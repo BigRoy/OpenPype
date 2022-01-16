@@ -8,7 +8,6 @@ import math
 
 import json
 import logging
-import itertools
 import contextlib
 from collections import OrderedDict, defaultdict
 from math import ceil
@@ -129,8 +128,10 @@ def float_round(num, places=0, direction=ceil):
 
 def pairwise(iterable):
     """s -> (s0,s1), (s2,s3), (s4, s5), ..."""
+    from six.moves import zip
+
     a = iter(iterable)
-    return itertools.izip(a, a)
+    return zip(a, a)
 
 
 def unique(name):

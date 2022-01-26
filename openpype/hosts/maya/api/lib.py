@@ -2776,101 +2776,88 @@ def iter_shader_edits(relationships, shader_nodes, nodes_by_id, label=None):
 
 
 def set_colorspace():
-    """Set Colorspace from project configuration
-    """
+    """Set Colorspace from project configuration"""
+
     project_name = os.getenv("AVALON_PROJECT")
     imageio = get_anatomy_settings(project_name)["imageio"]["maya"]
+    prefs = imageio["colorManagementPreference"]
+    log.debug("Color Management Preferences: {}".format(prefs))
+    config = prefs["OCIO_config"]
 
-    # Maya 2022+ introduces new OCIO v2 color management settings that
-    # can override the old color managenement preferences. OpenPype has
-    # separate settings for both so we fall back when necessary.
-    use_ocio_v2 = imageio["colorManagementPreference_v2"]["enabled"]
-    required_maya_version = 2022
-    maya_version = int(cmds.about(version=True))
-    maya_supports_ocio_v2 = maya_version >= required_maya_version
-    if use_ocio_v2 and not maya_supports_ocio_v2:
-        # Fallback to legacy behavior with a warning
-        log.warning("Color Management Preference v2 is enabled but not "
-                    "supported by current Maya version: {} (< {}). Falling "
-                    "back to legacy settings.".format(
-                        maya_version, required_maya_version)
-                    )
-        use_ocio_v2 = False
-
-    if use_ocio_v2:
-        root_dict = imageio["colorManagementPreference_v2"]
-    else:
-        root_dict = imageio["colorManagementPreference"]
-
-    if not isinstance(root_dict, dict):
-        msg = "set_colorspace(): argument should be dictionary"
-        log.error(msg)
-
-    log.debug(">> root_dict: {}".format(root_dict))
-
-    # enable color management
+    # Enable color management
     cmds.colorManagementPrefs(e=True, cmEnabled=True)
     cmds.colorManagementPrefs(e=True, ocioRulesEnabled=True)
 
-    # set config path
-    custom_ocio_config = False
-    if root_dict.get("configFilePath"):
-        unresolved_path = root_dict["configFilePath"]
+    # Detect whether Maya supports OCIO v2 config otherwise fall back
+    required_maya_version = 2022
+    maya_version = int(cmds.about(version=True))
+    maya_supports_ocio_v2 = maya_version >= required_maya_version
+    if not maya_supports_ocio_v2 and config == "maya-default":
+        log.warning("Color Management config 'maya-default' is not "
+                    "supported by current Maya version: {} (< {}). "
+                    "Falling back to 'maya-legacy' behavior.".format(
+                        maya_version, required_maya_version)
+                    )
+        config = "maya-legacy"
+
+    if config == "maya-default":
+        cmds.colorManagementPrefs(edit=True, configFilePath="")
+
+    elif config == "maya-legacy":
+        if maya_supports_ocio_v2:
+            cmds.colorManagementPrefs(edit=True, configFilePath="legacy")
+        else:
+            # Before Maya 2022+ OCIO v2 'legacy' is actually Maya's default
+            cmds.colorManagementPrefs(edit=True, configFilePath="")
+
+    elif config == "custom":
+        # set custom config path
+        unresolved_path = prefs["configFilePath"]
         ocio_paths = unresolved_path[platform.system().lower()]
 
-        resolved_path = None
         for ocio_p in ocio_paths:
             resolved_path = str(ocio_p).format(**os.environ)
-            if not os.path.exists(resolved_path):
-                continue
-
-        if resolved_path:
-            filepath = str(resolved_path).replace("\\", "/")
-            cmds.colorManagementPrefs(e=True, configFilePath=filepath)
-            cmds.colorManagementPrefs(e=True, cmConfigFileEnabled=True)
-            log.debug("maya '{}' changed to: {}".format(
-                "configFilePath", resolved_path))
-            custom_ocio_config = True
+            if os.path.exists(resolved_path):
+                filepath = str(resolved_path).replace("\\", "/")
+                cmds.colorManagementPrefs(e=True, configFilePath=filepath)
+                cmds.colorManagementPrefs(e=True, cmConfigFileEnabled=True)
+                log.info("Setting color preference 'configFilePath': "
+                         "{}".format(filepath))
+                break
         else:
+            log.warning("Color Management custom config not found in {}. "
+                        "Reverting to Maya defaults.".format(ocio_paths))
             cmds.colorManagementPrefs(e=True, cmConfigFileEnabled=False)
             cmds.colorManagementPrefs(e=True, configFilePath="")
 
-    # If no custom OCIO config file was set we make sure that Maya 2022+
-    # either chooses between Maya's newer default v2 or legacy config based
-    # on OpenPype setting to use ocio v2 or not.
-    if maya_supports_ocio_v2 and not custom_ocio_config:
-        if use_ocio_v2:
-            # Use Maya 2022+ default OCIO v2 config
-            log.info("Setting default Maya OCIO v2 config")
-            cmds.colorManagementPrefs(edit=True, configFilePath="")
-        else:
-            # Set the Maya default config file path
-            log.info("Setting default Maya OCIO v1 legacy config")
-            cmds.colorManagementPrefs(edit=True, configFilePath="legacy")
-
-    # set color spaces for rendering space and view transforms
-    def _colormanage(**kwargs):
-        """Wrapper around `cmds.colorManagementPrefs`.
-
-        This logs errors instead of raising an error so color management
-        settings get applied as much as possible.
-
-        """
-        assert len(kwargs) == 1, "Must receive one keyword argument"
-        try:
-            cmds.colorManagementPrefs(edit=True, **kwargs)
-            log.debug("Setting Color Management Preference: {}".format(kwargs))
-        except RuntimeError as exc:
-            log.error(exc)
-
-    if use_ocio_v2:
-        _colormanage(renderingSpaceName=root_dict["renderSpace"])
-        _colormanage(displayName=root_dict["displayName"])
-        _colormanage(viewName=root_dict["viewName"])
     else:
-        _colormanage(renderingSpaceName=root_dict["renderSpace"])
-        if maya_supports_ocio_v2:
-            _colormanage(viewName=root_dict["viewTransform"])
-            _colormanage(displayName="legacy")
+        log.error("Unsupported color config in settings: {}".format(config))
+
+    def apply(**kwargs):
+        """Set first value found in the available spaces"""
+        key, values = next(iter(kwargs.items()))   # consider only single kwarg
+        # We query with key + "s" because the relevant query flags all have
+        # an extra 's', e.g. edit "displayName", query "displayNames"
+        available = set(cmds.colorManagementPrefs(query=True,
+                        **{key + "s": True}))
+        for value in values:
+            if value in available:
+                log.info("Setting color preference '{}': '{}'".format(key,
+                                                                      value))
+                cmds.colorManagementPrefs(edit=True, **{key: value})
+                break
         else:
-            _colormanage(viewTransformName=root_dict["viewTransform"])
+            # If no valid value found to apply then we log a warning
+            log.warning("Color Management '{key}' can't set to: "
+                        "{values} - available: {available}".format(
+                            key=key, values=values, available=list(available)
+                        ))
+
+    apply(renderingSpaceName=prefs["renderSpace"])
+    if maya_supports_ocio_v2:
+        apply(displayName=prefs["displayName"])
+        apply(viewName=prefs["viewName"])
+    else:
+        # Pre Maya 2020 (legacy) interpret "viewName" as "viewTransformName"
+        apply(viewTransformName=prefs["viewName"])
+

@@ -378,63 +378,51 @@
             "label": "Maya",
             "children": [
                 {
-                    "key": "colorManagementPreference_v2",
-                    "type": "dict",
-                    "label": "Color Management Preference v2 (Maya 2022+)",
-                    "collapsible": true,
-                    "checkbox_key": "enabled",
-                    "children": [
-                        {
-                            "type": "boolean",
-                            "key": "enabled",
-                            "label": "Use Color Management Preference v2"
-                        },
-                        {
-                            "type": "path",
-                            "key": "configFilePath",
-                            "label": "OCIO Config File Path",
-                            "multiplatform": true,
-                            "multipath": true
-                        },
-                        {
-                            "type": "text",
-                            "key": "renderSpace",
-                            "label": "Rendering Space"
-                        },
-                        {
-                            "type": "text",
-                            "key": "displayName",
-                            "label": "Display"
-                        },
-                        {
-                            "type": "text",
-                            "key": "viewName",
-                            "label": "View"
-                        }
-                    ]
-                },
-                {
                     "key": "colorManagementPreference",
                     "type": "dict",
-                    "label": "Color Management Preference (legacy)",
-                    "collapsible": true,
+                    "label": "Color Management Preference",
+                    "collapsible": false,
                     "children": [
+                        {
+                            "type": "enum",
+                            "key": "OCIO_config",
+                            "label": "OpenColorIO Config",
+                            "enum_items": [
+                                {
+                                    "maya-default": "maya-default (Maya 2020+; uses maya-legacy pre Maya 2020)"
+                                },
+                                {
+                                    "maya-legacy": "maya-legacy"
+                                },
+                                {
+                                    "custom": "custom"
+                                }
+                            ]
+                        },
                         {
                             "type": "path",
                             "key": "configFilePath",
-                            "label": "OCIO Config File Path",
+                            "label": "Custom OCIO Config File Path",
                             "multiplatform": true,
                             "multipath": true
                         },
                         {
-                            "type": "text",
+                            "type": "list",
                             "key": "renderSpace",
-                            "label": "Rendering Space"
+                            "label": "Rendering Space",
+                            "object_type": "text"
                         },
                         {
-                            "type": "text",
-                            "key": "viewTransform",
-                            "label": "Viewer Transform"
+                            "type": "list",
+                            "key": "viewName",
+                            "label": "View",
+                            "object_type": "text"
+                        },
+                        {
+                            "type": "list",
+                            "key": "displayName",
+                            "label": "Display (Maya 2020+ only)",
+                            "object_type": "text"
                         }
                     ]
                 }

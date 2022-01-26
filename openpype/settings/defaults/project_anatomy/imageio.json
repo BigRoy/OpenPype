@@ -177,25 +177,25 @@
         }
     },
     "maya": {
-        "colorManagementPreference_v2": {
-            "enabled": true,
-            "configFilePath": {
-                "windows": [],
-                "darwin": [],
-                "linux": []
-            },
-            "renderSpace": "ACEScg",
-            "viewName": "ACES 1.0 SDR-video",
-            "displayName": "sRGB"
-        },
         "colorManagementPreference": {
+            "OCIO_config": "maya-default",
             "configFilePath": {
                 "windows": [],
                 "darwin": [],
                 "linux": []
             },
-            "renderSpace": "scene-linear Rec 709/sRGB",
-            "viewTransform": "sRGB gamma"
+            "renderSpace": [
+                "ACEScg",
+                "scene-linear Rec 709/sRGB"
+            ],
+            "viewName": [
+                "ACES 1.0 SDR-video",
+                "sRGB gamma"
+            ],
+            "displayName": [
+                "sRGB",
+                "legacy"
+            ]
         }
     }
 }

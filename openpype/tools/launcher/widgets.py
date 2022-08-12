@@ -153,6 +153,8 @@ class LauncherAssetsWidget(SingleSelectAssetsWidget):
 
     def _on_filter_text_change(self, new_text):
         self._launcher_model.set_asset_name_filter(new_text)
+        if new_text:
+            self._view.expandAll()
 
 
 class ActionBar(QtWidgets.QWidget):

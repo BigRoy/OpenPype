@@ -737,6 +737,8 @@ class AssetsWidget(QtWidgets.QWidget):
 
     def _on_filter_text_change(self, new_text):
         self._proxy.setFilterFixedString(new_text)
+        if new_text:
+            self._view.expandAll()
 
     def _on_model_refresh(self, has_item):
         """This method should be triggered on model refresh.

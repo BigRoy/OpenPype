@@ -172,6 +172,8 @@ class SubsetsModel(TreeModel, BaseRepresentationModel):
         (247, 99, 12),  # Orange
     ]
     not_last_hero_brush = QtGui.QBrush(QtGui.QColor(254, 121, 121))
+    loaded_in_scene_brush = QtGui.QBrush(QtGui.QColor(80, 170, 80))
+    not_loaded_in_scene_brush = QtGui.QBrush(QtGui.QColor(90, 90, 90))
 
     # Should be minimum of required asset document keys
     asset_doc_projection = {
@@ -800,6 +802,12 @@ class SubsetsModel(TreeModel, BaseRepresentationModel):
             if version_doc and version_doc.get("type") == "hero_version":
                 if not version_doc["is_from_latest"]:
                     return self.not_last_hero_brush
+
+            if index.column() == self.columns_index["loaded_in_scene"]:
+                if item.get("loaded_in_scene") == "no":
+                    return self.not_loaded_in_scene_brush
+                else:
+                    return self.loaded_in_scene_brush
 
         elif role == LOCAL_AVAILABILITY_ROLE:
             if not item.get("isGroup"):

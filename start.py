@@ -629,6 +629,9 @@ def _determine_mongodb() -> str:
 
 def _initialize_environment(openpype_version: OpenPypeVersion) -> None:
     version_path = openpype_version.path
+    if not version_path:
+        _print(f"!!! Version {openpype_version} doesn't have path set.")
+        raise ValueError("No path set in specified OpenPype version.")
     os.environ["OPENPYPE_VERSION"] = str(openpype_version)
     # set OPENPYPE_REPOS_ROOT to point to currently used OpenPype version.
     os.environ["OPENPYPE_REPOS_ROOT"] = os.path.normpath(
@@ -686,7 +689,7 @@ def _find_frozen_openpype(use_version: str = None,
     # Collect OpenPype versions
     installed_version = OpenPypeVersion.get_installed_version()
     # Expected version that should be used by studio settings
-    #   - this option is used only if version is not explictly set and if
+    #   - this option is used only if version is not explicitly set and if
     #       studio has set explicit version in settings
     studio_version = OpenPypeVersion.get_expected_studio_version(use_staging)
 
@@ -696,8 +699,7 @@ def _find_frozen_openpype(use_version: str = None,
             # Version says to use latest version
             _print(">>> Finding latest version defined by use version")
             openpype_version = bootstrap.find_latest_openpype_version(
-                use_staging, compatible_with=installed_version
-            )
+                use_staging)
         else:
             _print(f">>> Finding specified version \"{use_version}\"")
             openpype_version = bootstrap.find_openpype_version(
@@ -709,18 +711,11 @@ def _find_frozen_openpype(use_version: str = None,
                 f"Requested version \"{use_version}\" was not found."
             )
 
-        if not openpype_version.is_compatible(installed_version):
-            raise OpenPypeVersionIncompatible((
-                f"Requested version \"{use_version}\" is not compatible "
-                f"with installed version \"{installed_version}\""
-            ))
-
     elif studio_version is not None:
         # Studio has defined a version to use
         _print(f">>> Finding studio version \"{studio_version}\"")
         openpype_version = bootstrap.find_openpype_version(
-            studio_version, use_staging, compatible_with=installed_version
-        )
+            studio_version, use_staging)
         if openpype_version is None:
             raise OpenPypeVersionNotFound((
                 "Requested OpenPype version "
@@ -731,11 +726,11 @@ def _find_frozen_openpype(use_version: str = None,
     else:
         # Default behavior to use latest version
         _print((
-            ">>> Finding latest version compatible "
+            ">>> Finding latest version "
             f"with [ {installed_version} ]"))
         openpype_version = bootstrap.find_latest_openpype_version(
-            use_staging, compatible_with=installed_version
-        )
+            use_staging)
+
         if openpype_version is None:
             if use_staging:
                 reason = "Didn't find any staging versions."
@@ -752,6 +747,14 @@ def _find_frozen_openpype(use_version: str = None,
             path=version_path)
         _initialize_environment(openpype_version)
         return version_path
+
+    if not installed_version.is_compatible(openpype_version):
+        raise OpenPypeVersionIncompatible(
+            (
+                f"Latest version found {openpype_version} is not "
+                f"compatible with currently running {installed_version}"
+            )
+        )
 
     # test if latest detected is installed (in user data dir)
     is_inside = False
@@ -944,7 +947,12 @@ def _boot_print_versions(use_staging, local_version, openpype_root):
     openpype_versions = bootstrap.find_openpype(
         include_zips=True,
         staging=use_staging,
-        compatible_with=compatible_with)
+    )
+    openpype_versions = [
+        version for version in openpype_versions
+        if version.is_compatible(
+            OpenPypeVersion.get_installed_version())
+    ]
 
     list_versions(openpype_versions, local_version)
 

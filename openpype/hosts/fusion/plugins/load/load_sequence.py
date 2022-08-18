@@ -252,6 +252,7 @@ class FusionLoadSequence(load.LoaderPlugin):
         return os.path.join(root, files[0])
 
     def _get_start(self, version_doc, tool):
+        """Return real start frame of published files (incl. handles)"""
         data = version_doc["data"]
         start = data.get("frameStartHandle", data.get("frameStart"))
         if start is None:

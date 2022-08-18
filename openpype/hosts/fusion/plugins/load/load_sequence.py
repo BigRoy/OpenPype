@@ -149,9 +149,8 @@ class FusionLoadSequence(load.LoaderPlugin):
             tool["Clip"] = path
 
             # Set global in point to start frame (if in version.data)
-            start = context["version"]["data"].get("frameStart", None)
-            if start is not None:
-                loader_shift(tool, start, relative=False)
+            start = self._get_start(context["version"], tool)
+            loader_shift(tool, start, relative=False)
 
             imprint_container(tool,
                               name=name,
@@ -214,12 +213,7 @@ class FusionLoadSequence(load.LoaderPlugin):
         # Get start frame from version data
         project_name = legacy_io.active_project()
         version = get_version_by_id(project_name, representation["parent"])
-        start = version["data"].get("frameStart")
-        if start is None:
-            self.log.warning("Missing start frame for updated version"
-                             "assuming starts at frame 0 for: "
-                             "{} ({})".format(tool.Name, representation))
-            start = 0
+        start = self._get_start(version, tool)
 
         with comp_lock_and_undo_chunk(comp, "Update Loader"):
 
@@ -256,3 +250,13 @@ class FusionLoadSequence(load.LoaderPlugin):
         """Get first file in representation root"""
         files = sorted(os.listdir(root))
         return os.path.join(root, files[0])
+
+    def _get_start(self, version_doc, tool):
+        data = version_doc["data"]
+        start = data.get("frameStartHandle", data.get("frameStart"))
+        if start is None:
+            self.log.warning("Missing start frame for updated version"
+                             "assuming starts at frame 0 for: "
+                             "{}".format(tool.Name))
+            start = 0
+        return start

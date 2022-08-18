@@ -230,7 +230,7 @@ class HierarchyView(QtWidgets.QTreeView):
         row = current_index.row()
         skipped_index = None
         # Change column from "type" to "name"
-        if column == 1:
+        if column == self._column_key_to_index["type"]:
             new_index = self._source_model.index(
                 current_index.row(),
                 0,
@@ -438,9 +438,10 @@ class HierarchyView(QtWidgets.QTreeView):
         self.setState(HierarchyView.NoState)
         QtWidgets.QApplication.processEvents()
 
-        # TODO change hardcoded column index to coded
         task_type_index = self._source_model.index(
-            new_index.row(), 2, new_index.parent()
+            new_index.row(),
+            self._column_key_to_index["type"],
+            new_index.parent()
         )
         # Change current index
         self.selectionModel().setCurrentIndex(

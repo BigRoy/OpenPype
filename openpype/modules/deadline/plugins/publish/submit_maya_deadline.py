@@ -62,10 +62,7 @@ payload_skeleton_template = {
         "RenderLayer": None,  # Render only this layer
         "Renderer": None,
         "ProjectPath": None,  # Resolve relative references
-        # TODO: Match this logic with User scene settings instead
-        # NOTE: However it's recommended to set this globally for the pipeline
-        #       because this setting is saved in user prefs and not per scene.
-        "RenderSetupIncludeLights": False    # Don't include all lights
+        "RenderSetupIncludeLights": None,  # Include all lights flag.
     },
     "AuxFiles": []  # Mandatory for Deadline, may be empty
 }
@@ -508,6 +505,7 @@ class MayaSubmitDeadline(pyblish.api.InstancePlugin):
         self.payload_skeleton["JobInfo"]["Comment"] = comment
         self.payload_skeleton["PluginInfo"]["RenderLayer"] = renderlayer
 
+        self.payload_skeleton["PluginInfo"]["RenderSetupIncludeLights"] = instance.data.get("renderSetupIncludeLights") # noqa
         # Adding file dependencies.
         dependencies = instance.context.data["fileDependencies"]
         dependencies.append(filepath)

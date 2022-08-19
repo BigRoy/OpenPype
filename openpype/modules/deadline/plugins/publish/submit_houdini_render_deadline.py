@@ -67,7 +67,9 @@ class HoudiniSubmitRenderDeadline(pyblish.api.InstancePlugin):
                 "UserName": deadline_user,
 
                 "Plugin": "Houdini",
-                "Pool": instance.data.get("primaryPool"),
+                "Pool": instance.data.get("primaryPool",
+                                          # TODO: remove this hardcoded hack
+                                          "houdini"),
                 "secondaryPool": instance.data.get("secondaryPool"),
                 "Frames": frames,
 

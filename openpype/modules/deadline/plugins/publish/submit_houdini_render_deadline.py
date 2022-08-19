@@ -137,9 +137,12 @@ class HoudiniSubmitRenderDeadline(pyblish.api.InstancePlugin):
 
     def submit(self, instance, payload):
 
-        AVALON_DEADLINE = legacy_io.Session.get("AVALON_DEADLINE",
-                                          "http://localhost:8082")
-        assert AVALON_DEADLINE, "Requires AVALON_DEADLINE"
+        # get default deadline webservice url from deadline module
+        deadline_url = instance.context.data.get("defaultDeadline")
+        # if custom one is set in instance, use that
+        if instance.data.get("deadlineUrl"):
+            deadline_url = instance.data.get("deadlineUrl")
+        assert deadline_url, "Requires Deadline Webservice URL"
 
         plugin = payload["JobInfo"]["Plugin"]
         self.log.info("Using Render Plugin : {}".format(plugin))
@@ -147,8 +150,7 @@ class HoudiniSubmitRenderDeadline(pyblish.api.InstancePlugin):
         self.log.info("Submitting..")
         self.log.debug(json.dumps(payload, indent=4, sort_keys=True))
 
-        # E.g. http://192.168.0.1:8082/api/jobs
-        url = "{}/api/jobs".format(AVALON_DEADLINE)
+        url = "{}/api/jobs".format(deadline_url)
         response = requests.post(url, json=payload)
         if not response.ok:
             raise Exception(response.text)

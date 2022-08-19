@@ -105,6 +105,7 @@ class HoudiniSubmitRenderDeadline(pyblish.api.InstancePlugin):
 
         environment = dict({key: os.environ[key] for key in keys
                             if key in os.environ}, **legacy_io.Session)
+        environment["OPENPYPE_RENDER_JOB"] = "1"
 
         payload["JobInfo"].update({
             "EnvironmentKeyValue%d" % index: "{key}={value}".format(
@@ -160,5 +161,4 @@ class HoudiniSubmitRenderDeadline(pyblish.api.InstancePlugin):
         output_dir = os.path.dirname(instance.data["files"][0])
         instance.data["outputDir"] = output_dir
         instance.data["deadlineSubmissionJob"] = response.json()
-        instance.data["expectedFiles"] = copy.deepcopy(instance.data["files"])
         instance.data["toBeRenderedOn"] = "deadline"

@@ -91,16 +91,23 @@ class HoudiniSubmitRenderDeadline(pyblish.api.InstancePlugin):
             "AuxFiles": []
         }
 
-        # Include critical environment variables with submission + api.Session
+        # Handle environments -----------------------------------------------
+        # We need those to pass them to pype for it to set correct context
         keys = [
-            # Submit along the current Avalon tool setup that we launched
-            # this application with so the Render Slave can build its own
-            # similar environment using it, e.g. "maya2018;vray4.x;yeti3.1.9"
-            "AVALON_TOOLS",
+            "FTRACK_API_KEY",
+            "FTRACK_API_USER",
+            "FTRACK_SERVER",
+            "OPENPYPE_SG_USER",
+            "AVALON_PROJECT",
+            "AVALON_ASSET",
+            "AVALON_TASK",
+            "AVALON_APP_NAME",
+            "OPENPYPE_DEV",
+            "OPENPYPE_LOG_NO_COLORS",
             "OPENPYPE_VERSION"
         ]
         # Add mongo url if it's enabled
-        if context.data.get("deadlinePassMongoUrl"):
+        if instance.context.data.get("deadlinePassMongoUrl"):
             keys.append("OPENPYPE_MONGO")
 
         environment = dict({key: os.environ[key] for key in keys

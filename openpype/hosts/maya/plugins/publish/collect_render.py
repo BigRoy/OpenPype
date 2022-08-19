@@ -315,7 +315,7 @@ class CollectMayaRender(pyblish.api.ContextPlugin):
                         "vrayUseReferencedAovs") or False,
                 "aovSeparator": layer_render_products.layer_data.aov_separator,  # noqa: E501
                 "renderSetupIncludeLights": render_instance.data.get(
-                    "renderSetupIncludeLights"
+                    "renderSetupIncludeLights", False
                 )
             }
 

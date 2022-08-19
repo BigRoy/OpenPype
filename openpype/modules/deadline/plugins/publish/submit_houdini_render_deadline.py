@@ -34,17 +34,11 @@ class HoudiniSubmitRenderDeadline(pyblish.api.InstancePlugin):
     def process(self, instance):
 
         context = instance.context
-        code = context.data["code"]
         filepath = context.data["currentFile"]
         filename = os.path.basename(filepath)
         comment = context.data.get("comment", "")
         deadline_user = context.data.get("deadlineUser", getpass.getuser())
         jobname = "%s - %s" % (filename, instance.name)
-
-        # Support code prefix label for batch name
-        batch_name = filename
-        if code:
-            batch_name = "{0} - {1}".format(code, batch_name)
 
         # Output driver to render
         driver = instance[0]
@@ -63,7 +57,7 @@ class HoudiniSubmitRenderDeadline(pyblish.api.InstancePlugin):
         payload = {
             "JobInfo": {
                 # Top-level group name
-                "BatchName": batch_name,
+                "BatchName": filename,
 
                 # Job name, as seen in Monitor
                 "Name": jobname,

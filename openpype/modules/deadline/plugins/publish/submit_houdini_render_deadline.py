@@ -5,7 +5,7 @@ import getpass
 import requests
 import pyblish.api
 
-# import hou  ???
+import hou
 
 from openpype.pipeline import legacy_io
 
@@ -27,7 +27,8 @@ class HoudiniSubmitRenderDeadline(pyblish.api.InstancePlugin):
     order = pyblish.api.IntegratorOrder
     hosts = ["houdini"]
     families = ["usdrender",
-                "redshift_rop"]
+                "redshift_rop",
+                "arnold_rop"]
     targets = ["local"]
 
     def process(self, instance):

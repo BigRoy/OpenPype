@@ -70,7 +70,6 @@ class HierarchyView(QtWidgets.QTreeView):
     """A tree view that deselects on clicking on an empty area in the view"""
     column_delegate_defs = {
         "name": NameDef(),
-        "label": NameDef(),
         "type": TypeDef(),
         "frameStart": NumberDef(1),
         "frameEnd": NumberDef(1),

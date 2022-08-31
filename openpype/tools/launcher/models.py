@@ -26,7 +26,8 @@ from openpype.tools.utils.lib import (
 )
 from openpype.tools.utils.assets_widget import (
     AssetModel,
-    ASSET_NAME_ROLE
+    ASSET_NAME_ROLE,
+    ASSET_LABEL_ROLE
 )
 from openpype.tools.utils.tasks_widget import (
     TasksModel,
@@ -753,7 +754,12 @@ class AssetRecursiveSortFilterModel(QtCore.QSortFilterProxyModel):
         # Check current index itself
         valid = True
         if self._name_filter:
-            name = model.data(source_index, ASSET_NAME_ROLE)
+            # Allow search by label
+            label = model.data(source_index, ASSET_LABEL_ROLE)
+            if label:
+                name = label
+            else:
+                name = model.data(source_index, ASSET_NAME_ROLE)
             if (
                 name is None
                 or not re.search(self._name_filter, name, re.IGNORECASE)

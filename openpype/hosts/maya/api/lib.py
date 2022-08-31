@@ -2497,143 +2497,65 @@ def load_capture_preset(data=None):
     options['display_options'] = disp_options
 
     # VIEWPORT OPTIONS
-    temp_options = {}
+    viewport_options = {}
+    viewport2_options = {}
     id = 'Renderer'
     for key in preset[id]:
-        temp_options[str(key)] = preset[id][key]
+        viewport_options[str(key)] = preset[id][key]
 
-    temp_options2 = {}
+    # capture library is missing some option definitions so we add them
+    # todo: update and implement missing Maya settings in capture library
+    viewport2_option_keys = set(capture.Viewport2Options)
+    viewport2_option_keys.update({
+        'gpuCacheDisplayFilter',
+        'renderDepthOfField'
+    })
+
     id = 'Viewport Options'
-    for key in preset[id]:
-        if key == 'textureMaxResolution':
-            if preset[id][key] > 0:
-                temp_options2['textureMaxResolution'] = preset[id][key]
-                temp_options2['enableTextureMaxRes'] = True
-                temp_options2['textureMaxResMode'] = 1
-            else:
-                temp_options2['textureMaxResolution'] = preset[id][key]
-                temp_options2['enableTextureMaxRes'] = False
-                temp_options2['textureMaxResMode'] = 0
+    for key, value in preset[id].items():
 
-        if key == 'multiSample':
-            if preset[id][key] > 0:
-                temp_options2['multiSampleEnable'] = True
-                temp_options2['multiSampleCount'] = preset[id][key]
-            else:
-                temp_options2['multiSampleEnable'] = False
-                temp_options2['multiSampleCount'] = preset[id][key]
+        if key == "override_viewport_options":
+            # Ignore this entry from OpenPype settings
+            continue
 
-        if key == 'renderDepthOfField':
-            temp_options2['renderDepthOfField'] = preset[id][key]
+        # Some special cases from OpenPype settings
+        elif key == 'alphaCut':
+            viewport2_options['transparencyAlgorithm'] = 5
+            viewport2_options['transparencyQuality'] = 1
 
-        if key == 'ssaoEnable':
-            if preset[id][key] is True:
-                temp_options2['ssaoEnable'] = True
-            else:
-                temp_options2['ssaoEnable'] = False
+        elif key == 'multiSample':
+            # Enable only when value >0
+            viewport2_options['multiSampleEnable'] = bool(value)
+            viewport2_options['multiSampleCount'] = value
 
-        if key == 'ssaoSamples':
-            temp_options2['ssaoSamples'] = preset[id][key]
+        elif key == 'textureMaxResolution':
+            enabled = True if value > 0 else False
+            viewport2_options['enableTextureMaxRes'] = enabled
+            viewport2_options['textureMaxResolution'] = value
+            viewport2_options['textureMaxResMode'] = 1 if enabled else 0
 
-        if key == 'ssaoAmount':
-            temp_options2['ssaoAmount'] = preset[id][key]
+        # Direct match with viewport option names
+        elif key in viewport2_option_keys:
+            # Viewport 2 option
+            viewport2_options[key] = value
 
-        if key == 'ssaoRadius':
-            temp_options2['ssaoRadius'] = preset[id][key]
-
-        if key == 'hwFogDensity':
-            temp_options2['hwFogDensity'] = preset[id][key]
-
-        if key == 'ssaoFilterRadius':
-            temp_options2['ssaoFilterRadius'] = preset[id][key]
-
-        if key == 'alphaCut':
-            temp_options2['transparencyAlgorithm'] = 5
-            temp_options2['transparencyQuality'] = 1
-
-        if key == 'headsUpDisplay':
-            temp_options['headsUpDisplay'] = True
-
-        if key == 'fogging':
-            temp_options['fogging'] = preset[id][key] or False
-
-        if key == 'hwFogStart':
-            temp_options2['hwFogStart'] = preset[id][key]
-
-        if key == 'hwFogEnd':
-            temp_options2['hwFogEnd'] = preset[id][key]
-
-        if key == 'hwFogAlpha':
-            temp_options2['hwFogAlpha'] = preset[id][key]
-
-        if key == 'hwFogFalloff':
-            temp_options2['hwFogFalloff'] = int(preset[id][key])
-
-        if key == 'hwFogColorR':
-            temp_options2['hwFogColorR'] = preset[id][key]
-
-        if key == 'hwFogColorG':
-            temp_options2['hwFogColorG'] = preset[id][key]
-
-        if key == 'hwFogColorB':
-            temp_options2['hwFogColorB'] = preset[id][key]
-
-        if key == 'motionBlurEnable':
-            if preset[id][key] is True:
-                temp_options2['motionBlurEnable'] = True
-            else:
-                temp_options2['motionBlurEnable'] = False
-
-        if key == 'motionBlurSampleCount':
-            temp_options2['motionBlurSampleCount'] = preset[id][key]
-
-        if key == 'motionBlurShutterOpenFraction':
-            temp_options2['motionBlurShutterOpenFraction'] = preset[id][key]
-
-        if key == 'lineAAEnable':
-            if preset[id][key] is True:
-                temp_options2['lineAAEnable'] = True
-            else:
-                temp_options2['lineAAEnable'] = False
+        elif key in capture.ViewportOptions:
+            # Viewport Option
+            viewport_options[key] = value
 
         else:
-            temp_options[str(key)] = preset[id][key]
+            # Unsupported key
+            log.debug("Detected key not defined maya-capture "
+                      "viewport settings: {key}".format(key=key))
+            # Backwards compatibility: Use as default viewport setting
+            viewport_options[key] = preset[id][key]
 
-    for key in ['override_viewport_options',
-                'high_quality',
-                'alphaCut',
-                'gpuCacheDisplayFilter',
-                'multiSample',
-                'ssaoEnable',
-                'ssaoSamples',
-                'ssaoAmount',
-                'ssaoFilterRadius',
-                'ssaoRadius',
-                'hwFogStart',
-                'hwFogEnd',
-                'hwFogAlpha',
-                'hwFogFalloff',
-                'hwFogColorR',
-                'hwFogColorG',
-                'hwFogColorB',
-                'hwFogDensity',
-                'textureMaxResolution',
-                'motionBlurEnable',
-                'motionBlurSampleCount',
-                'motionBlurShutterOpenFraction',
-                'lineAAEnable',
-                'renderDepthOfField'
-                ]:
-        temp_options.pop(key, None)
-
-    options['viewport_options'] = temp_options
-    options['viewport2_options'] = temp_options2
+    options['viewport_options'] = viewport_options
+    options['viewport2_options'] = viewport2_options
 
     # use active sound track
     scene = capture.parse_active_scene()
     options['sound'] = scene['sound']
-
-    # options['display_options'] = temp_options
 
     return options
 

@@ -2548,7 +2548,7 @@ def load_capture_preset(data=None):
             log.debug("Detected key not defined maya-capture "
                       "viewport settings: {key}".format(key=key))
             # Backwards compatibility: Use as default viewport setting
-            viewport_options[key] = preset[id][key]
+            viewport_options[key] = value
 
     options['viewport_options'] = viewport_options
     options['viewport2_options'] = viewport2_options

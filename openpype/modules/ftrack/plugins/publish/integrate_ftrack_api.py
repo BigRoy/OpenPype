@@ -90,7 +90,8 @@ class IntegrateFtrackApi(pyblish.api.InstancePlugin):
 
         # Iterate over components and publish
         for data in component_list:
-            self.log.debug("data: {}".format(data))
+            if os.environ.get("OPENPYPE_DEBUG") == "1":
+                self.log.debug("data: {}".format(data))
 
             # AssetType
             asset_type_short = data["assettype_data"]["short"]

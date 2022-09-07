@@ -16,6 +16,8 @@ class CollectFtrackApi(pyblish.api.ContextPlugin):
         # which slow down publishing a lot
         logging.getLogger('ftrack_api').setLevel(logging.WARNING)
         logging.getLogger('ftrack_api_old').setLevel(logging.WARNING)
+        # Note: This is actually logging in Integrators, etc. but setting level
+        #       during collecting feels a bit nicer
         logging.getLogger('urllib3').setLevel(logging.WARNING)
 
         # Collect session

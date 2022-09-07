@@ -227,6 +227,9 @@
         }
     },
     "publish": {
+        "CollectFtrackApi": {
+            "enabled": true
+        },
         "CollectFtrackFamily": {
             "enabled": true,
             "profiles": [
@@ -495,6 +498,7 @@
             "additional_metadata_keys": []
         },
         "IntegrateFtrackFarmStatus": {
+            "enabled": true,
             "farm_status_profiles": []
         }
     }

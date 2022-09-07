@@ -344,17 +344,18 @@ class IntegrateFtrackInstance(pyblish.api.InstancePlugin):
             other_item["component_path"] = published_path
             component_list.append(other_item)
 
-        def json_obj_parser(obj):
-            return str(obj)
+        if os.environ.get("OPENPYPE_DEBUG") == "1":
+            def json_obj_parser(obj):
+                return str(obj)
 
-        self.log.debug("Components list: {}".format(
-            json.dumps(
-                component_list,
-                sort_keys=True,
-                indent=4,
-                default=json_obj_parser
-            )
-        ))
+            self.log.debug("Components list: {}".format(
+                json.dumps(
+                    component_list,
+                    sort_keys=True,
+                    indent=4,
+                    default=json_obj_parser
+                )
+            ))
         instance.data["ftrackComponentsList"] = component_list
 
     def _collect_additional_metadata(self, streams):

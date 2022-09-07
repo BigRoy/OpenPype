@@ -49,7 +49,8 @@ class ActionWhereIRun(BaseAction):
     def _show_info(self, event):
         title = "Where Do I Run?"
         msgs = {}
-        all_keys = ["Hostname", "IP", "Username", "System name", "PC name"]
+        all_keys = ["Hostname", "IP", "Username", "System name", "PC name",
+                    "Database"]
         try:
             host_name = socket.gethostname()
             msgs["Hostname"] = host_name
@@ -67,6 +68,12 @@ class ActionWhereIRun(BaseAction):
 
         try:
             msgs["Username"] = getpass.getuser()
+        except Exception:
+            pass
+
+        try:
+            import os
+            msgs["Database"] = os.environ["OPENPYPE_MONGO"]
         except Exception:
             pass
 

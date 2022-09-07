@@ -58,7 +58,6 @@ class IntegrateFtrackInstance(pyblish.api.InstancePlugin):
     additional_metadata_keys = []
 
     def process(self, instance):
-        self.log.debug("instance {}".format(instance))
 
         instance_repres = instance.data.get("representations")
         if not instance_repres:

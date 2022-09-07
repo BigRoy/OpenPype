@@ -39,6 +39,9 @@ class ShowInFtrack(LauncherAction):
         return ModulesManager().modules_by_name.get("ftrack")
 
     def is_compatible(self, session):
+        if not session.get("AVALON_PROJECT"):
+            return False
+
         ftrack_module = self.get_ftrack_module()
         if not ftrack_module or not ftrack_module.enabled:
             return False

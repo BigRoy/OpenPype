@@ -1,3 +1,4 @@
+import os
 import re
 import logging
 
@@ -184,11 +185,12 @@ def filter_profiles(profiles_data, key_values, keys_order=None, logger=None):
             value = key_values[key]
             match = validate_value_by_regexes(value, profile.get(key))
             if match == -1:
-                profile_value = profile.get(key) or []
-                logger.debug(
-                    "\"{}\" not found in \"{}\": {}".format(value, key,
-                                                            profile_value)
-                )
+                if os.environ.get("OPENPYPE_DEBUG") == "1":
+                    profile_value = profile.get(key) or []
+                    logger.debug(
+                        "\"{}\" not found in \"{}\": {}".format(value, key,
+                                                                profile_value)
+                    )
                 profile_points = -1
                 break
 

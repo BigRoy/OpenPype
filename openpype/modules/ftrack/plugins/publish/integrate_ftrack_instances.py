@@ -435,6 +435,15 @@ class IntegrateFtrackInstance(pyblish.api.InstancePlugin):
             metadata[label] = get_openpype_version()
 
         extension = os.path.splitext(component_path)[-1]
+
+        # TODO: Do not hardcode this
+        DO_NOT_FFPROBE_EXTENSIONS = {
+            ".abc", ".ma", ".mb", ".usd", ".vdb", ".fur", ".comp", ".exr",
+            ".hip", ".fbx", ".ass", ".vrscene"
+        }
+        if extension in DO_NOT_FFPROBE_EXTENSIONS:
+            return metadata
+
         streams = []
         try:
             streams = get_ffprobe_streams(component_path)

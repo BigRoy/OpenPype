@@ -53,7 +53,7 @@ class ShowInFtrack(LauncherAction):
         # Context inputs
         project_name = session["AVALON_PROJECT"]
         asset_name = session.get("AVALON_ASSET", None)
-        # TODO: implement task entity support?qqw
+        # TODO: implement task entity support?
         # task_name = session.get("AVALON_TASK", None)
 
         fields = ["data.ftrackId"]

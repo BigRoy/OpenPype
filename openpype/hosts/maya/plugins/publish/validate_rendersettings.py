@@ -248,7 +248,7 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
             if current != value:
                 invalid = True
                 cls.log.error("Invalid default render globals set for {}: {} "
-                              "(should be: {})".format(plug, value, current))
+                              "(should be: {})".format(plug, current, value))
 
         if padding != cls.DEFAULT_PADDING:
             invalid = True

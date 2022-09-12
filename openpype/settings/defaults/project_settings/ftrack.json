@@ -1,4 +1,5 @@
 {
+    "enabled": true,
     "events": {
         "sync_to_avalon": {
             "statuses_name_change": [

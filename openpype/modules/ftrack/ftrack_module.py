@@ -12,7 +12,7 @@ from openpype_interfaces import (
     ILaunchHookPaths,
     ISettingsChangeListener
 )
-from openpype.settings import SaveWarningExc
+from openpype.settings import SaveWarningExc, get_project_settings
 
 FTRACK_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -29,7 +29,15 @@ class FtrackModule(
     def initialize(self, settings):
         ftrack_settings = settings[self.name]
 
+        # Module enabled
         self.enabled = ftrack_settings["enabled"]
+
+        # Project enabled
+        if self.enabled:
+            project_name = os.environ.get("AVALON_PROJECT")
+            if project_name:
+                self._set_enabled_state_for_project(project_name)
+
         # Add http schema
         ftrack_url = ftrack_settings["ftrack_server"].strip("/ ")
         if ftrack_url:
@@ -71,6 +79,26 @@ class FtrackModule(
         # TimersManager connection
         self.timers_manager_connector = None
         self._timers_manager_module = None
+
+    def _set_enabled_state_for_project(self, project_name):
+
+        project_settings = get_project_settings(project_name)
+        if not project_settings["ftrack"].get("enabled", True):
+            print("Project {} disables Ftrack in project "
+                  "settings.".format(project_name))
+            self.enabled = False
+            return
+
+        from openpype.client import get_project
+        project = get_project(project_name,
+                              inactive=True,
+                              active=True,
+                              fields=["data.ftrackId"])
+        if not project or not project.get("data", {}).get("ftrackId"):
+            print("Unable to find ftrackId on project {}. "
+                  "Disabling Ftrack module")
+            self.enabled = False
+            return
 
     def get_global_environments(self):
         """Ftrack's global environments."""

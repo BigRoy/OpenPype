@@ -22,11 +22,6 @@ COPY = 1
 HARDLINK = 2
 
 
-def escape_space(path):
-    """Ensure path is enclosed by quotes to allow paths with spaces"""
-    return '"{}"'.format(path) if " " in path else path
-
-
 def get_ocio_config_path(profile_folder):
     """Path to OpenPype vendorized OCIO.
 
@@ -104,21 +99,19 @@ def maketx(source, destination, *args):
         # use oiio-optimized settings for tile-size, planarconfig, metadata
         "--oiio",
         "--filter lanczos3",
-        escape_space(source)
+        source
     ]
 
     cmd.extend(args)
-    cmd.extend(["-o", escape_space(destination)])
-
-    cmd = " ".join(cmd)
+    cmd.extend(["-o", destination])
 
     CREATE_NO_WINDOW = 0x08000000  # noqa
-    kwargs = dict(args=cmd, stderr=subprocess.STDOUT)
+    kwargs = dict(stderr=subprocess.STDOUT)
 
     if sys.platform == "win32":
         kwargs["creationflags"] = CREATE_NO_WINDOW
     try:
-        out = subprocess.check_output(**kwargs)
+        out = subprocess.check_output(cmd, **kwargs)
     except subprocess.CalledProcessError as exc:
         print(exc)
         import traceback
@@ -544,7 +537,7 @@ class ExtractLook(openpype.api.Extractor):
                 # Include `source-hash` as string metadata
                 "--sattrib",
                 "sourceHash",
-                escape_space(texture_hash),
+                texture_hash,
                 colorconvert,
                 color_config
             )

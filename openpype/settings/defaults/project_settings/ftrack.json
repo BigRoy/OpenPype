@@ -458,6 +458,9 @@
         "IntegrateFtrackComponentOverwrite": {
             "enabled": true
         },
+        "IntegrateFtrackApi": {
+            "enabled": true
+        },
         "IntegrateFtrackInstance": {
             "family_mapping": {
                 "camera": "cam",

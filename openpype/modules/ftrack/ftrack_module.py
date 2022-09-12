@@ -13,6 +13,7 @@ from openpype_interfaces import (
     ISettingsChangeListener
 )
 from openpype.settings import SaveWarningExc, get_project_settings
+from openpype.client import get_project
 
 FTRACK_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -89,14 +90,13 @@ class FtrackModule(
             self.enabled = False
             return
 
-        from openpype.client import get_project
         project = get_project(project_name,
                               inactive=True,
                               active=True,
                               fields=["data.ftrackId"])
         if not project or not project.get("data", {}).get("ftrackId"):
             print("Unable to find ftrackId on project {}. "
-                  "Disabling Ftrack module")
+                  "Disabling Ftrack module".format(project_name))
             self.enabled = False
             return
 

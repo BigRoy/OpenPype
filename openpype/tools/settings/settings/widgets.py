@@ -3,6 +3,8 @@ import uuid
 from Qt import QtWidgets, QtCore, QtGui
 import qtawesome
 
+from openpype.settings import SaveWarningExc
+from openpype.settings.entities import ProjectSettings
 from openpype.client import get_projects
 from openpype.pipeline import AvalonMongoDB
 from openpype.style import get_objected_colors
@@ -1214,3 +1216,80 @@ class ProjectListWidget(QtWidgets.QWidget):
             PROJECT_NAME_ROLE
         )
         self.project_list.resizeColumnToContents(0)
+
+
+class ProjectPicker(ProjectListWidget):
+    """Simple Project picker"""
+    def __init__(self, parent=None, only_active=False):
+        super(ProjectPicker, self).__init__(parent, only_active)
+
+        self.project_list.setSelectionMode(
+            self.project_list.ExtendedSelection)
+
+        # Hide settings version column
+        self.project_list.hideColumn(1)
+
+    def on_item_clicked(self, index):
+        # Disable ProjectListWidget behavior
+        pass
+
+    def on_item_right_clicked(self, index):
+        # Disable ProjectListWidget behavior
+        pass
+
+
+class CopyProjectSettingsEntityDialog(QtWidgets.QDialog):
+    def __init__(self, entity, parent=None):
+        super(CopyProjectSettingsEntityDialog, self).__init__(
+            parent=parent
+        )
+        self.entity = entity
+
+        self.setWindowTitle("Copy entity value to projects")
+
+        path_label = QtWidgets.QLineEdit(self.entity.path)
+        path_label.setReadOnly(True)
+        project_picker = ProjectPicker(parent=self)
+        button = QtWidgets.QPushButton("Copy settings")
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(path_label)
+        layout.addWidget(project_picker)
+        layout.addWidget(button)
+        self.project_picker = project_picker
+
+        button.clicked.connect(self.on_apply)
+
+        project_picker.refresh()
+
+    def on_apply(self):
+
+        project_list = self.project_picker.project_list
+        for index in project_list.selectedIndexes():
+            project_name = index.data(PROJECT_NAME_ROLE)
+            self._copy_entity_value_to_project(project_name)
+
+        self.close()
+
+    def _copy_entity_value_to_project(self, project_name):
+
+        def traverse(entity, path):
+            for key in path.split("/"):
+                if not key:
+                    continue
+                entity = entity[key]
+            return entity
+
+        path = self.entity.path
+        print(f"Copying setting '{path}' to project '{project_name}'")
+        dest_project_settings = ProjectSettings(project_name)
+        dest_entity = traverse(dest_project_settings, path)
+        if dest_entity.value != self.entity.value:
+            print("Detected settings mismatch, updating project..")
+            dest_entity.set(self.entity.value)
+            try:
+                dest_project_settings.save()
+                print(f"Saved '{project_name}' project settings..")
+            except SaveWarningExc as exc:
+                print(f"Saved '{project_name}' project settings but "
+                      f"a warning occurred: {exc}")

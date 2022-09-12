@@ -10,7 +10,7 @@ from Qt import QtWidgets, QtGui, QtCore
 from openpype.settings.entities import ProjectSettings
 from openpype.tools.settings import CHILD_OFFSET
 
-from .widgets import ExpandingWidget
+from .widgets import ExpandingWidget, CopyProjectSettingsEntityDialog
 from .lib import create_deffered_value_change_timer
 from .constants import (
     DEFAULT_PROJECT_LABEL,
@@ -308,6 +308,21 @@ class BaseWidget(QtWidgets.QWidget):
         action = QtWidgets.QAction("Copy", menu)
         return [(action, copy_value)]
 
+    def _copy_values_to_projects_actions(self, menu):
+        # Only show in project settings category
+        for attr_name in ("project_name", "get_project_names"):
+            if not hasattr(self.category_widget, attr_name):
+                return
+
+        def _copy_to_projects():
+            dialog = CopyProjectSettingsEntityDialog(entity=self.entity,
+                                                     parent=self)
+            dialog.resize(300, 500)
+            dialog.exec_()
+
+        action = QtWidgets.QAction("Copy to projects..", menu)
+        return [(action, _copy_to_projects)]
+
     def _extract_to_file(self):
         filepath = ExtractHelper.ask_for_save_filepath(self)
         if not filepath:
@@ -518,6 +533,7 @@ class BaseWidget(QtWidgets.QWidget):
 
         ui_actions = []
         ui_actions.extend(self._copy_value_actions(menu))
+        ui_actions.extend(self._copy_values_to_projects_actions(menu))
         ui_actions.extend(self._paste_value_actions(menu))
         if ui_actions:
             ui_actions.insert(0, _MENU_SEPARATOR_REQ)

@@ -295,6 +295,7 @@ class CollectMayaRender(pyblish.api.ContextPlugin):
                 "source": filepath,
                 "expectedFiles": full_exp_files,
                 "publishRenderMetadataFolder": common_publish_meta_path,
+                "renderProducts": layer_render_products,
                 "resolutionWidth": lib.get_attr_in_layer(
                     "defaultResolution.width", layer=layer_name
                 ),
@@ -361,9 +362,6 @@ class CollectMayaRender(pyblish.api.ContextPlugin):
             instance.data["label"] = label
             instance.data["farm"] = True
             instance.data.update(data)
-
-            if os.environ.get("OPENPYPE_DEBUG") == "1":
-                self.log.debug("data: {}".format(json.dumps(data, indent=4)))
 
     def parse_options(self, render_globals):
         """Get all overrides with a value, skip those without.

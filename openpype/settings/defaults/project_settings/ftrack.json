@@ -57,7 +57,7 @@
                     "Not Ready"
                 ],
                 "__ignore__": [
-                    "in prgoress",
+                    "in progress",
                     "omitted",
                     "on hold"
                 ]
@@ -96,10 +96,6 @@
             "enabled": true,
             "mapping": {},
             "asset_types_to_skip": []
-        },
-        "first_version_status": {
-            "enabled": true,
-            "status": ""
         },
         "next_task_update": {
             "enabled": true,
@@ -466,7 +462,7 @@
             "family_mapping": {
                 "camera": "cam",
                 "look": "look",
-                "mayaascii": "scene",
+                "mayaAscii": "scene",
                 "model": "geo",
                 "rig": "rig",
                 "setdress": "setdress",

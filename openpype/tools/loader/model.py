@@ -14,8 +14,7 @@ from openpype.client import (
     get_versions,
     get_hero_versions,
     get_version_by_name,
-    get_representations,
-    get_representations_parents
+    get_representations
 )
 from openpype.pipeline import (
     registered_host,
@@ -26,6 +25,7 @@ from openpype.pipeline import (
 from openpype.style import get_default_entity_icon_color
 from openpype.tools.utils.models import TreeModel, Item
 from openpype.tools.utils import lib
+from openpype.host import ILoadHost
 
 from openpype.modules import ModulesManager
 from openpype.tools.utils.constants import (
@@ -138,8 +138,8 @@ class SubsetsModel(TreeModel, BaseRepresentationModel):
         "duration",
         "handles",
         "step",
-        "repre_info",
-        "loaded_in_scene"
+        "loaded_in_scene",
+        "repre_info"
     ]
 
     column_labels_mapping = {
@@ -153,8 +153,8 @@ class SubsetsModel(TreeModel, BaseRepresentationModel):
         "duration": "Duration",
         "handles": "Handles",
         "step": "Step",
-        "repre_info": "Availability",
-        "loaded_in_scene": "In scene"
+        "loaded_in_scene": "In scene",
+        "repre_info": "Availability"
     }
 
     SortAscendingRole = QtCore.Qt.UserRole + 2
@@ -284,15 +284,17 @@ class SubsetsModel(TreeModel, BaseRepresentationModel):
 
                 # update availability on active site when version changes
                 if self.sync_server.enabled and version_doc:
-                    repre_info = self.sync_server.get_repre_info_for_versions(
-                        project_name,
-                        [version_doc["_id"]],
-                        self.active_site,
-                        self.remote_site
+                    repres_info = list(
+                        self.sync_server.get_repre_info_for_versions(
+                            project_name,
+                            [version_doc["_id"]],
+                            self.active_site,
+                            self.remote_site
+                        )
                     )
-                    if repre_info:
+                    if repres_info:
                         version_doc["data"].update(
-                            self._get_repre_dict(repre_info[0]))
+                            self._get_repre_dict(repres_info[0]))
 
             self.set_version(index, version_doc)
 
@@ -505,29 +507,34 @@ class SubsetsModel(TreeModel, BaseRepresentationModel):
         if self._doc_fetching_stop:
             return
 
-        repre_info = {}
+        repre_info_by_version_id = {}
         if self.sync_server.enabled:
-            version_ids = set()
+            versions_by_id = {}
             for _subset_id, doc in last_versions_by_subset_id.items():
-                version_ids.add(doc["_id"])
+                versions_by_id[doc["_id"]] = doc
 
-            repres = self.sync_server.get_repre_info_for_versions(
+            repres_info = self.sync_server.get_repre_info_for_versions(
                 project_name,
-                list(version_ids), self.active_site, self.remote_site
+                list(versions_by_id.keys()),
+                self.active_site,
+                self.remote_site
             )
-            for repre in repres:
+            for repre_info in repres_info:
                 if self._doc_fetching_stop:
                     return
+
+                version_id = repre_info["_id"]
+                doc = versions_by_id[version_id]
                 doc["active_provider"] = self.active_provider
                 doc["remote_provider"] = self.remote_provider
-                repre_info[repre["_id"]] = repre
+                repre_info_by_version_id[version_id] = repre_info
 
         self._doc_payload = {
             "asset_docs_by_id": asset_docs_by_id,
             "subset_docs_by_id": subset_docs_by_id,
             "subset_families": subset_families,
             "last_versions_by_subset_id": last_versions_by_subset_id,
-            "repre_info_by_version_id": repre_info,
+            "repre_info_by_version_id": repre_info_by_version_id,
             "subsets_loaded_by_id": loaded_subset_ids
         }
 
@@ -565,8 +572,12 @@ class SubsetsModel(TreeModel, BaseRepresentationModel):
         if self._host:
             time_since_refresh = time.time() - self._host_loaded_refresh_time
             if time_since_refresh > self._host_loaded_refresh_timeout:
-                repre_ids = {con.get("representation")
-                             for con in self._host.ls()}
+                if isinstance(self._host, ILoadHost):
+                    containers = self._host.get_containers()
+                else:
+                    containers = self._host.ls()
+
+                repre_ids = {con.get("representation") for con in containers}
                 self._loaded_representation_ids = repre_ids
                 self._host_loaded_refresh_time = time.time()
 
@@ -682,9 +693,7 @@ class SubsetsModel(TreeModel, BaseRepresentationModel):
             data["asset"] = asset_docs_by_id[asset_id]["name"]
 
             data["last_version"] = last_version
-
-            loaded = subset_doc["_id"] in subsets_loaded_by_id
-            data["loaded_in_scene"] = "yes" if loaded else "no"
+            data["loaded_in_scene"] = subset_doc["_id"] in subsets_loaded_by_id
 
             # Sync server data
             data.update(

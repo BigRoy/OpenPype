@@ -257,13 +257,21 @@ class FusionLoadSequence(load.LoaderPlugin):
     def _get_start(self, version_doc, tool):
         """Return real start frame of published files (incl. handles)"""
         data = version_doc["data"]
+
+        # Get start frame directly with handle if it's in data
+        start = data.get("frameStartHandle")
+        if start is not None:
+            return start
+
+        # Get frame start without handles
         start = data.get("frameStart")
         if start is None:
-            self.log.warning("Missing start frame for updated version"
+            self.log.warning("Missing start frame for version "
                              "assuming starts at frame 0 for: "
                              "{}".format(tool.Name))
             return 0
 
+        # Use `handleStart` if the data is available
         handle_start = data.get("handleStart")
         if handle_start:
             start -= handle_start

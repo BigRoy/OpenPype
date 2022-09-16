@@ -13,7 +13,6 @@ def main(env):
     # However the contents of that folder can conflict with Qt library dlls
     # so we make sure to move out of it to avoid DLL Load Failed errors.
     os.chdir("..")
-
     from openpype.hosts.fusion import api
     from openpype.hosts.fusion.api import menu
 

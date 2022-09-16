@@ -3,7 +3,6 @@ import sys
 from Qt import QtWidgets, QtCore
 
 from openpype.tools.utils import host_tools
-
 from openpype.style import load_stylesheet
 from openpype.lib import register_event_callback
 from openpype.hosts.fusion.scripts import (
@@ -45,6 +44,7 @@ class OpenPypeMenu(QtWidgets.QWidget):
             QtCore.Qt.Window
             | QtCore.Qt.CustomizeWindowHint
             | QtCore.Qt.WindowTitleHint
+            | QtCore.Qt.WindowMinimizeButtonHint
             | QtCore.Qt.WindowCloseButtonHint
             | QtCore.Qt.WindowStaysOnTopHint
         )

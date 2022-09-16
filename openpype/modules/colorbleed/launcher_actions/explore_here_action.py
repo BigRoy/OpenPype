@@ -20,7 +20,7 @@ class ExploreToCurrent(LauncherAction):
 
         from Qt import QtCore, QtWidgets
         from openpype.pipeline import AvalonMongoDB
-        from openpype.api import Anatomy
+        from openpype.pipeline.anatomy import Anatomy
 
         # Prerequirements
         project_name = session["AVALON_PROJECT"]

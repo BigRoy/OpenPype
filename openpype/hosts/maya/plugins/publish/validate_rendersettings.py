@@ -106,7 +106,6 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
     def get_invalid(cls, instance):
 
         invalid = False
-        multipart = False
 
         renderer = instance.data['renderer']
         layer = instance.data['setMembers']

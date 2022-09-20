@@ -16,6 +16,7 @@ from openpype.hosts.fusion.api.lib import (
 from openpype.pipeline import legacy_io
 
 from .pulse import FusionPulse
+from .pipeline import CompSessions
 
 self = sys.modules[__name__]
 self.menu = None
@@ -130,6 +131,49 @@ class OpenPypeMenu(QtWidgets.QWidget):
         # Force close current process if Fusion is closed
         self._pulse = FusionPulse(parent=self)
         self._pulse.start()
+
+        self._check_active_comp_timer = QtCore.QTimer()
+        self._check_active_comp_timer.setInterval(2500)
+        self._check_active_comp_timer.start()
+        self._check_active_comp_timer.timeout.connect(self._check_active_comp)
+
+        self._fusion = getattr(sys.modules["__main__"], "fusion", None)
+        self._last_comp = None
+
+        # We directly check for current session comp because the OpenPype
+        # menu could have been closed and re-opened by the user. By checking
+        # directly the re-opened menu can directly enter the correct session
+        # since by default it'd inherit the original session Fusion started in.
+        self._check_active_comp()
+
+    def _check_active_comp(self):
+        """Check current comp against registered comp session for this fusion.
+
+        If the current comp is not the same comp as in the last check then
+        it will check if that comp id was found in this fusion process before
+        with a valid OpenPype Session and update the current session to match
+        the session that belonged to that comp. It allows to OpenPype menu
+        to auto-match the correct context environment.
+
+        """
+        # TODO: Auto-updating on comp switch can be dangerous during publishing
+        #       Investigate.
+        comp = self._fusion.CurrentComp
+
+        # Direct object comparison doesn't work with Fusion python objects
+        if str(self._last_comp) == str(comp):
+            return
+
+        self._last_comp = comp
+        sessions = CompSessions.instance()
+        session = sessions.get_comp_session(comp)
+        if session:
+            if sessions.apply_comp_session(session):
+                comp.Print("Automatic updating the active session "
+                           "to new comp: {project} > {asset} > {task}".format(
+                                project=session["AVALON_PROJECT"],
+                                asset=session["AVALON_ASSET"],
+                                task=session["AVALON_TASK"]))
 
     def on_task_changed(self):
         # Update current context label

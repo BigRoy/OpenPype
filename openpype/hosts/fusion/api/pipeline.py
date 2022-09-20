@@ -2,7 +2,11 @@
 Basic avalon integration
 """
 import os
+import re
+import sys
+import json
 import logging
+import tempfile
 
 import pyblish.api
 
@@ -18,6 +22,12 @@ from openpype.pipeline import (
     deregister_creator_plugin_path,
     deregister_inventory_action_path,
     AVALON_CONTAINER_ID,
+    legacy_io
+)
+from openpype.client import get_asset_by_name
+from openpype.pipeline.context_tools import (
+    change_current_context,
+    compute_session_changes
 )
 from openpype.pipeline.load import any_outdated_containers
 from openpype.hosts.fusion import FUSION_HOST_DIR
@@ -42,9 +52,9 @@ INVENTORY_PATH = os.path.join(PLUGINS_DIR, "inventory")
 class CompLogHandler(logging.Handler):
     def emit(self, record):
         entry = self.format(record)
-        comp = get_current_comp()
-        if comp:
-            comp.Print(entry)
+        fusion = getattr(sys.modules["__main__"], "fusion", None)
+        if fusion:
+            fusion.Print(entry)
 
 
 def install():
@@ -89,7 +99,8 @@ def install():
     # Fusion integration currently does not attach to direct callbacks of
     # the application. So we use workfile callbacks to allow similar behavior
     # on save and open
-    register_event_callback("workfile.open.after", on_after_open)
+    register_event_callback("workfile.open.after", on_after_workfile_open)
+    register_event_callback("workfile.save.after", on_after_workfile_save)
 
 
 def uninstall():
@@ -139,16 +150,22 @@ def on_pyblish_instance_toggled(instance, old_value, new_value):
                 tool.SetAttrs({"TOOLB_PassThrough": passthrough})
 
 
-def on_after_open(_event):
-    validate_comp_prefs()
+def on_after_workfile_save(_event):
+    comp = get_current_comp()
+    CompSessions.instance().register_comp_session(comp)
+
+
+def on_after_workfile_open(_event):
+    comp = get_current_comp()
+    CompSessions.instance().register_comp_session(comp)
+
+    validate_comp_prefs(comp)
 
     if any_outdated_containers():
         log.warning("Scene has outdated content.")
 
         # Find OpenPype menu to attach to
         from . import menu
-
-        comp = get_current_comp()
 
         def _on_show_scene_inventory():
             # ensure that comp is active
@@ -257,3 +274,114 @@ def parse_container(tool):
     return container
 
 
+class CompSessions(object):
+    """Store and retrieve OpenPype Session per Comp
+
+    For the current app id (unique like process id) we produce a temporary
+    json file in which we can store an OpenPype Session per comp. Using that
+    Session we know what "AVALON_ASSET", "AVALON_TASK", etc. the comp was
+    related to.
+
+    The Sessions are stored as:
+    {
+        "{comp_id1}": SESSION1,
+        "{comp_id2}": SESSION2,
+    }
+
+    Where SESSION is a copy of a `legacy_io.Session` reduced to only the
+        AVALON_PROJECT, AVALON_ASSET, AVALON_TASK
+
+    """
+    _instance = None
+
+    @classmethod
+    def instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+
+        uuid = self.get_fusion_id()
+        folder = tempfile.gettempdir()
+        fname = "fusion_{uuid}.json".format(uuid=uuid)
+        self._path = os.path.join(folder, fname)
+        self._cached = {}
+
+    def get_comp_sessions(self):
+        import json
+        if not os.path.exists(self._path):
+            return {}
+
+        with open(self._path, "r") as f:
+            data = json.load(f)
+
+        self._cached.update(data)
+        return data
+
+    def register_comp_session(self, comp, session=None):
+        if session is None:
+            session = legacy_io.Session
+
+        comp_id = self.get_comp_id(comp)
+        data = self.get_comp_sessions()
+
+        # Store only a project, asset and task of the session
+        session_reduced = {
+            "AVALON_PROJECT": session["AVALON_PROJECT"],
+            "AVALON_ASSET": session["AVALON_ASSET"],
+            "AVALON_TASK": session["AVALON_TASK"]
+        }
+        data[comp_id] = session_reduced
+
+        with open(self._path, "w") as f:
+            json.dump(data, f)
+
+    def get_comp_session(self, comp, allow_cache=True):
+        comp_id = self.get_comp_id(comp)
+        if allow_cache and comp_id in self._cached:
+            return self._cached[comp_id]
+
+        return self.get_comp_sessions().get(comp_id)
+
+    def delete(self):
+        # Delete sessions cache file
+        if os.path.isfile(self._path):
+            os.remove(self._path)
+        self._cached.clear()
+
+    def apply_comp_session(self, session):
+
+        project_name = session.get("AVALON_PROJECT")
+        asset_name = session.get("AVALON_ASSET")
+        task_name = session.get("AVALON_TASK")
+        if not project_name or not asset_name or not task_name:
+            return False
+        asset_doc = get_asset_by_name(project_name, asset_name=asset_name)
+        if not asset_doc:
+            return False
+
+        changes = compute_session_changes(legacy_io.Session,
+                                          asset_doc=asset_doc,
+                                          task_name=task_name)
+        if not changes:
+            return False
+
+        change_current_context(
+            asset_doc=asset_doc,
+            task_name=session["AVALON_ASSET"],
+            template_key="work"
+        )
+        return True
+
+    @staticmethod
+    def get_fusion_id():
+        # Get UUID from connected fusion instance
+        fusion = getattr(sys.modules["__main__"], "fusion", None)
+        match = re.search(r"UUID: (.*)\]$", str(fusion))
+        uuid = match.group(1)
+        return uuid
+
+    @staticmethod
+    def get_comp_id(comp):
+        return str(comp).split("(", 1)[1].split(")", 1)[0]

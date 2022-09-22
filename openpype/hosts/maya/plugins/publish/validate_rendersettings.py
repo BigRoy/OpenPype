@@ -11,6 +11,11 @@ from openpype.pipeline.publish import (
     ValidateContentsOrder,
 )
 from openpype.hosts.maya.api import lib
+from openpype.hosts.maya.api.lib_rendersettings import RenderSettings
+from openpype.hosts.maya.api.lib_renderproducts import (
+    R_AOV_TOKEN,
+    R_LAYER_TOKEN
+)
 
 
 class ValidateRenderSettings(pyblish.api.InstancePlugin):
@@ -48,30 +53,6 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
     families = ["renderlayer"]
     actions = [RepairAction]
 
-    ImagePrefixes = {
-        'mentalray': 'defaultRenderGlobals.imageFilePrefix',
-        'vray': 'vraySettings.fileNamePrefix',
-        'arnold': 'defaultRenderGlobals.imageFilePrefix',
-        'renderman': 'rmanGlobals.imageFileFormat',
-        'redshift': 'defaultRenderGlobals.imageFilePrefix',
-        'mayahardware2': 'defaultRenderGlobals.imageFilePrefix',
-    }
-
-    ImagePrefixTokens = {
-        'mentalray': '<Scene>/<RenderLayer>/<RenderLayer>{aov_separator}<RenderPass>',  # noqa: E501
-        'arnold': '<Scene>/<RenderLayer>/<RenderLayer>{aov_separator}<RenderPass>',  # noqa: E501
-        'redshift': '<Scene>/<RenderLayer>/<RenderLayer>',
-        'vray': '<Scene>/<Layer>/<Layer>',
-        'renderman': '<layer>{aov_separator}<aov>.<f4>.<ext>',
-        'mayahardware2': '<Scene>/<RenderLayer>/<RenderLayer>',
-    }
-
-    _aov_chars = {
-        "dot": ".",
-        "dash": "-",
-        "underscore": "_"
-    }
-
     _required_globals = {
         "outFormatControl": 0,
         "animation": 1,
@@ -85,10 +66,6 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
 
     renderman_dir_prefix = "<scene>/<layer>"
 
-    R_AOV_TOKEN = re.compile(
-        r'%a|<aov>|<renderpass>', re.IGNORECASE)
-    R_LAYER_TOKEN = re.compile(
-        r'%l|<layer>|<renderlayer>', re.IGNORECASE)
     R_CAMERA_TOKEN = re.compile(r'%c|Camera>')
     R_SCENE_TOKEN = re.compile(r'%s|<scene>', re.IGNORECASE)
 
@@ -111,12 +88,14 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
         layer = instance.data['setMembers']
         cameras = instance.data.get("cameras", [])
 
-        # Get the node attributes for current renderer
-        attrs = lib.RENDER_ATTRS.get(renderer, lib.RENDER_ATTRS['default'])
-        prefix = lib.get_attr_in_layer(cls.ImagePrefixes[renderer],
-                                       layer=layer)
-        padding = lib.get_attr_in_layer("{node}.{padding}".format(**attrs),
-                                        layer=layer)
+        render_settings = RenderSettings(
+            project_settings=instance.context.data["project_settings"])
+
+        # Get current image prefix and padding set in scene
+        prefix = lib.get_attr_in_layer(
+            render_settings.get_image_prefix_attr(renderer), layer=layer)
+        padding = lib.get_attr_in_layer(
+            render_settings.get_padding_attr(renderer), layer=layer)
 
         anim_override = lib.get_attr_in_layer("defaultRenderGlobals.animation",
                                               layer=layer)
@@ -124,14 +103,16 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
         prefix = prefix.replace(
             "{aov_separator}", instance.data.get("aovSeparator", "_"))
 
-        default_prefix = cls.ImagePrefixTokens[renderer]
+        default_prefix = render_settings.get_default_image_prefix(
+            renderer, format_aov_separator=False)
+        aov_separator = render_settings.get_aov_separator()
 
         if not anim_override:
             invalid = True
             cls.log.error("Animation needs to be enabled. Use the same "
                           "frame for start and end to render single frame")
 
-        if not re.search(cls.R_LAYER_TOKEN, prefix):
+        if not re.search(R_LAYER_TOKEN, prefix):
             invalid = True
             cls.log.error("Wrong image prefix [ {} ] - "
                           "doesn't have: '<renderlayer>' or "
@@ -160,9 +141,9 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
 
         if renderer == "redshift":
             redshift_AOV_prefix = cls.redshift_AOV_prefix.replace(
-                "{aov_separator}", instance.data.get("aovSeparator", "_")
+                "{aov_separator}", aov_separator
             )
-            if re.search(cls.R_AOV_TOKEN, prefix):
+            if re.search(R_AOV_TOKEN, prefix):
                 invalid = True
                 cls.log.error(("Do not use AOV token [ {} ] - "
                                "Redshift is using image prefixes per AOV so "
@@ -210,28 +191,30 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
 
         if renderer == "arnold":
             multipart = cmds.getAttr("defaultArnoldDriver.mergeAOVs")
+            multipart_default = render_settings.get(
+                "arnold_renderer/multilayer_exr", True)
+            if multipart != multipart_default:
+                cls.log.warning("Warning: Merge AOVs differs from project "
+                                "recommended: {}".format(multipart_default))
+
+            prefix_has_aov_token = re.search(R_AOV_TOKEN, prefix)
             if multipart:
-                if re.search(cls.R_AOV_TOKEN, prefix):
+                if prefix_has_aov_token:
                     invalid = True
                     cls.log.error("Wrong image prefix [ {} ] - "
                                   "You can't use '<renderpass>' token "
                                   "with merge AOVs turned on".format(prefix))
-                default_prefix = re.sub(
-                    cls.R_AOV_TOKEN, "", default_prefix)
-                # remove aov token from prefix to pass validation
-                default_prefix = default_prefix.split("{aov_separator}")[0]
-            elif not re.search(cls.R_AOV_TOKEN, prefix):
+            elif not prefix_has_aov_token:
                 invalid = True
                 cls.log.error("Wrong image prefix [ {} ] - "
-                              "doesn't have: '<renderpass>' or "
-                              "token".format(prefix))
+                              "You must have: '<renderpass>' token "
+                              "with merge AOVs turned off".format(prefix))
 
-        default_prefix = default_prefix.replace(
-            "{aov_separator}", instance.data.get("aovSeparator", "_"))
+        default_prefix = default_prefix.replace("{aov_separator}",
+                                                aov_separator)
         if prefix.lower() != default_prefix.lower():
-            cls.log.warning("warning: prefix differs from "
-                            "recommended {}".format(
-                                default_prefix))
+            cls.log.warning("Warning: prefix differs from "
+                            "recommended {}".format(default_prefix))
             invalid = True
 
         for attr, value in cls._required_globals.items():
@@ -242,28 +225,29 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                 cls.log.error("Invalid default render globals set for {}: {} "
                               "(should be: {})".format(plug, current, value))
 
+
         if padding != cls.DEFAULT_PADDING:
             invalid = True
             cls.log.error("Expecting padding of {} ( {} )".format(
                 cls.DEFAULT_PADDING, "0" * cls.DEFAULT_PADDING))
 
-        # load validation definitions from settings
-        validation_settings = (
-            instance.context.data["project_settings"]["maya"]["publish"]["ValidateRenderSettings"].get(  # noqa: E501
-                "{}_render_attributes".format(renderer)) or []
-        )
-        settings_lights_flag = instance.context.data["project_settings"].get(
-            "maya", {}).get(
-            "RenderSettings", {}).get(
-            "enable_all_lights", False)
-
+        # Validate render setup include all lights
+        settings_lights_flag = render_settings.get("enable_all_lights", False)
         instance_lights_flag = instance.data.get("renderSetupIncludeLights")
         if settings_lights_flag != instance_lights_flag:
             cls.log.warning('Instance flag for "Render Setup Include Lights" is set to {0} and Settings flag is set to {1}'.format(instance_lights_flag, settings_lights_flag)) # noqa
 
-        # go through definitions and test if such node.attribute exists.
-        # if so, compare its value from the one required.
-        for attr, value in OrderedDict(validation_settings).items():
+        # Validate render settings attributes per renderer
+        attr_validations = (
+            instance.context.data["project_settings"]
+                                 ["maya"]
+                                 ["publish"]
+                                 ["ValidateRenderSettings"]
+        ).get("{}_render_attributes".format(renderer)) or []
+        for attr, value in attr_validations:
+            # go through definitions and test if such node.attribute exists.
+            # if so, compare its value from the one required.
+
             # first get node of that type
             cls.log.debug("{}: {}".format(attr, value))
             node_type = attr.split(".")[0]
@@ -275,21 +259,18 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                 continue
 
             for node in nodes:
+                plug = "{}.{}".format(node, attribute_name)
                 try:
-                    render_value = cmds.getAttr(
-                        "{}.{}".format(node, attribute_name))
+                    render_value = cmds.getAttr(plug)
                 except RuntimeError:
                     invalid = True
-                    cls.log.error(
-                        "Cannot get value of {}.{}".format(
-                            node, attribute_name))
+                    cls.log.error("Cannot get value of {}".format(plug))
                 else:
                     if str(value) != str(render_value):
                         invalid = True
                         cls.log.error(
-                            ("Invalid value {} set on {}.{}. "
-                             "Expecting {}").format(
-                                render_value, node, attribute_name, value)
+                            "Invalid value {} set on {}. Expecting {}"
+                            "".format(render_value, plug, value)
                         )
 
         return invalid
@@ -298,30 +279,23 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
     def repair(cls, instance):
         renderer = instance.data['renderer']
         layer_node = instance.data['setMembers']
-        redshift_AOV_prefix = cls.redshift_AOV_prefix.replace(
-            "{aov_separator}", instance.data.get("aovSeparator", "_")
-        )
-        default_prefix = cls.ImagePrefixTokens[renderer].replace(
-            "{aov_separator}", instance.data.get("aovSeparator", "_")
-        )
+
+        render_settings = RenderSettings(
+            project_settings=instance.context.data["project_settings"])
+
+        default_prefix = render_settings.get_default_image_prefix(renderer)
+        aov_separator = render_settings.get_aov_separator()
 
         with lib.renderlayer(layer_node):
-            default = lib.RENDER_ATTRS['default']
-            render_attrs = lib.RENDER_ATTRS.get(renderer, default)
 
-            # Repair prefix
             if renderer != "renderman":
-                node = render_attrs["node"]
-                prefix_attr = render_attrs["prefix"]
-
-                fname_prefix = default_prefix
-                cmds.setAttr("{}.{}".format(node, prefix_attr),
-                             fname_prefix, type="string")
+                # Repair prefix
+                prefix_attr = render_settings.get_image_prefix_attr(renderer)
+                cmds.setAttr(prefix_attr, default_prefix, type="string")
 
                 # Repair padding
-                padding_attr = render_attrs["padding"]
-                cmds.setAttr("{}.{}".format(node, padding_attr),
-                             cls.DEFAULT_PADDING)
+                padding_attr = render_settings.get_padding_attr(renderer)
+                cmds.setAttr(padding_attr, cls.DEFAULT_PADDING)
             else:
                 # renderman handles stuff differently
                 cmds.setAttr("rmanGlobals.imageFileFormat",
@@ -331,6 +305,7 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                              cls.renderman_dir_prefix,
                              type="string")
 
+            # Repair AOV separators
             if renderer == "vray":
                 vray_settings = cmds.ls(type="VRaySettingsNode")
                 if not vray_settings:
@@ -339,27 +314,29 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                     node = vray_settings[0]
 
                 cmds.optionMenuGrp("vrayRenderElementSeparator",
-                                   v=instance.data.get("aovSeparator", "_"))
+                                   v=aov_separator)
                 cmds.setAttr(
-                    "{}.fileNameRenderElementSeparator".format(
-                        node),
-                    instance.data.get("aovSeparator", "_"),
+                    "{}.fileNameRenderElementSeparator".format(node),
+                    aov_separator,
                     type="string"
                 )
 
             if renderer == "redshift":
+                redshift_AOV_prefix = cls.redshift_AOV_prefix.replace(
+                    "{aov_separator}", aov_separator
+                )
                 # get redshift AOVs
                 rs_aovs = cmds.ls(type="RedshiftAOV", referencedNodes=False)
                 for aov in rs_aovs:
                     # fix AOV prefixes
-                    cmds.setAttr(
-                        "{}.filePrefix".format(aov),
-                        redshift_AOV_prefix, type="string")
+                    cmds.setAttr("{}.filePrefix".format(aov),
+                                 redshift_AOV_prefix,
+                                 type="string")
                     # fix AOV file format
-                    default_ext = cmds.getAttr(
-                        "redshiftOptions.imageFormat", asString=True)
-                    cmds.setAttr(
-                        "{}.fileFormat".format(aov), default_ext)
+                    default_ext = cmds.getAttr("redshiftOptions.imageFormat",
+                                               asString=True)
+                    cmds.setAttr("{}.fileFormat".format(aov),
+                                 default_ext)
 
             for attr, value in cls._required_globals.items():
                 plug = "defaultRenderGlobals.{}".format(attr)

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """Maya validator for render settings."""
 import re
-from collections import OrderedDict
 
 from maya import cmds, mel
 
@@ -220,12 +219,22 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
             cls.log.warning('Instance flag for "Render Setup Include Lights" is set to {0} and Settings flag is set to {1}'.format(instance_lights_flag, settings_lights_flag)) # noqa
 
         # Validate render settings attributes per renderer
+        if cls.get_invalid_attributes(instance):
+            invalid = True
+
+        return invalid
+
+    @classmethod
+    def get_invalid_attributes(cls, instance):
+        renderer = instance.data["renderer"]
         attr_validations = (
             instance.context.data["project_settings"]
                                  ["maya"]
                                  ["publish"]
                                  ["ValidateRenderSettings"]
         ).get("{}_render_attributes".format(renderer)) or []
+
+        invalid_diffs = []
         for attr, value in attr_validations:
             # go through definitions and test if such node.attribute exists.
             # if so, compare its value from the one required.
@@ -242,20 +251,20 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
 
             for node in nodes:
                 plug = "{}.{}".format(node, attribute_name)
+
                 try:
-                    render_value = cmds.getAttr(plug)
+                    diff = lib.attribute_diff(plug, value)
                 except RuntimeError:
-                    invalid = True
                     cls.log.error("Cannot get value of {}".format(plug))
                 else:
-                    if str(value) != str(render_value):
-                        invalid = True
+                    if not diff.match:
+                        invalid_diffs.append(diff)
                         cls.log.error(
                             "Invalid value {} set on {}. Expecting {}"
-                            "".format(render_value, plug, value)
+                            "".format(diff.current_value, plug, value)
                         )
 
-        return invalid
+        return invalid_diffs
 
     @classmethod
     def repair(cls, instance):
@@ -319,3 +328,7 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                                                asString=True)
                     cmds.setAttr("{}.fileFormat".format(aov),
                                  default_ext)
+
+        # Apply the changes
+        for attr_diff in cls.get_invalid_attributes(instance):
+            attr_diff.apply()

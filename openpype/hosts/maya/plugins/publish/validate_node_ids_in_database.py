@@ -42,6 +42,8 @@ class ValidateNodeIdsInDatabase(pyblish.api.InstancePlugin):
         # Get all id required nodes
         id_required_nodes = lib.get_id_required_nodes(referenced_nodes=True,
                                                       nodes=instance[:])
+        if not id_required_nodes:
+            return
 
         # check ids against database ids
         project_name = legacy_io.active_project()

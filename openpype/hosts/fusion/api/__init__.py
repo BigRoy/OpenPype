@@ -5,10 +5,7 @@ from .pipeline import (
     ls,
 
     imprint_container,
-    parse_container,
-
-    get_current_comp,
-    comp_lock_and_undo_chunk
+    parse_container
 )
 
 from .workio import (
@@ -22,9 +19,10 @@ from .workio import (
 
 from .lib import (
     maintained_selection,
-    get_additional_data,
     update_frame_range,
-    set_framerange
+    set_asset_framerange,
+    get_current_comp,
+    comp_lock_and_undo_chunk
 )
 
 from .menu import launch_openpype_menu
@@ -39,9 +37,6 @@ __all__ = [
     "imprint_container",
     "parse_container",
 
-    "get_current_comp",
-    "comp_lock_and_undo_chunk",
-
     # workio
     "open_file",
     "save_file",
@@ -52,9 +47,10 @@ __all__ = [
 
     # lib
     "maintained_selection",
-    "get_additional_data",
     "update_frame_range",
-    "set_framerange",
+    "set_asset_framerange",
+    "get_current_comp",
+    "comp_lock_and_undo_chunk",
 
     # menu
     "launch_openpype_menu",

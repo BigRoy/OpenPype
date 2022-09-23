@@ -1,6 +1,6 @@
 import sys
 
-from Qt import QtWidgets, QtCore
+from Qt import QtWidgets, QtCore, QtGui
 
 from openpype.tools.utils import host_tools
 from openpype.style import load_stylesheet
@@ -9,29 +9,17 @@ from openpype.hosts.fusion.scripts import (
     set_rendermode,
     duplicate_with_inputs
 )
-from openpype.hosts.fusion.api import (
-    set_framerange
+from openpype.hosts.fusion.api.lib import (
+    set_asset_framerange,
+    set_asset_resolution
 )
 from openpype.pipeline import legacy_io
+from openpype.resources import get_openpype_icon_filepath
 
 from .pulse import FusionPulse
 
-
-class Spacer(QtWidgets.QWidget):
-    def __init__(self, height, *args, **kwargs):
-        super(Spacer, self).__init__(*args, **kwargs)
-
-        self.setFixedHeight(height)
-
-        real_spacer = QtWidgets.QWidget(self)
-        real_spacer.setObjectName("Spacer")
-        real_spacer.setFixedHeight(height)
-
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(real_spacer)
-
-        self.setLayout(layout)
+self = sys.modules[__name__]
+self.menu = None
 
 
 class OpenPypeMenu(QtWidgets.QWidget):
@@ -39,6 +27,10 @@ class OpenPypeMenu(QtWidgets.QWidget):
         super(OpenPypeMenu, self).__init__(*args, **kwargs)
 
         self.setObjectName("OpenPypeMenu")
+
+        icon_path = get_openpype_icon_filepath()
+        icon = QtGui.QIcon(icon_path)
+        self.setWindowIcon(icon)
 
         self.setWindowFlags(
             QtCore.Qt.Window
@@ -78,29 +70,29 @@ class OpenPypeMenu(QtWidgets.QWidget):
 
         layout.addWidget(asset_label)
 
-        layout.addWidget(Spacer(15, self))
+        layout.addSpacing(20)
 
         layout.addWidget(workfiles_btn)
 
-        layout.addWidget(Spacer(15, self))
+        layout.addSpacing(20)
 
         layout.addWidget(create_btn)
         layout.addWidget(load_btn)
         layout.addWidget(publish_btn)
         layout.addWidget(manager_btn)
 
-        layout.addWidget(Spacer(15, self))
+        layout.addSpacing(20)
 
         layout.addWidget(libload_btn)
 
-        layout.addWidget(Spacer(15, self))
+        layout.addSpacing(20)
 
         layout.addWidget(saver_manager_btn)
         layout.addWidget(set_framerange_btn)
         layout.addWidget(set_resolution_btn)
         layout.addWidget(rendermode_btn)
 
-        layout.addWidget(Spacer(15, self))
+        layout.addSpacing(20)
 
         layout.addWidget(duplicate_with_inputs_btn)
 
@@ -149,27 +141,21 @@ class OpenPypeMenu(QtWidgets.QWidget):
         self._callbacks[:] = []
 
     def on_workfile_clicked(self):
-        print("Clicked Workfile")
         host_tools.show_workfiles()
 
     def on_create_clicked(self):
-        print("Clicked Create")
         host_tools.show_creator()
 
     def on_publish_clicked(self):
-        print("Clicked Publish")
         host_tools.show_publish()
 
     def on_load_clicked(self):
-        print("Clicked Load")
         host_tools.show_loader(use_context=True)
 
     def on_manager_clicked(self):
-        print("Clicked Manager")
         host_tools.show_scene_inventory()
 
     def on_libload_clicked(self):
-        print("Clicked Library")
         host_tools.show_library_loader()
 
     def on_saver_manager_clicked(self):
@@ -180,7 +166,6 @@ class OpenPypeMenu(QtWidgets.QWidget):
         manager.show()
 
     def on_rendermode_clicked(self):
-        print("Clicked Set Render Mode")
         if self.render_mode_widget is None:
             window = set_rendermode.SetRenderMode()
             window.setStyleSheet(load_stylesheet())
@@ -190,15 +175,13 @@ class OpenPypeMenu(QtWidgets.QWidget):
             self.render_mode_widget.show()
 
     def on_duplicate_with_inputs_clicked(self):
-        print("Clicked Duplicate with input connections")
         duplicate_with_inputs.duplicate_with_input_connections()
 
     def on_set_resolution_clicked(self):
-        print("Clicked Reset Resolution")
+        set_asset_resolution()
 
     def on_set_framerange_clicked(self):
-        print("Clicked Reset Framerange")
-        set_framerange()
+        set_asset_framerange()
 
 
 def launch_openpype_menu():
@@ -210,6 +193,7 @@ def launch_openpype_menu():
     pype_menu.setStyleSheet(stylesheet)
 
     pype_menu.show()
+    self.menu = pype_menu
 
     result = app.exec_()
     print("Shutting down..")

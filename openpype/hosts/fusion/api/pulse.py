@@ -19,9 +19,8 @@ class PulseThread(QtCore.QThread):
         while True:
             if self.isInterruptionRequested():
                 return
-            try:
-                app.Test()
-            except Exception:
+
+            if app.Test is None:
                 self.no_response.emit()
 
             self.msleep(interval)

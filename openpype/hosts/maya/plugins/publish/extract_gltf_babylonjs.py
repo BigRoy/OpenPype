@@ -162,7 +162,7 @@ class ExtractGLTFBabylonJS(publish.Extractor):
 
         cmds.loadPlugin("Maya2Babylon", quiet=True)
 
-        filename = instance.name
+        filename = instance.name + ".gltf"
         staging_dir = self.staging_dir(instance)
         filepath = os.path.join(staging_dir, filename)
 
@@ -184,11 +184,27 @@ class ExtractGLTFBabylonJS(publish.Extractor):
                     override_parameters[key] = value
 
         # Export
+        self.log.info(f"Extracting to: {filepath}")
         with maintained_selection():
             cmds.select(instance[:], r=1, noExpand=True)
             export_babylonjs(outputPath=filepath,
                              animations=animations,
                              **override_parameters)
+
+        # The GLTF format will introduce additional file outputs like .bin
+        # binary data and potentially textures that are referenced by name
+        # from the main .gltf file - we'll want to transfer those explicitly
+        # into the published folder to ensure those links remain correct.
+        transfers = instance.data.setdefault("transfers", [])
+        publish_dir = instance.data["publishDir"]
+        for fname in os.listdir(staging_dir):
+            if fname == filename:
+                # Exclude the main file
+                continue
+            source = os.path.join(staging_dir, fname)
+            destination = os.path.join(publish_dir, fname)
+            self.log.debug(f"Adding resource: {fname}")
+            transfers.append((source, destination))
 
         representations = instance.data.setdefault("representations", [])
         representations.append({

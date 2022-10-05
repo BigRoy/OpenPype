@@ -55,7 +55,8 @@ class CollectResourcesPath(pyblish.api.InstancePlugin):
                 "background",
                 "effect",
                 "staticMesh",
-                "skeletalMesh"
+                "skeletalMesh",
+                "gltf"
                 ]
 
     def process(self, instance):

@@ -15,9 +15,6 @@ class CreateGltf(plugin.Creator):
     def __init__(self, *args, **kwargs):
         super(CreateGltf, self).__init__(*args, **kwargs)
 
-        # create an ordered dict with the existing data first
-        self.data["animation"] = False
-
         # get basic animation data : start / end / handles / steps
         for key, value in lib.collect_animation_data().items():
             self.data[key] = value

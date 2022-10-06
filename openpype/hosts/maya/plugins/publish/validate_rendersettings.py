@@ -235,7 +235,6 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                 cls.log.error("Invalid default render globals set for {}: {} "
                               "(should be: {})".format(plug, current, value))
 
-
         if padding != cls.DEFAULT_PADDING:
             invalid = True
             cls.log.error("Expecting padding of {} ( {} )".format(
@@ -260,12 +259,19 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
 
             # first get node of that type
             cls.log.debug("{}: {}".format(attr, value))
-            node_type = attr.split(".")[0]
-            attribute_name = ".".join(attr.split(".")[1:])
+            if "." not in attr:
+                cls.log.warning("Skipping invalid attribute defined in "
+                                "validation settings: '{}'".format(attr))
+                continue
+
+            node_type, attribute_name = attr.split(".", 1)
+
+            # first get node of that type
             nodes = cmds.ls(type=node_type)
 
-            if not isinstance(nodes, list):
-                cls.log.warning("No nodes of '{}' found.".format(node_type))
+            if not nodes:
+                cls.log.warning(
+                    "No nodes of type '{}' found.".format(node_type))
                 continue
 
             for node in nodes:

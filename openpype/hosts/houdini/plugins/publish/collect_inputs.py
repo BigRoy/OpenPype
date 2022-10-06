@@ -74,6 +74,10 @@ def iter_upstream(node):
 
         # Include the references' ancestors that have not been collected yet.
         for reference in references:
+            if reference in collected:
+                # Might have been collected in previous iteration
+                continue
+
             ancestors = reference.inputAncestors(
                 include_ref_inputs=True, follow_subnets=True
             )

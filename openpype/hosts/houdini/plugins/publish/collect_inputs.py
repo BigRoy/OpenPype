@@ -124,14 +124,18 @@ class CollectUpstreamInputs(pyblish.api.InstancePlugin):
                 container["_members"] = container_members
             instance.context.data["__cache_containers"] = scene_containers
 
-        # Collect all upstream parents
-        nodes = list(iter_upstream(output))
-        nodes.append(output)
+        if scene_containers:
+            # Collect all upstream parents
+            nodes = list(iter_upstream(output))
+            nodes.append(output)
 
-        # Collect containers for the given set of nodes
-        containers = collect_input_containers(scene_containers, nodes)
+            # Collect containers for the given set of nodes
+            containers = collect_input_containers(scene_containers, nodes)
 
-        inputs = [ObjectId(c["representation"]) for c in containers]
+            inputs = [ObjectId(c["representation"]) for c in containers]
+        else:
+            inputs = []
+
         instance.data["inputRepresentations"] = inputs
 
         self.log.info("Collected inputs: %s" % inputs)

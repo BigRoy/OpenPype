@@ -247,11 +247,10 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
     @classmethod
     def get_invalid_attributes(cls, instance):
         renderer = instance.data["renderer"]
+        render_settings = RenderSettings(
+            project_settings=instance.context.data["project_settings"])
 
         attr_validations = {}
-
-        # Required globals
-        attr_validations.update(cls._required_globals.items())
 
         # project_settings/maya/publish/ValidateRenderSettings
         # Renderer specific by node type
@@ -276,6 +275,12 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
             for node in nodes:
                 plug = "{}.{}".format(node, attribute_name)
                 attr_validations[plug] = required_value
+
+        # project_setings/maya/RenderSettings/
+        #   {renderer}_renderer/additional_options
+        additional_options = dict(render_settings.get(
+            "{}_renderer/additional_options".format(renderer), []))
+        attr_validations.update(additional_options)
 
         invalid_diffs = []
         for attr, value in attr_validations.items():
@@ -361,4 +366,6 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
 
             # Apply the changes
             for attr_diff in cls.get_invalid_attributes(instance):
+                cls.log.info("Setting {diff.attribute} = {diff.to_set_value}"
+                             "".format(diff=attr_diff))
                 attr_diff.apply()

@@ -3484,7 +3484,7 @@ def iter_visible_nodes_in_range(nodes, start, end):
 
 @attr.s
 class AttrDiff:
-    attr = attr.ib(type=str)
+    attribute = attr.ib(type=str)
     match = attr.ib(type=str)
     current_value = attr.ib()
     to_set_value = attr.ib()
@@ -3495,7 +3495,7 @@ class AttrDiff:
         value = self.to_set_value
         if isinstance(value, string_types):
             kwargs["type"] = "string"
-        cmds.setAttr(self.attr, self.to_set_value, **kwargs)
+        cmds.setAttr(self.attribute, self.to_set_value, **kwargs)
 
 
 def attribute_diff(attr, value, tolerance=1e-6):

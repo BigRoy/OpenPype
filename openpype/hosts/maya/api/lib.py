@@ -12,6 +12,7 @@ import contextlib
 from collections import OrderedDict, defaultdict
 from math import ceil
 from six import string_types
+import attr
 
 from maya import cmds, mel
 import maya.api.OpenMaya as om
@@ -3479,3 +3480,85 @@ def iter_visible_nodes_in_range(nodes, start, end):
         # If no more nodes to process break the frame iterations..
         if not node_dependencies:
             break
+
+
+@attr.s
+class AttrDiff:
+    attr = attr.ib(type=str)
+    match = attr.ib(type=str)
+    current_value = attr.ib()
+    to_set_value = attr.ib()
+
+    def apply(self):
+        """Set the attribute to the value"""
+        kwargs = {}
+        value = self.to_set_value
+        if isinstance(value, string_types):
+            kwargs["type"] = "string"
+        cmds.setAttr(self.attr, self.to_set_value, **kwargs)
+
+
+def attribute_diff(attr, value, tolerance=1e-6):
+    """Compare attribute with a value.
+
+    It will try to convert the input value to the Maya
+    attribute's type. For example a string value from OP settings
+    can be interpreted to matched the attribute type.
+    Also supports other value types as inputs.
+
+    It will return None if the attributes matches the
+    value within the tolerance (float attributes only).
+    If the attribute does not match then it will return
+    a tuple with the current value and the value you
+    can set it to with `maya.cmds.setAttr`
+
+    Returns:
+        AttrDiff: Instance of AttrDiff
+
+    """
+
+    attr_type = cmds.getAttr(attr, type=True)
+    attr_value = cmds.getAttr(attr)
+
+    # Float comparison with tolerance
+    if attr_type in {"float",
+                     "double",
+                     "doubleAngle",
+                     "doubleLinear",
+                     "time"}:
+        value = float(value)
+        if tolerance:
+            match = abs(value - attr_value) <= tolerance
+        else:
+            match = value == attr_value
+
+        return AttrDiff(attr, match, attr_value, value)
+
+    # Boolean comparison allow 1, 0, True, False (and also as strings)
+    elif attr_type == "bool":
+        if isinstance(value, string_types):
+            if value.isnumeric():
+                value = bool(float(value))
+            elif value.lower() == "false":
+                value = False
+            else:
+                value = bool(value)
+
+    # Integers
+    elif attr_type in {"long", "short", "byte", "enum"}:
+        value = int(value)
+
+    # String
+    elif attr_type == "string":
+        value = str(value)
+
+    else:
+        raise NotImplementedError(
+            "Attribute {attr} can not be compared due to unsupported attribute"
+            " type: {attr_type}".format(attr=attr, attr_type=attr_type)
+        )
+
+    return AttrDiff(attr,
+                    value == attr_value,
+                    attr_value,
+                    value)

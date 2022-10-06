@@ -227,14 +227,6 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                             "recommended {}".format(default_prefix))
             invalid = True
 
-        for attr, value in cls._required_globals.items():
-            plug = "defaultRenderGlobals.{}".format(attr)
-            current = cmds.getAttr(plug)
-            if current != value:
-                invalid = True
-                cls.log.error("Invalid default render globals set for {}: {} "
-                              "(should be: {})".format(plug, current, value))
-
         if padding != cls.DEFAULT_PADDING:
             invalid = True
             cls.log.error("Expecting padding of {} ( {} )".format(
@@ -247,28 +239,35 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
             cls.log.warning('Instance flag for "Render Setup Include Lights" is set to {0} and Settings flag is set to {1}'.format(instance_lights_flag, settings_lights_flag)) # noqa
 
         # Validate render settings attributes per renderer
-        attr_validations = (
+        if cls.get_invalid_attributes(instance):
+            invalid = True
+
+        return invalid
+
+    @classmethod
+    def get_invalid_attributes(cls, instance):
+        renderer = instance.data["renderer"]
+
+        attr_validations = {}
+
+        # Required globals
+        attr_validations.update(cls._required_globals.items())
+
+        # project_settings/maya/publish/ValidateRenderSettings
+        # Renderer specific by node type
+        for attr, required_value in (
             instance.context.data["project_settings"]
                                  ["maya"]
                                  ["publish"]
                                  ["ValidateRenderSettings"]
-        ).get("{}_render_attributes".format(renderer)) or []
-        for attr, value in attr_validations:
-            # go through definitions and test if such node.attribute exists.
-            # if so, compare its value from the one required.
-
-            # first get node of that type
-            cls.log.debug("{}: {}".format(attr, value))
+            ).get("{}_render_attributes".format(renderer)) or []:
             if "." not in attr:
                 cls.log.warning("Skipping invalid attribute defined in "
                                 "validation settings: '{}'".format(attr))
                 continue
 
             node_type, attribute_name = attr.split(".", 1)
-
-            # first get node of that type
             nodes = cmds.ls(type=node_type)
-
             if not nodes:
                 cls.log.warning(
                     "No nodes of type '{}' found.".format(node_type))
@@ -276,20 +275,23 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
 
             for node in nodes:
                 plug = "{}.{}".format(node, attribute_name)
-                try:
-                    render_value = cmds.getAttr(plug)
-                except RuntimeError:
-                    invalid = True
-                    cls.log.error("Cannot get value of {}".format(plug))
-                else:
-                    if str(value) != str(render_value):
-                        invalid = True
-                        cls.log.error(
-                            "Invalid value {} set on {}. Expecting {}"
-                            "".format(render_value, plug, value)
-                        )
+                attr_validations[plug] = required_value
 
-        return invalid
+        invalid_diffs = []
+        for attr, value in attr_validations.items():
+            try:
+                diff = lib.attribute_diff(attr, value)
+            except RuntimeError:
+                cls.log.error("Cannot get value of {}".format(attr))
+            else:
+                if not diff.match:
+                    invalid_diffs.append(diff)
+                    cls.log.error(
+                        "Invalid value {} set on {}. Expecting {}"
+                        "".format(diff.current_value, attr, value)
+                    )
+
+        return invalid_diffs
 
     @classmethod
     def repair(cls, instance):
@@ -357,7 +359,6 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                     cmds.setAttr("{}.fileFormat".format(aov),
                                  default_ext)
 
-            for attr, value in cls._required_globals.items():
-                plug = "defaultRenderGlobals.{}".format(attr)
-                cls.log.info("Setting {}: {}".format(plug, value))
-                cmds.setAttr(plug, value)
+            # Apply the changes
+            for attr_diff in cls.get_invalid_attributes(instance):
+                attr_diff.apply()

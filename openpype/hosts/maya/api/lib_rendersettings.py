@@ -13,6 +13,7 @@ from openpype.api import (
 from openpype.pipeline import CreatorError
 from openpype.pipeline.context_tools import get_current_project_asset
 from openpype.hosts.maya.api.commands import reset_frame_range
+from openpype.hosts.maya.api.lib import attribute_diff
 
 
 class RenderSettings(object):
@@ -279,21 +280,8 @@ class RenderSettings(object):
     def _additional_attribs_setter(self, additional_attribs):
         for item in additional_attribs:
             attribute, value = item
-            attribute = str(attribute)  # ensure str conversion from settings
-            attribute_type = cmds.getAttr(attribute, type=True)
-            if attribute_type in {"long", "bool"}:
-                cmds.setAttr(attribute, int(value))
-            elif attribute_type == "string":
-                cmds.setAttr(attribute, str(value), type="string")
-            elif attribute_type in {"double", "doubleAngle", "doubleLinear"}:
-                cmds.setAttr(attribute, float(value))
-            else:
-                self.log.error(
-                    "Attribute {attribute} can not be set due to unsupported "
-                    "type: {attribute_type}".format(
-                        attribute=attribute,
-                        attribute_type=attribute_type)
-                )
+            diff = attribute_diff(attribute, value)
+            diff.apply()
 
     def get(self, item, default=None):
         try:

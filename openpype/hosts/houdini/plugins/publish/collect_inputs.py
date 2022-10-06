@@ -1,3 +1,4 @@
+from collections import deque
 from bson.objectid import ObjectId
 
 import pyblish.api
@@ -56,7 +57,7 @@ def iter_upstream(node):
     )
 
     # Initialize process queue with the node's ancestors itself
-    queue = list(upstream)
+    queue = deque(upstream)
     collected = set(upstream)
 
     # Traverse upstream references for all nodes and yield them as we

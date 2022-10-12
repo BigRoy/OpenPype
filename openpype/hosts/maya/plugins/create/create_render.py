@@ -9,15 +9,16 @@ import requests
 from maya import cmds
 from maya.app.renderSetup.model import renderSetup
 
+from openpype.settings import (
+    get_system_settings,
+    get_project_settings,
+)
 from openpype.hosts.maya.api import (
     lib,
     lib_rendersettings,
     plugin
 )
 from openpype.lib import requests_get
-from openpype.api import (
-    get_system_settings,
-    get_project_settings)
 from openpype.modules import ModulesManager
 from openpype.pipeline import (
     legacy_io,

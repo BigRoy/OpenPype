@@ -12,7 +12,7 @@ from openpype.lib import requests_post
 from openpype.hosts.maya.api import lib
 from openpype.hosts.maya.api.lib_rendersettings import RenderSettings
 from openpype.pipeline import legacy_io
-from openpype.api import get_system_settings
+from openpype.settings import get_system_settings
 
 
 # mapping between Maya renderer names and Muster template ids

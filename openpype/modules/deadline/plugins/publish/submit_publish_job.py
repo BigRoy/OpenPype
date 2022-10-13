@@ -266,6 +266,10 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin):
             "--targets", "farm"
         ]
 
+        # Pools
+        pool = self.deadline_pool or instance.data.get("primaryPool", "")
+        secondary_pool = self.deadline_pool_secondary or ""
+
         # Generate the payload for Deadline submission
         payload = {
             "JobInfo": {
@@ -280,8 +284,8 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin):
                 "Priority": priority,
 
                 "Group": self.deadline_group,
-                "Pool": instance.data.get("primaryPool"),
-                "SecondaryPool": instance.data.get("secondaryPool"),
+                "Pool": pool,
+                "SecondaryPool": secondary_pool,
 
                 "OutputDirectory0": output_dir,
 
@@ -332,9 +336,6 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin):
                     }
                 )
                 index += 1
-
-        # remove secondary pool
-        payload["JobInfo"].pop("SecondaryPool", None)
 
         self.log.info("Submitting Deadline job ...")
 

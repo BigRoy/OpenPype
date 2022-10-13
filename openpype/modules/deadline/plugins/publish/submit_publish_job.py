@@ -33,7 +33,10 @@ def get_resources(project_name, version, extension=None):
     if extension:
         extensions = [extension]
     repre_docs = list(get_representations(
-        project_name, version_ids=[version["_id"]], extensions=extensions
+        project_name, version_ids=[version["_id"]],
+        # This might be inaccurate. The representation name doesn't necessarily
+        # equal its extension.
+        representation_names=extensions
     ))
     assert repre_docs, "This is a bug"
 

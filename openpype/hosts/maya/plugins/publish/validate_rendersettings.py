@@ -282,6 +282,10 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
             "{}_renderer/additional_options".format(renderer), []))
         attr_validations.update(additional_options)
 
+        for attr, required_value in cls._required_globals.items():
+            plug = "defaultRenderGlobals.{}".format(attr)
+            attr_validations[plug] = required_value
+
         invalid_diffs = []
         for attr, value in attr_validations.items():
             try:

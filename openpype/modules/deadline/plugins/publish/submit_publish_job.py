@@ -724,12 +724,7 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin):
             fps = context.data["fps"]
 
         if data.get("extendFrames", False):
-            start, end = self._extend_frames(
-                asset,
-                subset,
-                start,
-                end,
-                data["overrideExistingFrame"])
+            start, end = self._extend_frames(asset, subset, start, end)
 
         try:
             source = data["source"]

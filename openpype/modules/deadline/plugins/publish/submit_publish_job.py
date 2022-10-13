@@ -33,7 +33,10 @@ def get_resources(project_name, version, extension=None):
     if extension:
         extensions = [extension]
     repre_docs = list(get_representations(
-        project_name, version_ids=[version["_id"]], extensions=extensions
+        project_name, version_ids=[version["_id"]],
+        # This might be inaccurate. The representation name doesn't necessarily
+        # equal its extension.
+        representation_names=extensions
     ))
     assert repre_docs, "This is a bug"
 
@@ -357,7 +360,6 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin):
         self.log.info("Preparing to copy ...")
         start = instance.data.get("frameStart")
         end = instance.data.get("frameEnd")
-        project_name = legacy_io.active_project()
 
         # get latest version of subset
         # this will stop if subset wasn't published yet
@@ -733,12 +735,7 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin):
             fps = context.data["fps"]
 
         if data.get("extendFrames", False):
-            start, end = self._extend_frames(
-                asset,
-                subset,
-                start,
-                end,
-                data["overrideExistingFrame"])
+            start, end = self._extend_frames(asset, subset, start, end)
 
         try:
             source = data["source"]

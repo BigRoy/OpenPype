@@ -51,7 +51,7 @@ def _validate_deadline_bool_value(instance, attribute, value):
 
 
 @attr.s
-class MayaPluginInfo():
+class MayaPluginInfo(object):
     SceneFile = attr.ib(default=None)   # Input
     OutputFilePath = attr.ib(default=None)  # Output directory and filename
     OutputFilePrefix = attr.ib(default=None)
@@ -66,7 +66,7 @@ class MayaPluginInfo():
 
 
 @attr.s
-class PythonPluginInfo():
+class PythonPluginInfo(object):
     ScriptFile = attr.ib()
     Version = attr.ib(default="3.6")
     Arguments = attr.ib(default=None)
@@ -74,7 +74,7 @@ class PythonPluginInfo():
 
 
 @attr.s
-class VRayPluginInfo():
+class VRayPluginInfo(object):
     InputFilename = attr.ib(default=None)   # Input
     SeparateFilesPerFrame = attr.ib(default=None)
     VRayEngine = attr.ib(default="V-Ray")
@@ -85,7 +85,7 @@ class VRayPluginInfo():
 
 
 @attr.s
-class ArnoldPluginInfo():
+class ArnoldPluginInfo(object):
     ArnoldFile = attr.ib(default=None)
 
 

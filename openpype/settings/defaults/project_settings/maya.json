@@ -1,5 +1,4 @@
 {
-    "mel_workspace": "workspace -fr \"shaders\" \"renderData/shaders\";\nworkspace -fr \"images\" \"renders/maya\";\nworkspace -fr \"particles\" \"particles\";\nworkspace -fr \"mayaAscii\" \"\";\nworkspace -fr \"mayaBinary\" \"\";\nworkspace -fr \"scene\" \"\";\nworkspace -fr \"alembicCache\" \"cache/alembic\";\nworkspace -fr \"renderData\" \"renderData\";\nworkspace -fr \"sourceImages\" \"sourceimages\";\nworkspace -fr \"fileCache\" \"cache/nCache\";\n",
     "imageio": {
         "colorManagementPreference_v2": {
             "enabled": true,
@@ -57,7 +56,7 @@
     },
     "RenderSettings": {
         "apply_render_settings": true,
-        "default_render_image_folder": "renders",
+        "default_render_image_folder": "renders/maya",
         "enable_all_lights": true,
         "aov_separator": "underscore",
         "reset_current_frame": false,

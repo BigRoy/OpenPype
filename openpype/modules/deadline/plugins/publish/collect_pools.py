@@ -20,4 +20,4 @@ class CollectDeadlinePools(pyblish.api.InstancePlugin):
             instance.data["primaryPool"] = self.primary_pool or "none"
 
         if not instance.data.get("secondaryPool"):
-            instance.data["secondaryPool"] = self.secondary_pool or "none"
+            instance.data["secondaryPool"] = self.secondary_pool or ""

@@ -421,28 +421,14 @@ class CollectMayaRender(pyblish.api.ContextPlugin):
         return options
 
     def _discover_pools(self, attributes):
-
-        pool_a = None
-        pool_b = None
-
-        # Check for specific pools
-        pool_b = []
-        if "primaryPool" in attributes:
-            pool_a = attributes["primaryPool"]
-            if "secondaryPool" in attributes:
-                pool_b = attributes["secondaryPool"]
-
-        else:
-            # Backwards compatibility
-            pool_str = attributes.get("pools", None)
-            if pool_str:
-                pool_a, pool_b = pool_str.split(";")
+        primary_pool = attributes.get("primaryPool")
+        secondary_pool = attributes.get("secondaryPool")
 
         # Ensure empty entry token is caught
-        if pool_b == "-":
-            pool_b = None
+        if secondary_pool == "-":
+            secondary_pool = None
 
-        return pool_a, pool_b
+        return primary_pool, secondary_pool
 
     @staticmethod
     def get_render_attribute(attr, layer):

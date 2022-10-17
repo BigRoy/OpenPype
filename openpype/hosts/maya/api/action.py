@@ -5,7 +5,10 @@ import pyblish.api
 
 from openpype.client import get_asset_by_name
 from openpype.pipeline import legacy_io
-from openpype.pipeline.publish import get_errored_instances_from_context
+from openpype.pipeline.publish import (
+    get_errored_instances_from_context,
+    get_errored_plugins_from_context
+)
 
 
 class GenerateUUIDsOnInvalidAction(pyblish.api.Action):
@@ -111,17 +114,18 @@ class SelectInvalidAction(pyblish.api.Action):
         except ImportError:
             raise ImportError("Current host is not Maya")
 
-
         # Get the invalid nodes for the plug-ins
         self.log.info("Finding invalid nodes..")
+        invalid = list()
         if issubclass(plugin, pyblish.api.ContextPlugin):
-            invalid = plugin.get_invalid(context)
+            errored_plugins = get_errored_plugins_from_context(context)
+            if plugin in errored_plugins:
+                invalid = plugin.get_invalid(context)
         else:
             # Apply pyblish.logic to get the instances for the plug-in
             errored_instances = get_errored_instances_from_context(context)
             instances = pyblish.api.instances_by_plugin(errored_instances,
                                                         plugin)
-            invalid = list()
             for instance in instances:
                 invalid_nodes = plugin.get_invalid(instance)
                 if invalid_nodes:

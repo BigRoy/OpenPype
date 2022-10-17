@@ -235,7 +235,7 @@ class RepairContextAction(pyblish.api.Action):
             raise RuntimeError("Plug-in does not have repair method.")
 
         # Get the errored instances
-        self.log.info("Finding failed instances..")
+        self.log.info("Finding failed plug-ins..")
         errored_plugins = get_errored_plugins_from_context(context)
 
         # Apply pyblish.logic to get the instances for the plug-in

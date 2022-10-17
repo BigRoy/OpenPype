@@ -111,22 +111,25 @@ class SelectInvalidAction(pyblish.api.Action):
         except ImportError:
             raise ImportError("Current host is not Maya")
 
-        errored_instances = get_errored_instances_from_context(context)
-
-        # Apply pyblish.logic to get the instances for the plug-in
-        instances = pyblish.api.instances_by_plugin(errored_instances, plugin)
 
         # Get the invalid nodes for the plug-ins
         self.log.info("Finding invalid nodes..")
-        invalid = list()
-        for instance in instances:
-            invalid_nodes = plugin.get_invalid(instance)
-            if invalid_nodes:
-                if isinstance(invalid_nodes, (list, tuple)):
-                    invalid.extend(invalid_nodes)
-                else:
-                    self.log.warning("Plug-in returned to be invalid, "
-                                     "but has no selectable nodes.")
+        if issubclass(plugin, pyblish.api.ContextPlugin):
+            invalid = plugin.get_invalid(context)
+        else:
+            # Apply pyblish.logic to get the instances for the plug-in
+            errored_instances = get_errored_instances_from_context(context)
+            instances = pyblish.api.instances_by_plugin(errored_instances,
+                                                        plugin)
+            invalid = list()
+            for instance in instances:
+                invalid_nodes = plugin.get_invalid(instance)
+                if invalid_nodes:
+                    if isinstance(invalid_nodes, (list, tuple)):
+                        invalid.extend(invalid_nodes)
+                    else:
+                        self.log.warning("Plug-in returned to be invalid, "
+                                         "but has no selectable nodes.")
 
         # Ensure unique (process each node only once)
         invalid = list(set(invalid))

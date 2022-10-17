@@ -52,13 +52,24 @@ class ValidateSceneUnknownPlugins(pyblish.api.ContextPlugin):
         for plugin in cls.get_invalid():
             cls.log.debug("Removing unknown plugin: %s .." % plugin)
 
-            node_types = cmds.unknownPlugin(plugin, query=True, nodeTypes=True)
-            if node_types:
-                for node in cmds.ls(type=node_types):
-                    try:
-                        force_delete(node)
-                    except RuntimeError as exc:
-                        cls.log.error(exc)
+            for node in cmds.ls(type="unknown"):
+                if not cmds.objExists(node):
+                    # Might have been deleted in previous iteration
+                    cls.log.debug("Already deleted: {}".format(node))
+                    continue
+
+                if cmds.unknownNode(node, query=True, plugin=True) != plugin:
+                    continue
+
+                nodetype = cmds.unknownNode(node,
+                                            query=True,
+                                            realClassName=True)
+                cls.log.info("Deleting {} (type: {})".format(node, nodetype))
+
+                try:
+                    force_delete(node)
+                except RuntimeError as exc:
+                    cls.log.error(exc)
 
             # TODO: Remove datatypes
             # datatypes = cmds.unknownPlugin(plugin,

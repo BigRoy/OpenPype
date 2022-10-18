@@ -27,6 +27,7 @@ class ValidateSceneUnknownNodes(pyblish.api.ContextPlugin):
 
     order = ValidateContentsOrder
     hosts = ['maya']
+    families = ["model", "rig", "mayaScene", "look", "renderlayer", "yetiRig"]
     optional = True
     label = "Unknown Nodes"
     actions = [SelectInvalidAction, RepairContextAction]

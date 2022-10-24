@@ -44,9 +44,9 @@ class ValidateRigContents(pyblish.api.InstancePlugin):
         controls_content = cmds.ls(controls_content, long=True)
 
         # Validate members are inside the hierarchy from root node
-        root_node = cmds.ls(set_members, assemblies=True)
-        hierarchy = cmds.listRelatives(root_node, allDescendents=True,
-                                       fullPath=True)
+        root_nodes = cmds.ls(set_members, assemblies=True, long=True)
+        hierarchy = cmds.listRelatives(root_nodes, allDescendents=True,
+                                       fullPath=True) + root_nodes
         hierarchy = set(hierarchy)
 
         invalid_hierarchy = []

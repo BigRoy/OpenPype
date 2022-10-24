@@ -20,6 +20,7 @@ class ValidateSingleAssembly(pyblish.api.InstancePlugin):
     order = ValidateContentsOrder
     hosts = ['maya']
     families = ['rig']
+    optional = True
     label = 'Single Assembly'
 
     def process(self, instance):

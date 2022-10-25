@@ -13,15 +13,13 @@ from openpype.settings import (
     get_system_settings,
     get_project_settings,
 )
+from openpype.lib import requests_get
+from openpype.modules import ModulesManager
+from openpype.pipeline import legacy_io
 from openpype.hosts.maya.api import (
     lib,
     lib_rendersettings,
     plugin
-)
-from openpype.lib import requests_get
-from openpype.modules import ModulesManager
-from openpype.pipeline import (
-    legacy_io,
 )
 
 

@@ -1,6 +1,8 @@
 import os
+import sys
 import copy
 import logging
+import traceback
 import collections
 import inspect
 from uuid import uuid4
@@ -22,9 +24,15 @@ from .creator_plugins import (
     Creator,
     AutoCreator,
     discover_creator_plugins,
+    CreatorError,
 )
 
 UpdateData = collections.namedtuple("UpdateData", ["instance", "changes"])
+
+
+class UnavailableSharedData(Exception):
+    """Shared data are not available at the moment when are accessed."""
+    pass
 
 
 class ImmutableKeyError(TypeError):
@@ -60,6 +68,77 @@ class HostMissRequiredMethod(Exception):
             host_name, joined_methods
         )
         super(HostMissRequiredMethod, self).__init__(msg)
+
+
+class CreatorsOperationFailed(Exception):
+    """Raised when a creator process crashes in 'CreateContext'.
+
+    The exception contains information about the creator and error. The data
+    are prepared using 'prepare_failed_creator_operation_info' and can be
+    serialized using json.
+
+    Usage is for UI purposes which may not have access to exceptions directly
+    and would not have ability to catch exceptions 'per creator'.
+
+    Args:
+        msg (str): General error message.
+        failed_info (list[dict[str, Any]]): List of failed creators with
+            exception message and optionally formatted traceback.
+    """
+
+    def __init__(self, msg, failed_info):
+        super(CreatorsOperationFailed, self).__init__(msg)
+        self.failed_info = failed_info
+
+
+class CreatorsCollectionFailed(CreatorsOperationFailed):
+    def __init__(self, failed_info):
+        msg = "Failed to collect instances"
+        super(CreatorsCollectionFailed, self).__init__(
+            msg, failed_info
+        )
+
+
+class CreatorsSaveFailed(CreatorsOperationFailed):
+    def __init__(self, failed_info):
+        msg = "Failed update instance changes"
+        super(CreatorsSaveFailed, self).__init__(
+            msg, failed_info
+        )
+
+
+class CreatorsRemoveFailed(CreatorsOperationFailed):
+    def __init__(self, failed_info):
+        msg = "Failed to remove instances"
+        super(CreatorsRemoveFailed, self).__init__(
+            msg, failed_info
+        )
+
+
+class CreatorsCreateFailed(CreatorsOperationFailed):
+    def __init__(self, failed_info):
+        msg = "Faled to create instances"
+        super(CreatorsCreateFailed, self).__init__(
+            msg, failed_info
+        )
+
+
+def prepare_failed_creator_operation_info(
+    identifier, label, exc_info, add_traceback=True
+):
+    formatted_traceback = None
+    exc_type, exc_value, exc_traceback = exc_info
+    if add_traceback:
+        formatted_traceback = "".join(traceback.format_exception(
+            exc_type, exc_value, exc_traceback
+        ))
+
+    return {
+        "creator_identifier": identifier,
+        "creator_label": label,
+        "message": str(exc_value),
+        "traceback": formatted_traceback
+    }
 
 
 class InstanceMember:
@@ -200,6 +279,16 @@ class AttributeValues:
     def changes(self):
         return self.calculate_changes(self._data, self._origin_data)
 
+    def apply_changes(self, changes):
+        for key, item in changes.items():
+            old_value, new_value = item
+            if new_value is None:
+                if key in self:
+                    self.pop(key)
+
+            elif self.get(key) != new_value:
+                self[key] = new_value
+
 
 class CreatorAttributeValues(AttributeValues):
     """Creator specific attribute values of an instance.
@@ -332,6 +421,21 @@ class PublishAttributes:
             if key not in self._data:
                 changes[key] = (value, None)
         return changes
+
+    def apply_changes(self, changes):
+        for key, item in changes.items():
+            if isinstance(item, dict):
+                self._data[key].apply_changes(item)
+                continue
+
+            old_value, new_value = item
+            if new_value is not None:
+                raise ValueError(
+                    "Unexpected type \"{}\" expected None".format(
+                        str(type(new_value))
+                    )
+                )
+            self.pop(key)
 
     def set_publish_plugins(self, attr_plugins):
         """Set publish plugins attribute definitions."""
@@ -730,6 +834,97 @@ class CreatedInstance:
             if member not in self._members:
                 self._members.append(member)
 
+    def serialize_for_remote(self):
+        return {
+            "data": self.data_to_store(),
+            "orig_data": copy.deepcopy(self._orig_data)
+        }
+
+    @classmethod
+    def deserialize_on_remote(cls, serialized_data, creator_items):
+        """Convert instance data to CreatedInstance.
+
+        This is fake instance in remote process e.g. in UI process. The creator
+        is not a full creator and should not be used for calling methods when
+        instance is created from this method (matters on implementation).
+
+        Args:
+            serialized_data (Dict[str, Any]): Serialized data for remote
+                recreating. Should contain 'data' and 'orig_data'.
+            creator_items (Dict[str, Any]): Mapping of creator identifier and
+                objects that behave like a creator for most of attribute
+                access.
+        """
+
+        instance_data = copy.deepcopy(serialized_data["data"])
+        creator_identifier = instance_data["creator_identifier"]
+        creator_item = creator_items[creator_identifier]
+
+        family = instance_data.get("family", None)
+        if family is None:
+            family = creator_item.family
+        subset_name = instance_data.get("subset", None)
+
+        obj = cls(
+            family, subset_name, instance_data, creator_item, new=False
+        )
+        obj._orig_data = serialized_data["orig_data"]
+
+        return obj
+
+    def remote_changes(self):
+        """Prepare serializable changes on remote side.
+
+        Returns:
+            Dict[str, Any]: Prepared changes that can be send to client side.
+        """
+
+        return {
+            "changes": self.changes(),
+            "asset_is_valid": self._asset_is_valid,
+            "task_is_valid": self._task_is_valid,
+        }
+
+    def update_from_remote(self, remote_changes):
+        """Apply changes from remote side on client side.
+
+        Args:
+            remote_changes (Dict[str, Any]): Changes created on remote side.
+        """
+
+        self._asset_is_valid = remote_changes["asset_is_valid"]
+        self._task_is_valid = remote_changes["task_is_valid"]
+
+        changes = remote_changes["changes"]
+        creator_attributes = changes.pop("creator_attributes", None) or {}
+        publish_attributes = changes.pop("publish_attributes", None) or {}
+        if changes:
+            self.apply_changes(changes)
+
+        if creator_attributes:
+            self.creator_attributes.apply_changes(creator_attributes)
+
+        if publish_attributes:
+            self.publish_attributes.apply_changes(publish_attributes)
+
+    def apply_changes(self, changes):
+        """Apply changes created via 'changes'.
+
+        Args:
+            Dict[str, Tuple[Any, Any]]: Instance changes to apply. Same values
+                are kept untouched.
+        """
+
+        for key, item in changes.items():
+            old_value, new_value = item
+            if new_value is None:
+                if key in self:
+                    self.pop(key)
+            else:
+                current_value = self.get(key)
+                if current_value != new_value:
+                    self[key] = new_value
+
 
 class CreateContext:
     """Context of instance creation.
@@ -809,6 +1004,9 @@ class CreateContext:
         self._bulk_counter = 0
         self._bulk_instances_to_process = []
 
+        # Shared data across creators during collection phase
+        self._collection_shared_data = None
+
         # Trigger reset if was enabled
         if reset:
             self.reset(discover_publish_plugins)
@@ -816,6 +1014,10 @@ class CreateContext:
     @property
     def instances(self):
         return self._instances_by_id.values()
+
+    @property
+    def instances_by_id(self):
+        return self._instances_by_id
 
     @property
     def publish_attributes(self):
@@ -860,6 +1062,9 @@ class CreateContext:
 
         All changes will be lost if were not saved explicitely.
         """
+
+        self.reset_preparation()
+
         self.reset_avalon_context()
         self.reset_plugins(discover_publish_plugins)
         self.reset_context_data()
@@ -867,6 +1072,20 @@ class CreateContext:
         with self.bulk_instances_collection():
             self.reset_instances()
             self.execute_autocreators()
+
+        self.reset_finalization()
+
+    def reset_preparation(self):
+        """Prepare attributes that must be prepared/cleaned before reset."""
+
+        # Give ability to store shared data for collection phase
+        self._collection_shared_data = {}
+
+    def reset_finalization(self):
+        """Cleanup of attributes after reset."""
+
+        # Stop access to collection shared data
+        self._collection_shared_data = None
 
     def reset_avalon_context(self):
         """Give ability to reset avalon context.
@@ -976,7 +1195,8 @@ class CreateContext:
                 and creator_class.host_name != self.host_name
             ):
                 self.log.info((
-                    "Creator's host name is not supported for current host {}"
+                    "Creator's host name \"{}\""
+                    " is not supported for current host \"{}\""
                 ).format(creator_class.host_name, self.host_name))
                 continue
 
@@ -1065,7 +1285,65 @@ class CreateContext:
         with self.bulk_instances_collection():
             self._bulk_instances_to_process.append(instance)
 
+    def create(self, identifier, *args, **kwargs):
+        """Wrapper for creators to trigger created.
+
+        Different types of creators may expect different arguments thus the
+        hints for args are blind.
+
+        Args:
+            identifier (str): Creator's identifier.
+            *args (Tuple[Any]): Arguments for create method.
+            **kwargs (Dict[Any, Any]): Keyword argument for create method.
+        """
+
+        error_message = "Failed to run Creator with identifier \"{}\". {}"
+        creator = self.creators.get(identifier)
+        label = getattr(creator, "label", None)
+        failed = False
+        add_traceback = False
+        exc_info = None
+        try:
+            # Fake CreatorError (Could be maybe specific exception?)
+            if creator is None:
+                raise CreatorError(
+                    "Creator {} was not found".format(identifier)
+                )
+
+            creator.create(*args, **kwargs)
+
+        except CreatorError:
+            failed = True
+            exc_info = sys.exc_info()
+            self.log.warning(error_message.format(identifier, exc_info[1]))
+
+        except:
+            failed = True
+            add_traceback = True
+            exc_info = sys.exc_info()
+            self.log.warning(
+                error_message.format(identifier, ""),
+                exc_info=True
+            )
+
+        if failed:
+            raise CreatorsCreateFailed([
+                prepare_failed_creator_operation_info(
+                    identifier, label, exc_info, add_traceback
+                )
+            ])
+
     def creator_removed_instance(self, instance):
+        """When creator removes instance context should be acknowledged.
+
+        If creator removes instance conext should know about it to avoid
+        possible issues in the session.
+
+        Args:
+            instance (CreatedInstance): Object of instance which was removed
+                from scene metadata.
+        """
+
         self._instances_by_id.pop(instance.id, None)
 
     @contextmanager
@@ -1100,24 +1378,81 @@ class CreateContext:
         self._instances_by_id = {}
 
         # Collect instances
+        error_message = "Collection of instances for creator {} failed. {}"
+        failed_info = []
         for creator in self.creators.values():
-            creator.collect_instances()
+            label = creator.label
+            identifier = creator.identifier
+            failed = False
+            add_traceback = False
+            exc_info = None
+            try:
+                creator.collect_instances()
+
+            except CreatorError:
+                failed = True
+                exc_info = sys.exc_info()
+                self.log.warning(error_message.format(identifier, exc_info[1]))
+
+            except:
+                failed = True
+                add_traceback = True
+                exc_info = sys.exc_info()
+                self.log.warning(
+                    error_message.format(identifier, ""),
+                    exc_info=True
+                )
+
+            if failed:
+                failed_info.append(
+                    prepare_failed_creator_operation_info(
+                        identifier, label, exc_info, add_traceback
+                    )
+                )
+
+        if failed_info:
+            raise CreatorsCollectionFailed(failed_info)
 
     def execute_autocreators(self):
         """Execute discovered AutoCreator plugins.
 
         Reset instances if any autocreator executed properly.
         """
+
+        error_message = "Failed to run AutoCreator with identifier \"{}\". {}"
+        failed_info = []
         for identifier, creator in self.autocreators.items():
+            label = creator.label
+            failed = False
+            add_traceback = False
             try:
                 creator.create()
 
-            except Exception:
-                # TODO raise report exception if any crashed
-                msg = (
-                    "Failed to run AutoCreator with identifier \"{}\" ({})."
-                ).format(identifier, inspect.getfile(creator.__class__))
-                self.log.warning(msg, exc_info=True)
+            except CreatorError:
+                failed = True
+                exc_info = sys.exc_info()
+                self.log.warning(error_message.format(identifier, exc_info[1]))
+
+            # Use bare except because some hosts raise their exceptions that
+            #   do not inherit from python's `BaseException`
+            except:
+                failed = True
+                add_traceback = True
+                exc_info = sys.exc_info()
+                self.log.warning(
+                    error_message.format(identifier, ""),
+                    exc_info=True
+                )
+
+            if failed:
+                failed_info.append(
+                    prepare_failed_creator_operation_info(
+                        identifier, label, exc_info, add_traceback
+                    )
+                )
+
+        if failed_info:
+            raise CreatorsCreateFailed(failed_info)
 
     def validate_instances_context(self, instances=None):
         """Validate 'asset' and 'task' instance context."""
@@ -1194,16 +1529,47 @@ class CreateContext:
             identifier = instance.creator_identifier
             instances_by_identifier[identifier].append(instance)
 
-        for identifier, cretor_instances in instances_by_identifier.items():
+        error_message = "Instances update of creator \"{}\" failed. {}"
+        failed_info = []
+        for identifier, creator_instances in instances_by_identifier.items():
             update_list = []
-            for instance in cretor_instances:
+            for instance in creator_instances:
                 instance_changes = instance.changes()
                 if instance_changes:
                     update_list.append(UpdateData(instance, instance_changes))
 
             creator = self.creators[identifier]
-            if update_list:
+            if not update_list:
+                continue
+
+            label = creator.label
+            failed = False
+            add_traceback = False
+            exc_info = None
+            try:
                 creator.update_instances(update_list)
+
+            except CreatorError:
+                failed = True
+                exc_info = sys.exc_info()
+                self.log.warning(error_message.format(identifier, exc_info[1]))
+
+            except:
+                failed = True
+                add_traceback = True
+                exc_info = sys.exc_info()
+                self.log.warning(
+                    error_message.format(identifier, ""), exc_info=True)
+
+            if failed:
+                failed_info.append(
+                    prepare_failed_creator_operation_info(
+                        identifier, label, exc_info, add_traceback
+                    )
+                )
+
+        if failed_info:
+            raise CreatorsSaveFailed(failed_info)
 
     def remove_instances(self, instances):
         """Remove instances from context.
@@ -1212,14 +1578,48 @@ class CreateContext:
             instances(list<CreatedInstance>): Instances that should be removed
                 from context.
         """
+
         instances_by_identifier = collections.defaultdict(list)
         for instance in instances:
             identifier = instance.creator_identifier
             instances_by_identifier[identifier].append(instance)
 
+        error_message = "Instances removement of creator \"{}\" failed. {}"
+        failed_info = []
         for identifier, creator_instances in instances_by_identifier.items():
             creator = self.creators.get(identifier)
-            creator.remove_instances(creator_instances)
+            label = creator.label
+            failed = False
+            add_traceback = False
+            exc_info = None
+            try:
+                creator.remove_instances(creator_instances)
+
+            except CreatorError:
+                failed = True
+                exc_info = sys.exc_info()
+                self.log.warning(
+                    error_message.format(identifier, exc_info[1])
+                )
+
+            except:
+                failed = True
+                add_traceback = True
+                exc_info = sys.exc_info()
+                self.log.warning(
+                    error_message.format(identifier, ""),
+                    exc_info=True
+                )
+
+            if failed:
+                failed_info.append(
+                    prepare_failed_creator_operation_info(
+                        identifier, label, exc_info, add_traceback
+                    )
+                )
+
+        if failed_info:
+            raise CreatorsRemoveFailed(failed_info)
 
     def _get_publish_plugins_with_attr_for_family(self, family):
         """Publish plugin attributes for passed family.
@@ -1251,3 +1651,20 @@ class CreateContext:
             if not plugin.__instanceEnabled__:
                 plugins.append(plugin)
         return plugins
+
+    @property
+    def collection_shared_data(self):
+        """Access to shared data that can be used during creator's collection.
+
+        Retruns:
+            Dict[str, Any]: Shared data.
+
+        Raises:
+            UnavailableSharedData: When called out of collection phase.
+        """
+
+        if self._collection_shared_data is None:
+            raise UnavailableSharedData(
+                "Accessed Collection shared data out of collection phase"
+            )
+        return self._collection_shared_data

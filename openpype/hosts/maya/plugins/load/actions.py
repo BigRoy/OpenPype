@@ -100,7 +100,7 @@ class ImportMayaLoader(load.LoaderPlugin):
         so you could also use it as a new base.
 
     """
-    representations = ["ma", "mb"]
+    representations = ["ma", "mb", "obj"]
     families = ["*"]
 
     label = "Import"

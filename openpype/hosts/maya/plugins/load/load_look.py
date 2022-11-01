@@ -72,9 +72,9 @@ class LookLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
         # Trigger the regular reference update on the ReferenceLoader
         super(LookLoader, self).update(container, representation)
 
-        # get new applied shaders and nodes from new version
+        # Get shaders from new
+        members = lib.get_container_members(container)
         shader_nodes = cmds.ls(members, type='shadingEngine')
-        nodes = set(self._get_nodes_with_shader(shader_nodes))
 
         project_name = legacy_io.active_project()
         json_representation = get_representation_by_name(
@@ -96,7 +96,8 @@ class LookLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
             # clean references - removes failed reference edits
             cmds.file(cr=reference_node)  # cleanReference
 
-            # reapply shading groups from json representation on orig nodes
+            # reapply shading groups from json representation on nodes
+            orig_nodes = cmds.ls(orig_nodes, long=True)  # ensure nodes exist
             lib.apply_shaders(json_data, shader_nodes, orig_nodes)
 
             msg = ["During reference update some edits failed.",
@@ -111,8 +112,9 @@ class LookLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
 
         attributes = json_data.get("attributes", [])
 
-        # region compute lookup
+        # Apply look attributes to nodes that have shader assigned
         nodes_by_id = defaultdict(list)
+        nodes = set(self._get_nodes_with_shader(shader_nodes))
         for n in nodes:
             nodes_by_id[lib.get_id(n)].append(n)
         lib.apply_attributes(attributes, nodes_by_id)

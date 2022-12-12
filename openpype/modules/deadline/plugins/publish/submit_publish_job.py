@@ -461,7 +461,6 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin):
                 ext = cols[0].tail.lstrip(".")
                 col = list(cols[0])
 
-            self.log.debug(col)
             # create subset name `familyTaskSubset_AOV`
             group_name = 'render{}{}{}{}'.format(
                 task[0].upper(), task[1:],

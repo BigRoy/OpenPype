@@ -878,8 +878,6 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin):
         `foo` and `xxx`
         """
 
-        self.log.info(data.get("expectedFiles"))
-
         if isinstance(data.get("expectedFiles")[0], dict):
             # we cannot attach AOVs to other subsets as we consider every
             # AOV subset of its own.

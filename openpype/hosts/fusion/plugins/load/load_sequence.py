@@ -151,6 +151,18 @@ class FusionLoadSequence(load.LoaderPlugin):
             tool = comp.AddTool("Loader", *args)
             tool["Clip"] = path
 
+            # Name tool to subset without the family prefix
+            # 'renderLightingMain' becomes `LightingMain`
+            subset = context["subset"]
+            label = subset["name"]
+            family = subset["data"].get("family", "")
+            if label.startswith(family):
+                label = label[len(family):]
+            tool.SetAttrs({
+                "TOOLS_Name": label,
+                "TOOLB_NameSet": True
+            })
+
             # Set global in point to start frame (if in version.data)
             start = self._get_start(context["version"], tool)
             loader_shift(tool, start, relative=False)

@@ -658,11 +658,6 @@ def on_task_changed():
         legacy_io.Session["AVALON_TASK"]
     )
 
-    lib.show_message(
-        "Context was changed",
-        ("Context was changed to:\n{}".format(msg)),
-    )
-
 
 def before_workfile_open():
     if handle_workfile_locks():

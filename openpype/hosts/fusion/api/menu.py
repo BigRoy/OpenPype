@@ -129,8 +129,11 @@ class OpenPypeMenu(QtWidgets.QWidget):
 
     def on_task_changed(self):
         # Update current context label
-        label = legacy_io.Session["AVALON_ASSET"]
-        self.asset_label.setText(label)
+        asset_name = legacy_io.Session["AVALON_ASSET"]
+        self.asset_label.setText(asset_name)
+
+        # Update window title
+        self.setWindowTitle("OpenPype - {}".format(asset_name))
 
     def register_callback(self, name, fn):
 

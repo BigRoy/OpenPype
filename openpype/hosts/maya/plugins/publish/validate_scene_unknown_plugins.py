@@ -1,7 +1,6 @@
 from maya import cmds
 
 import pyblish.api
-from openpype.hosts.maya.api.action import SelectInvalidAction
 from openpype.pipeline.publish import (
     ValidateContentsOrder,
     RepairContextAction
@@ -35,9 +34,18 @@ class ValidateSceneUnknownPlugins(pyblish.api.ContextPlugin):
     label = "Unknown Plug-ins"
     actions = [RepairContextAction]
 
-    @staticmethod
-    def get_invalid():
-        return sorted(cmds.unknownPlugin(query=True, list=True) or [])
+    ignore = {
+        "stereoCamera"
+    }
+
+    @classmethod
+    def get_invalid(cls):
+        plugins = sorted(cmds.unknownPlugin(query=True, list=True) or [])
+
+        # Ignore specific plug-ins allowed to be unknown
+        plugins = [plugin for plugin in plugins if plugin not in cls.ignore]
+
+        return plugins
 
     def process(self, context):
         """Process all the nodes in the instance"""

@@ -133,7 +133,7 @@ class OpenPypeMenu(QtWidgets.QWidget):
         self.asset_label.setText(asset_name)
 
         # Update window title
-        self.setWindowTitle("OpenPype - {}".format(asset_name))
+        self.setWindowTitle("{} - OpenPype".format(asset_name))
 
     def register_callback(self, name, fn):
 

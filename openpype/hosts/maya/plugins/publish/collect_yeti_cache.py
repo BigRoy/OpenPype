@@ -4,12 +4,62 @@ import pyblish.api
 
 from openpype.hosts.maya.api import lib
 
-SETTINGS = {"renderDensity",
-            "renderWidth",
-            "renderLength",
-            "increaseRenderBounds",
-            "imageSearchPath",
-            "cbId"}
+
+SETTINGS = {
+    # Preview
+    "displayOutput",
+    "colorR", "colorG", "colorB"
+    "viewportDensity",
+    "viewportWidth",
+    "viewportLength",
+    # Render attributes
+    "renderDensity",
+    "renderWidth",
+    "renderLength",
+    "increaseRenderBounds",
+    "imageSearchPath",
+    # Pipeline specific
+    "cbId"
+}
+
+
+def get_yeti_user_variables(node):
+    """Collect Yeti graph user variables (attributes + values)
+
+    Output data example:
+    {
+        "yetiVariableF_bestpipelineintheworld": 666.0,
+        "yetiVariableF_foobar": 0.0,
+        "yetiVariableF_answertolife": 42.0,
+        "yetiVariableV_myvector": [-0.5, 5.11, 0.0]
+    }
+
+    Arguments:
+        node (str): Maya Yeti Graph node name (pgYetiMaya)
+
+    Returns:
+        dict: Attribute name: value
+
+    """
+
+    variables = dict()
+
+    for attr in cmds.listAttr(node, string="yetiVariable*", userDefined=True) or []:
+        if attr.startswith("yetiVariableF_"):
+            # Float attributes
+            plug = "{}.{}".format(node, attr)
+            variables[attr] = cmds.getAttr(plug)
+
+        elif attr.startswith("yetiVariableV_"):
+            # Vector attributes
+            plug = "{}.{}".format(node, attr)
+            if cmds.attributeQuery(attr, node=node, listParent=True):
+                # Ignore the individual channels of the attribute,
+                # we will only collect the top level vector variable
+                continue
+            variables[attr] = cmds.getAttr(plug)[0]
+
+    return variables
 
 
 class CollectYetiCache(pyblish.api.InstancePlugin):
@@ -39,10 +89,6 @@ class CollectYetiCache(pyblish.api.InstancePlugin):
         # Get yeti nodes and their transforms
         yeti_shapes = cmds.ls(instance, type="pgYetiMaya")
         for shape in yeti_shapes:
-            shape_data = {"transform": None,
-                          "name": shape,
-                          "cbId": lib.get_id(shape),
-                          "attrs": None}
 
             # Get specific node attributes
             attr_data = {}
@@ -58,9 +104,17 @@ class CollectYetiCache(pyblish.api.InstancePlugin):
             parent = cmds.listRelatives(shape, parent=True)[0]
             transform_data = {"name": parent, "cbId": lib.get_id(parent)}
 
-            # Store collected data
-            shape_data["attrs"] = attr_data
-            shape_data["transform"] = transform_data
+            shape_data = {
+                "transform": transform_data,
+                "name": shape,
+                "cbId": lib.get_id(shape),
+                "attrs": attr_data,
+            }
+
+            # Optional user variables
+            user_variables = get_yeti_user_variables(shape)
+            if user_variables:
+                shape_data["user_variables"] = user_variables
 
             settings["nodes"].append(shape_data)
 

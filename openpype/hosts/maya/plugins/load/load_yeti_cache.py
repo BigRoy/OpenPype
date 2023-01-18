@@ -22,49 +22,6 @@ def set_attribute(node, attr, value):
     lib.set_attribute(node, attr, value)
 
 
-def set_yeti_user_variables(node, variables):
-    """Add (if not exists) and set the user variables on the node.
-
-    See collected user variables in `collect_yeti_cache.py`
-    """
-
-    def _add_attr(node, longName, **kwargs):
-        """Helper addAttr which ignores existing attribute"""
-        if cmds.attributeQuery(longName, node=node, exists=True):
-            # Already exists
-            return
-
-        cmds.addAttr(node, longName=longName, keyable=True, **kwargs)
-
-    for attr, value in variables.items():
-        plug = "{}.{}".format(node, attr)
-
-        if attr.startswith("yetiVariableF"):
-            # Float attributes
-            _add_attr(node,
-                      longName=attr,
-                      at="double",
-                      # Same defaults as what yeti generates
-                      defaultValue=0.0,
-                      softMinValue=0.0,
-                      softMaxValue=100.0)
-
-            cmds.setAttr(plug, value)
-
-        elif attr.startswith("yetiVariableV"):
-            # Vector attributes
-            _add_attr(node,
-                      longName=attr,
-                      at="double3")
-            for axis in "XYZ":
-                _add_attr(node,
-                          longName=attr + axis,
-                          parent=attr,
-                          at="double")
-
-            cmds.setAttr(plug, value[0], value[1], value[2], type="double3")
-
-
 class YetiCacheLoader(load.LoaderPlugin):
     """Load Yeti Cache with one or more Yeti nodes"""
 
@@ -248,10 +205,6 @@ class YetiCacheLoader(load.LoaderPlugin):
                     for attr, value in node_settings["attrs"].items():
                         set_attribute(attr, value, yeti_node)
 
-                    # Update the yeti user variables
-                    user_variables = node_settings.get("user_variables", [])
-                    set_yeti_user_variables(yeti_node, user_variables)
-
         cmds.setAttr("{}.representation".format(container_node),
                      str(representation["_id"]),
                      typ="string")
@@ -371,10 +324,6 @@ class YetiCacheLoader(load.LoaderPlugin):
         # Apply attributes to pgYetiMaya node
         for attr, value in attributes.items():
             set_attribute(attr, value, yeti_node)
-
-        # Apply yeti user variables
-        user_variables = node_settings.get("user_variables", [])
-        set_yeti_user_variables(yeti_node, user_variables)
 
         # Connect to the time node
         cmds.connectAttr("time1.outTime", "%s.currentTime" % yeti_node)

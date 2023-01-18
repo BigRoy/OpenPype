@@ -8,7 +8,7 @@ from openpype.hosts.maya.api import lib
 SETTINGS = {
     # Preview
     "displayOutput",
-    "colorR", "colorG", "colorB"
+    "colorR", "colorG", "colorB",
     "viewportDensity",
     "viewportWidth",
     "viewportLength",

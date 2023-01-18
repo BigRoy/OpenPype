@@ -356,7 +356,6 @@ class YetiCacheLoader(load.LoaderPlugin):
         # Update attributes with defaults
         attributes = node_settings["attrs"]
         attributes.update({
-            "viewportDensity": 0.1,
             "verbosity": 2,
             "fileMode": 1,
 
@@ -365,6 +364,9 @@ class YetiCacheLoader(load.LoaderPlugin):
             "visibleInReflections": True,
             "visibleInRefractions": True
         })
+
+        if "viewportDensity" not in attributes:
+            attributes["viewportDensity"] = 0.1
 
         # Apply attributes to pgYetiMaya node
         for attr, value in attributes.items():

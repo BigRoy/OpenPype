@@ -8,14 +8,6 @@ import pyblish.api
 from openpype.hosts.maya.api import lib
 
 
-SETTINGS = {"renderDensity",
-            "renderWidth",
-            "renderLength",
-            "increaseRenderBounds",
-            "imageSearchPath",
-            "cbId"}
-
-
 class CollectYetiRig(pyblish.api.InstancePlugin):
     """Collect all information of the Yeti Rig"""
 

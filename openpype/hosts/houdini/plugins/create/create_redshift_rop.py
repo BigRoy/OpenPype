@@ -39,7 +39,7 @@ class CreateRedshiftROP(plugin.Creator):
 
         # Also create the linked Redshift IPR Rop
         try:
-            ipr_rop = self.parent.createNode(
+            ipr_rop = instance.parent().createNode(
                 "Redshift_IPR", node_name=basename + "_IPR"
             )
         except hou.OperationFailed:

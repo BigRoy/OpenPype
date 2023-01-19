@@ -58,7 +58,7 @@ class CreateRedshiftROP(plugin.Creator):
             "trange": 1,
             # Redshift ROP settings
             "RS_outputFileNamePrefix": prefix,
-            "RS_outputMultilayerMode": 0,  # no multi-layered exr
+            "RS_outputMultilayerMode": "1",  # no multi-layered exr
             "RS_outputBeautyAOVSuffix": "beauty",
         }
         instance.setParms(parms)

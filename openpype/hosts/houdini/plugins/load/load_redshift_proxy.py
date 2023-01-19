@@ -109,8 +109,7 @@ class RedshiftProxyLoader(load.LoaderPlugin):
                                  "in: {}".format(remainder))
 
             # A single frame without frame range detected
-            filepath = remainder[0]
-            return os.path.normpath(filepath).replace("\\", "/")
+            return os.path.normpath(path).replace("\\", "/")
 
         # Frames detected with a valid "frame" number pattern
         # Then we don't want to have any remainder files found

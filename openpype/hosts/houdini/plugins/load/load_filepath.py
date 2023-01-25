@@ -76,14 +76,21 @@ class FilePathLoader(load.LoaderPlugin):
 
         # Update the file path
         file_path = get_representation_path(representation)
+        file_path = self.format_path(file_path)
 
         node = container["node"]
         node.setParms({
-            "filepath": self.format_path(file_path),
+            "filepath": file_path,
             "representation": str(representation["_id"])
         })
 
-        # TODO: Update the parameter default value (cosmetics)
+        # Update the parameter default value (cosmetics)
+        parm_template_group = node.parmTemplateGroup()
+        parm = parm_template_group.find("filepath")
+        parm.setDefaultValue((file_path,))
+        parm_template_group.replace(parm_template_group.find("filepath"),
+                                    parm)
+        node.setParmTemplateGroup(parm_template_group)
 
     def remove(self, container):
 

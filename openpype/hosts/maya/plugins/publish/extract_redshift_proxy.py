@@ -5,7 +5,13 @@ import os
 from maya import cmds
 
 from openpype.pipeline import publish
-from openpype.hosts.maya.api.lib import maintained_selection
+from openpype.hosts.maya.api.lib import (
+    maintained_selection,
+    renderlayer
+)
+from openpype.hosts.maya.api.render_setup_tools import (
+    _allow_export_from_render_setup_layer
+)
 
 
 class ExtractRedshiftProxy(publish.Extractor):
@@ -57,14 +63,21 @@ class ExtractRedshiftProxy(publish.Extractor):
 
         # Write out rs file
         self.log.info("Writing: '%s'" % file_path)
+
+        # Allow overriding what renderlayer to export from. By default force
+        # it to the default render layer
+        layer = instance.data.get("renderLayer", "defaultRenderLayer")
+
         with maintained_selection():
-            cmds.select(instance.data["setMembers"], noExpand=True)
-            cmds.file(file_path,
-                      pr=False,
-                      force=True,
-                      type="Redshift Proxy",
-                      exportSelected=True,
-                      options=rs_options)
+            with renderlayer(layer):
+                with _allow_export_from_render_setup_layer():
+                    cmds.select(instance.data["setMembers"], noExpand=True)
+                    cmds.file(file_path,
+                              preserveReferences=False,
+                              force=True,
+                              type="Redshift Proxy",
+                              exportSelected=True,
+                              options=rs_options)
 
         if "representations" not in instance.data:
             instance.data["representations"] = []

@@ -119,8 +119,7 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin):
     deadline_plugin = "OpenPype"
     targets = ["local"]
 
-    hosts = ["fusion", "maya", "nuke", "celaction", "aftereffects", "harmony",
-             "houdini"]
+    hosts = ["fusion", "maya", "nuke", "celaction", "aftereffects", "harmony"]
 
     families = ["render.farm", "prerender.farm",
                 "renderlayer", "imagesequence", "vrayscene",

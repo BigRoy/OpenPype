@@ -1,15 +1,14 @@
-import sys
 import re
-import traceback
 
-from Qt import QtWidgets, QtCore, QtGui
+from qtpy import QtWidgets, QtCore, QtGui
 
 from openpype.pipeline.create import (
-    CreatorError,
     SUBSET_NAME_ALLOWED_SYMBOLS,
+    PRE_CREATE_THUMBNAIL_KEY,
     TaskNotSetError,
 )
 
+from .thumbnail_widget import ThumbnailWidget
 from .widgets import (
     IconValuePixmapLabel,
     CreateBtn,
@@ -19,18 +18,20 @@ from .tasks_widget import CreateWidgetTasksWidget
 from .precreate_widget import PreCreateWidget
 from ..constants import (
     VARIANT_TOOLTIP,
+    FAMILY_ROLE,
     CREATOR_IDENTIFIER_ROLE,
-    FAMILY_ROLE
+    CREATOR_THUMBNAIL_ENABLED_ROLE,
+    CREATOR_SORT_ROLE,
 )
 
 SEPARATORS = ("---separator---", "---")
 
 
-class VariantInputsWidget(QtWidgets.QWidget):
+class ResizeControlWidget(QtWidgets.QWidget):
     resized = QtCore.Signal()
 
     def resizeEvent(self, event):
-        super(VariantInputsWidget, self).resizeEvent(event)
+        super(ResizeControlWidget, self).resizeEvent(event)
         self.resized.emit()
 
 
@@ -90,11 +91,18 @@ class CreatorShortDescWidget(QtWidgets.QWidget):
         self._description_label.setText(description)
 
 
+class CreatorsProxyModel(QtCore.QSortFilterProxyModel):
+    def lessThan(self, left, right):
+        l_show_order = left.data(CREATOR_SORT_ROLE)
+        r_show_order = right.data(CREATOR_SORT_ROLE)
+        if l_show_order == r_show_order:
+            return super(CreatorsProxyModel, self).lessThan(left, right)
+        return l_show_order < r_show_order
+
+
 class CreateWidget(QtWidgets.QWidget):
     def __init__(self, controller, parent=None):
         super(CreateWidget, self).__init__(parent)
-
-        self.setWindowTitle("Create new instance")
 
         self._controller = controller
 
@@ -141,7 +149,7 @@ class CreateWidget(QtWidgets.QWidget):
 
         creators_view = QtWidgets.QListView(creators_view_widget)
         creators_model = QtGui.QStandardItemModel()
-        creators_sort_model = QtCore.QSortFilterProxyModel()
+        creators_sort_model = CreatorsProxyModel()
         creators_sort_model.setSourceModel(creators_model)
         creators_view.setModel(creators_sort_model)
 
@@ -153,13 +161,20 @@ class CreateWidget(QtWidgets.QWidget):
         # --- Creator attr defs ---
         creators_attrs_widget = QtWidgets.QWidget(creators_splitter)
 
+        # Top part - variant / subset name + thumbnail
+        creators_attrs_top = QtWidgets.QWidget(creators_attrs_widget)
+
+        # Basics - variant / subset name
+        creator_basics_widget = ResizeControlWidget(creators_attrs_top)
+
         variant_subset_label = QtWidgets.QLabel(
-            "Create options", creators_attrs_widget
+            "Create options", creator_basics_widget
         )
 
-        variant_subset_widget = QtWidgets.QWidget(creators_attrs_widget)
+        variant_subset_widget = QtWidgets.QWidget(creator_basics_widget)
         # Variant and subset input
-        variant_widget = VariantInputsWidget(creators_attrs_widget)
+        variant_widget = ResizeControlWidget(variant_subset_widget)
+        variant_widget.setObjectName("VariantInputsWidget")
 
         variant_input = QtWidgets.QLineEdit(variant_widget)
         variant_input.setObjectName("VariantInput")
@@ -186,6 +201,18 @@ class CreateWidget(QtWidgets.QWidget):
         variant_subset_layout.addRow("Variant", variant_widget)
         variant_subset_layout.addRow("Subset", subset_name_input)
 
+        creator_basics_layout = QtWidgets.QVBoxLayout(creator_basics_widget)
+        creator_basics_layout.setContentsMargins(0, 0, 0, 0)
+        creator_basics_layout.addWidget(variant_subset_label, 0)
+        creator_basics_layout.addWidget(variant_subset_widget, 0)
+
+        thumbnail_widget = ThumbnailWidget(controller, creators_attrs_top)
+
+        creators_attrs_top_layout = QtWidgets.QHBoxLayout(creators_attrs_top)
+        creators_attrs_top_layout.setContentsMargins(0, 0, 0, 0)
+        creators_attrs_top_layout.addWidget(creator_basics_widget, 1)
+        creators_attrs_top_layout.addWidget(thumbnail_widget, 0)
+
         # Precreate attributes widget
         pre_create_widget = PreCreateWidget(creators_attrs_widget)
 
@@ -201,8 +228,7 @@ class CreateWidget(QtWidgets.QWidget):
 
         creators_attrs_layout = QtWidgets.QVBoxLayout(creators_attrs_widget)
         creators_attrs_layout.setContentsMargins(0, 0, 0, 0)
-        creators_attrs_layout.addWidget(variant_subset_label, 0)
-        creators_attrs_layout.addWidget(variant_subset_widget, 0)
+        creators_attrs_layout.addWidget(creators_attrs_top, 0)
         creators_attrs_layout.addWidget(pre_create_widget, 1)
         creators_attrs_layout.addWidget(create_btn_wrapper, 0)
 
@@ -240,6 +266,7 @@ class CreateWidget(QtWidgets.QWidget):
 
         create_btn.clicked.connect(self._on_create)
         variant_widget.resized.connect(self._on_variant_widget_resize)
+        creator_basics_widget.resized.connect(self._on_creator_basics_resize)
         variant_input.returnPressed.connect(self._on_create)
         variant_input.textChanged.connect(self._on_variant_change)
         creators_view.selectionModel().currentChanged.connect(
@@ -252,6 +279,8 @@ class CreateWidget(QtWidgets.QWidget):
             self._on_current_session_context_request
         )
         tasks_widget.task_changed.connect(self._on_task_change)
+        thumbnail_widget.thumbnail_created.connect(self._on_thumbnail_create)
+        thumbnail_widget.thumbnail_cleared.connect(self._on_thumbnail_clear)
 
         controller.event_system.add_callback(
             "plugins.refresh.finished", self._on_plugins_refresh
@@ -278,11 +307,14 @@ class CreateWidget(QtWidgets.QWidget):
         self._create_btn = create_btn
 
         self._creator_short_desc_widget = creator_short_desc_widget
+        self._creator_basics_widget = creator_basics_widget
+        self._thumbnail_widget = thumbnail_widget
         self._pre_create_widget = pre_create_widget
         self._attr_separator_widget = attr_separator_widget
 
         self._prereq_timer = prereq_timer
         self._first_show = True
+        self._last_thumbnail_path = None
 
     @property
     def current_asset_name(self):
@@ -417,24 +449,33 @@ class CreateWidget(QtWidgets.QWidget):
 
         # Add new families
         new_creators = set()
-        for identifier, creator_item in self._controller.creator_items.items():
+        creator_items_by_identifier = self._controller.creator_items
+        for identifier, creator_item in creator_items_by_identifier.items():
             if creator_item.creator_type != "artist":
                 continue
 
             # TODO add details about creator
             new_creators.add(identifier)
             if identifier in existing_items:
+                is_new = False
                 item = existing_items[identifier]
             else:
+                is_new = True
                 item = QtGui.QStandardItem()
                 item.setFlags(
                     QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
                 )
-                self._creators_model.appendRow(item)
 
             item.setData(creator_item.label, QtCore.Qt.DisplayRole)
+            item.setData(creator_item.show_order, CREATOR_SORT_ROLE)
             item.setData(identifier, CREATOR_IDENTIFIER_ROLE)
+            item.setData(
+                creator_item.create_allow_thumbnail,
+                CREATOR_THUMBNAIL_ENABLED_ROLE
+            )
             item.setData(creator_item.family, FAMILY_ROLE)
+            if is_new:
+                self._creators_model.appendRow(item)
 
         # Remove families that are no more available
         for identifier in (old_creators - new_creators):
@@ -454,8 +495,9 @@ class CreateWidget(QtWidgets.QWidget):
             index = indexes[0]
 
         identifier = index.data(CREATOR_IDENTIFIER_ROLE)
+        create_item = creator_items_by_identifier.get(identifier)
 
-        self._set_creator_by_identifier(identifier)
+        self._set_creator(create_item)
 
     def _on_plugins_refresh(self):
         # Trigger refresh only if is visible
@@ -472,6 +514,13 @@ class CreateWidget(QtWidgets.QWidget):
     def _on_task_change(self):
         if self._context_change_is_enabled():
             self._invalidate_prereq_deffered()
+
+    def _on_thumbnail_create(self, thumbnail_path):
+        self._last_thumbnail_path = thumbnail_path
+        self._thumbnail_widget.set_current_thumbnails([thumbnail_path])
+
+    def _on_thumbnail_clear(self):
+        self._last_thumbnail_path = None
 
     def _on_current_session_context_request(self):
         self._assets_widget.set_current_session_asset()
@@ -526,6 +575,10 @@ class CreateWidget(QtWidgets.QWidget):
         ):
             self._set_context_enabled(creator_item.create_allow_context_change)
             self._refresh_asset()
+
+        self._thumbnail_widget.setVisible(
+            creator_item.create_allow_thumbnail
+        )
 
         default_variants = creator_item.default_variants
         if not default_variants:
@@ -684,6 +737,11 @@ class CreateWidget(QtWidgets.QWidget):
             self._first_show = False
             self._on_first_show()
 
+    def _on_creator_basics_resize(self):
+        self._thumbnail_widget.set_height(
+            self._creator_basics_widget.sizeHint().height()
+        )
+
     def _on_create(self):
         indexes = self._creators_view.selectedIndexes()
         if not indexes or len(indexes) > 1:
@@ -706,6 +764,11 @@ class CreateWidget(QtWidgets.QWidget):
             task_name = self._get_task_name()
 
         pre_create_data = self._pre_create_widget.current_value()
+        if index.data(CREATOR_THUMBNAIL_ENABLED_ROLE):
+            pre_create_data[PRE_CREATE_THUMBNAIL_KEY] = (
+                self._last_thumbnail_path
+            )
+
         # Where to define these data?
         # - what data show be stored?
         instance_data = {
@@ -725,3 +788,5 @@ class CreateWidget(QtWidgets.QWidget):
         if success:
             self._set_creator(self._selected_creator)
             self._controller.emit_card_message("Creation finished...")
+            self._last_thumbnail_path = None
+            self._thumbnail_widget.set_current_thumbnails()

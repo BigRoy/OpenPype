@@ -15,6 +15,7 @@ class SetFrameRangeLoader(load.LoaderPlugin):
     families = [
         "animation",
         "camera",
+        "proxyAbc",
         "pointcache",
         "vdbcache",
         "usd",
@@ -54,7 +55,8 @@ class SetFrameRangeWithHandlesLoader(load.LoaderPlugin):
     families = [
         "animation",
         "camera",
-        "pointcache",
+        "proxyAbc",
+        "pointcache"
         "vdbcache",
         "usd",
         "yeticache"
@@ -113,7 +115,7 @@ class ImportMayaLoader(load.LoaderPlugin):
             "clean_import",
             label="Clean import",
             default=False,
-            help="Should all occurences of cbId be purged?"
+            help="Should all occurrences of cbId be purged?"
         )
     ]
 
@@ -161,7 +163,7 @@ class ImportMayaLoader(load.LoaderPlugin):
 
         """
 
-        from Qt import QtWidgets
+        from qtpy import QtWidgets
 
         accept = QtWidgets.QMessageBox.Ok
         buttons = accept | QtWidgets.QMessageBox.Cancel

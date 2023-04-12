@@ -4,7 +4,7 @@ import os
 import sys
 import platform
 import uuid
-import math
+import re
 
 import json
 import logging
@@ -15,7 +15,7 @@ from six import string_types
 import attr
 
 from maya import cmds, mel
-import maya.api.OpenMaya as om
+from maya.api import OpenMaya
 
 from openpype.client import (
     get_project,
@@ -34,7 +34,6 @@ from openpype.pipeline import (
     registered_host,
 )
 from openpype.pipeline.context_tools import get_current_project_asset
-from .commands import reset_frame_range
 
 
 self = sys.modules[__name__]
@@ -104,7 +103,7 @@ RENDERLIKE_INSTANCE_FAMILIES = ["rendering", "vrayscene"]
 
 def get_main_window():
     """Acquire Maya's main window"""
-    from Qt import QtWidgets
+    from qtpy import QtWidgets
 
     if self._parent is None:
         self._parent = {
@@ -115,14 +114,19 @@ def get_main_window():
 
 
 @contextlib.contextmanager
-def suspended_refresh():
-    """Suspend viewport refreshes"""
+def suspended_refresh(suspend=True):
+    """Suspend viewport refreshes
 
+    cmds.ogs(pause=True) is a toggle so we cant pass False.
+    """
+    original_state = cmds.ogs(query=True, pause=True)
     try:
-        cmds.refresh(suspend=True)
+        if suspend and not original_state:
+            cmds.ogs(pause=True)
         yield
     finally:
-        cmds.refresh(suspend=False)
+        if suspend and not original_state:
+            cmds.ogs(pause=True)
 
 
 @contextlib.contextmanager
@@ -237,11 +241,6 @@ def read(node):
     return data
 
 
-def _get_mel_global(name):
-    """Return the value of a mel global variable"""
-    return mel.eval("$%s = $%s;" % (name, name))
-
-
 def matrix_equals(a, b, tolerance=1e-10):
     """
     Compares two matrices with an imperfection tolerance
@@ -270,73 +269,6 @@ def pairwise(iterable):
 
     a = iter(iterable)
     return zip(a, a)
-
-
-def export_alembic(nodes,
-                   file,
-                   frame_range=None,
-                   write_uv=True,
-                   write_visibility=True,
-                   attribute_prefix=None):
-    """Wrap native MEL command with limited set of arguments
-
-    Arguments:
-        nodes (list): Long names of nodes to cache
-
-        file (str): Absolute path to output destination
-
-        frame_range (tuple, optional): Start- and end-frame of cache,
-            default to current animation range.
-
-        write_uv (bool, optional): Whether or not to include UVs,
-            default to True
-
-        write_visibility (bool, optional): Turn on to store the visibility
-        state of objects in the Alembic file. Otherwise, all objects are
-        considered visible, default to True
-
-        attribute_prefix (str, optional): Include all user-defined
-            attributes with this prefix.
-
-    """
-
-    if frame_range is None:
-        frame_range = (
-            cmds.playbackOptions(query=True, ast=True),
-            cmds.playbackOptions(query=True, aet=True)
-        )
-
-    options = [
-        ("file", file),
-        ("frameRange", "%s %s" % frame_range),
-    ] + [("root", mesh) for mesh in nodes]
-
-    if isinstance(attribute_prefix, string_types):
-        # Include all attributes prefixed with "mb"
-        # TODO(marcus): This would be a good candidate for
-        #   external registration, so that the developer
-        #   doesn't have to edit this function to modify
-        #   the behavior of Alembic export.
-        options.append(("attrPrefix", str(attribute_prefix)))
-
-    if write_uv:
-        options.append(("uvWrite", ""))
-
-    if write_visibility:
-        options.append(("writeVisibility", ""))
-
-    # Generate MEL command
-    mel_args = list()
-    for key, value in options:
-        mel_args.append("-{0} {1}".format(key, value))
-
-    mel_args_string = " ".join(mel_args)
-    mel_cmd = "AbcExport -j \"{0}\"".format(mel_args_string)
-
-    # For debuggability, put the string passed to MEL in the Script editor.
-    print("mel.eval('%s')" % mel_cmd)
-
-    return mel.eval(mel_cmd)
 
 
 def collect_animation_data(fps=False):
@@ -458,9 +390,9 @@ def lsattrs(attrs):
 
     """
 
-    dep_fn = om.MFnDependencyNode()
-    dag_fn = om.MFnDagNode()
-    selection_list = om.MSelectionList()
+    dep_fn = OpenMaya.MFnDependencyNode()
+    dag_fn = OpenMaya.MFnDagNode()
+    selection_list = OpenMaya.MSelectionList()
 
     first_attr = next(iter(attrs))
 
@@ -474,7 +406,7 @@ def lsattrs(attrs):
     matches = set()
     for i in range(selection_list.length()):
         node = selection_list.getDependNode(i)
-        if node.hasFn(om.MFn.kDagNode):
+        if node.hasFn(OpenMaya.MFn.kDagNode):
             fn_node = dag_fn.setObject(node)
             full_path_names = [path.fullPathName()
                                for path in fn_node.getAllPaths()]
@@ -674,13 +606,13 @@ class delete_after(object):
             cmds.delete(self._nodes)
 
 
+def get_current_renderlayer():
+    return cmds.editRenderLayerGlobals(query=True, currentRenderLayer=True)
+
+
 def get_renderer(layer):
     with renderlayer(layer):
         return cmds.getAttr("defaultRenderGlobals.currentRenderer")
-
-
-def get_current_renderlayer():
-    return cmds.editRenderLayerGlobals(query=True, currentRenderLayer=True)
 
 
 @contextlib.contextmanager
@@ -923,11 +855,11 @@ def maintained_selection_api():
     Warning: This is *not* added to the undo stack.
 
     """
-    original = om.MGlobal.getActiveSelectionList()
+    original = OpenMaya.MGlobal.getActiveSelectionList()
     try:
         yield
     finally:
-        om.MGlobal.setActiveSelectionList(original)
+        OpenMaya.MGlobal.setActiveSelectionList(original)
 
 
 @contextlib.contextmanager
@@ -1337,11 +1269,11 @@ def get_id(node):
     if node is None:
         return
 
-    sel = om.MSelectionList()
+    sel = OpenMaya.MSelectionList()
     sel.add(node)
 
     api_node = sel.getDependNode(0)
-    fn = om.MFnDependencyNode(api_node)
+    fn = OpenMaya.MFnDependencyNode(api_node)
 
     if not fn.hasAttribute("cbId"):
         return
@@ -1423,25 +1355,69 @@ def set_id(node, unique_id, overwrite=False):
         cmds.setAttr(attr, unique_id, type="string")
 
 
-# endregion ID
-def get_reference_node(path):
-    """
-    Get the reference node when the path is found being used in a reference
+def get_attribute(plug,
+                  asString=False,
+                  expandEnvironmentVariables=False,
+                  **kwargs):
+    """Maya getAttr with some fixes based on `pymel.core.general.getAttr()`.
+
+    Like Pymel getAttr this applies some changes to `maya.cmds.getAttr`
+      - maya pointlessly returned vector results as a tuple wrapped in a list
+        (ex.  '[(1,2,3)]'). This command unpacks the vector for you.
+      - when getting a multi-attr, maya would raise an error, but this will
+        return a list of values for the multi-attr
+      - added support for getting message attributes by returning the
+        connections instead
+
+    Note that the asString + expandEnvironmentVariables argument naming
+    convention matches the `maya.cmds.getAttr` arguments so that it can
+    act as a direct replacement for it.
+
     Args:
-        path (str): the file path to check
+        plug (str): Node's attribute plug as `node.attribute`
+        asString (bool): Return string value for enum attributes instead
+            of the index. Note that the return value can be dependent on the
+            UI language Maya is running in.
+        expandEnvironmentVariables (bool): Expand any environment variable and
+            (tilde characters on UNIX) found in string attributes which are
+            returned.
+
+    Kwargs:
+        Supports the keyword arguments of `maya.cmds.getAttr`
 
     Returns:
-        node (str): name of the reference node in question
-    """
-    try:
-        node = cmds.file(path, query=True, referenceNode=True)
-    except RuntimeError:
-        log.debug('File is not referenced : "{}"'.format(path))
-        return
+        object: The value of the maya attribute.
 
-    reference_path = cmds.referenceQuery(path, filename=True)
-    if os.path.normpath(path) == os.path.normpath(reference_path):
-        return node
+    """
+    attr_type = cmds.getAttr(plug, type=True)
+    if asString:
+        kwargs["asString"] = True
+    if expandEnvironmentVariables:
+        kwargs["expandEnvironmentVariables"] = True
+    try:
+        res = cmds.getAttr(plug, **kwargs)
+    except RuntimeError:
+        if attr_type == "message":
+            return cmds.listConnections(plug)
+
+        node, attr = plug.split(".", 1)
+        children = cmds.attributeQuery(attr, node=node, listChildren=True)
+        if children:
+            return [
+                get_attribute("{}.{}".format(node, child))
+                for child in children
+            ]
+
+        raise
+
+    # Convert vector result wrapped in tuple
+    if isinstance(res, list) and len(res):
+        if isinstance(res[0], tuple) and len(res):
+            if attr_type in {'pointArray', 'vectorArray'}:
+                return res
+            return res[0]
+
+    return res
 
 
 def set_attribute(attribute, value, node):
@@ -1952,6 +1928,12 @@ def remove_other_uv_sets(mesh):
             cmds.removeMultiInstance(attr, b=True)
 
 
+def get_node_parent(node):
+    """Return full path name for parent of node"""
+    parents = cmds.listRelatives(node, parent=True, fullPath=True)
+    return parents[0] if parents else None
+
+
 def get_id_from_sibling(node, history_only=True):
     """Return first node id in the history chain that matches this node.
 
@@ -1975,10 +1957,6 @@ def get_id_from_sibling(node, history_only=True):
 
     """
 
-    def _get_parent(node):
-        """Return full path name for parent of node"""
-        return cmds.listRelatives(node, parent=True, fullPath=True)
-
     node = cmds.ls(node, long=True)[0]
 
     # Find all similar nodes in history
@@ -1990,8 +1968,8 @@ def get_id_from_sibling(node, history_only=True):
     similar_nodes = [x for x in similar_nodes if x != node]
 
     # The node *must be* under the same parent
-    parent = _get_parent(node)
-    similar_nodes = [i for i in similar_nodes if _get_parent(i) == parent]
+    parent = get_node_parent(node)
+    similar_nodes = [i for i in similar_nodes if get_node_parent(i) == parent]
 
     # Check all of the remaining similar nodes and take the first one
     # with an id and assume it's the original.
@@ -2039,8 +2017,6 @@ def get_id_from_sibling(node, history_only=True):
             return first_id
 
 
-
-# Project settings
 def set_scene_fps(fps, update=True):
     """Set FPS from project configuration
 
@@ -2053,30 +2029,23 @@ def set_scene_fps(fps, update=True):
 
     """
 
-    fps_mapping = {'15': 'game',
-                   '24': 'film',
-                   '25': 'pal',
-                   '30': 'ntsc',
-                   '48': 'show',
-                   '50': 'palf',
-                   '60': 'ntscf',
-                   '23.98': '23.976fps',
-                   '23.976': '23.976fps',
-                   '29.97': '29.97fps',
-                   '47.952': '47.952fps',
-                   '47.95': '47.952fps',
-                   '59.94': '59.94fps',
-                   '44100': '44100fps',
-                   '48000': '48000fps'}
+    fps_mapping = {
+        '15': 'game',
+        '24': 'film',
+        '25': 'pal',
+        '30': 'ntsc',
+        '48': 'show',
+        '50': 'palf',
+        '60': 'ntscf',
+        '23.976023976023978': '23.976fps',
+        '29.97002997002997': '29.97fps',
+        '47.952047952047955': '47.952fps',
+        '59.94005994005994': '59.94fps',
+        '44100': '44100fps',
+        '48000': '48000fps'
+    }
 
-    # pull from mapping
-    # this should convert float string to float and int to int
-    # so 25.0 is converted to 25, but 23.98 will be still float.
-    dec, ipart = math.modf(fps)
-    if dec == 0.0:
-        fps = int(ipart)
-
-    unit = fps_mapping.get(str(fps), None)
+    unit = fps_mapping.get(str(convert_to_maya_fps(fps)), None)
     if unit is None:
         raise ValueError("Unsupported FPS value: `%s`" % fps)
 
@@ -2143,6 +2112,68 @@ def set_scene_resolution(width, height, pixelAspect):
     cmds.setAttr("%s.pixelAspect" % control_node, pixelAspect)
 
 
+def get_frame_range():
+    """Get the current assets frame range and handles."""
+
+    # Set frame start/end
+    project_name = legacy_io.active_project()
+    asset_name = legacy_io.Session["AVALON_ASSET"]
+    asset = get_asset_by_name(project_name, asset_name)
+
+    frame_start = asset["data"].get("frameStart")
+    frame_end = asset["data"].get("frameEnd")
+
+    if frame_start is None or frame_end is None:
+        cmds.warning("No edit information found for %s" % asset_name)
+        return
+
+    handle_start = asset["data"].get("handleStart") or 0
+    handle_end = asset["data"].get("handleEnd") or 0
+
+    return {
+        "frameStart": frame_start,
+        "frameEnd": frame_end,
+        "handleStart": handle_start,
+        "handleEnd": handle_end
+    }
+
+
+def reset_frame_range(playback=True, render=True, fps=True):
+    """Set frame range to current asset
+
+    Args:
+        playback (bool, Optional): Whether to set the maya timeline playback
+            frame range. Defaults to True.
+        render (bool, Optional): Whether to set the maya render frame range.
+            Defaults to True.
+        fps (bool, Optional): Whether to set scene FPS. Defaults to True.
+    """
+
+    if fps:
+        fps = convert_to_maya_fps(
+            float(legacy_io.Session.get("AVALON_FPS", 25))
+        )
+        set_scene_fps(fps)
+
+    frame_range = get_frame_range()
+
+    frame_start = frame_range["frameStart"] - int(frame_range["handleStart"])
+    frame_end = frame_range["frameEnd"] + int(frame_range["handleEnd"])
+
+    if playback:
+        cmds.playbackOptions(minTime=frame_start)
+        cmds.playbackOptions(maxTime=frame_end)
+        cmds.playbackOptions(animationStartTime=frame_start)
+        cmds.playbackOptions(animationEndTime=frame_end)
+        cmds.playbackOptions(minTime=frame_start)
+        cmds.playbackOptions(maxTime=frame_end)
+        cmds.currentTime(frame_start)
+
+    if render:
+        cmds.setAttr("defaultRenderGlobals.startFrame", frame_start)
+        cmds.setAttr("defaultRenderGlobals.endFrame", frame_end)
+
+
 def reset_scene_resolution():
     """Apply the scene resolution  from the project definition
 
@@ -2194,7 +2225,9 @@ def set_context_settings():
     asset_data = asset_doc.get("data", {})
 
     # Set project fps
-    fps = asset_data.get("fps", project_data.get("fps", 25))
+    fps = convert_to_maya_fps(
+        asset_data.get("fps", project_data.get("fps", 25))
+    )
     legacy_io.Session["AVALON_FPS"] = str(fps)
     set_scene_fps(fps)
 
@@ -2216,15 +2249,12 @@ def validate_fps():
 
     """
 
-    fps = get_current_project_asset(fields=["data.fps"])["data"]["fps"]
-    # TODO(antirotor): This is hack as for framerates having multiple
-    # decimal places. FTrack is ceiling decimal values on
-    # fps to two decimal places but Maya 2019+ is reporting those fps
-    # with much higher resolution. As we currently cannot fix Ftrack
-    # rounding, we have to round those numbers coming from Maya.
-    current_fps = float_round(mel.eval('currentTimeUnitToFPS()'), 2)
+    expected_fps = convert_to_maya_fps(
+        get_current_project_asset(fields=["data.fps"])["data"]["fps"]
+    )
+    current_fps = mel.eval('currentTimeUnitToFPS()')
 
-    fps_match = current_fps == fps
+    fps_match = current_fps == expected_fps
     if not fps_match and not IS_HEADLESS:
         from openpype.widgets import popup
 
@@ -2233,14 +2263,19 @@ def validate_fps():
         dialog = popup.PopupUpdateKeys(parent=parent)
         dialog.setModal(True)
         dialog.setWindowTitle("Maya scene does not match project FPS")
-        dialog.setMessage("Scene %i FPS does not match project %i FPS" %
-                          (current_fps, fps))
+        dialog.setMessage(
+            "Scene {} FPS does not match project {} FPS".format(
+                current_fps, expected_fps
+            )
+        )
         dialog.setButtonText("Fix")
 
         # Set new text for button (add optional argument for the popup?)
         toggle = dialog.widgets["toggle"]
         update = toggle.isChecked()
-        dialog.on_clicked_state.connect(lambda: set_scene_fps(fps, update))
+        dialog.on_clicked_state.connect(
+            lambda: set_scene_fps(expected_fps, update)
+        )
 
         dialog.show()
 
@@ -2482,8 +2517,8 @@ def load_capture_preset(data=None):
                     float(value[2]) / 255
                 ]
             disp_options[key] = value
-        else:
-            disp_options['displayGradient'] = True
+        elif key == "displayGradient":
+            disp_options[key] = value
 
     options['display_options'] = disp_options
 
@@ -2995,7 +3030,7 @@ def update_content_on_context_change():
 
 
 def show_message(title, msg):
-    from Qt import QtWidgets
+    from qtpy import QtWidgets
     from openpype.widgets import message_window
 
     # Find maya main window
@@ -3180,38 +3215,78 @@ def set_colorspace():
 def parent_nodes(nodes, parent=None):
     # type: (list, str) -> list
     """Context manager to un-parent provided nodes and return them back."""
-    import pymel.core as pm  # noqa
 
-    parent_node = None
+    def _as_mdagpath(node):
+        """Return MDagPath for node path."""
+        if not node:
+            return
+        sel = OpenMaya.MSelectionList()
+        sel.add(node)
+        return sel.getDagPath(0)
+
+    # We can only parent dag nodes so we ensure input contains only dag nodes
+    nodes = cmds.ls(nodes, type="dagNode", long=True)
+    if not nodes:
+        # opt-out early
+        yield
+        return
+
+    parent_node_path = None
     delete_parent = False
-
     if parent:
         if not cmds.objExists(parent):
-            parent_node = pm.createNode("transform", n=parent, ss=False)
+            parent_node = cmds.createNode("transform",
+                                          name=parent,
+                                          skipSelect=False)
             delete_parent = True
         else:
-            parent_node = pm.PyNode(parent)
+            parent_node = parent
+        parent_node_path = cmds.ls(parent_node, long=True)[0]
+
+    # Store original parents
     node_parents = []
     for node in nodes:
-        n = pm.PyNode(node)
-        try:
-            root = pm.listRelatives(n, parent=1)[0]
-        except IndexError:
-            root = None
-        node_parents.append((n, root))
+        node_parent = get_node_parent(node)
+        node_parents.append((_as_mdagpath(node), _as_mdagpath(node_parent)))
+
     try:
-        for node in node_parents:
-            if not parent:
-                node[0].setParent(world=True)
+        for node, node_parent in node_parents:
+            node_parent_path = node_parent.fullPathName() if node_parent else None  # noqa
+            if node_parent_path == parent_node_path:
+                # Already a child
+                continue
+
+            if parent_node_path:
+                cmds.parent(node.fullPathName(), parent_node_path)
             else:
-                node[0].setParent(parent_node)
+                cmds.parent(node.fullPathName(), world=True)
+
         yield
     finally:
-        for node in node_parents:
-            if node[1]:
-                node[0].setParent(node[1])
+        # Reparent to original parents
+        for node, original_parent in node_parents:
+            node_path = node.fullPathName()
+            if not node_path:
+                # Node must have been deleted
+                continue
+
+            node_parent_path = get_node_parent(node_path)
+
+            original_parent_path = None
+            if original_parent:
+                original_parent_path = original_parent.fullPathName()
+                if not original_parent_path:
+                    # Original parent node must have been deleted
+                    continue
+
+            if node_parent_path != original_parent_path:
+                if not original_parent_path:
+                    cmds.parent(node_path, world=True)
+                else:
+                    cmds.parent(node_path, original_parent_path)
+
         if delete_parent:
-            pm.delete(parent_node)
+            cmds.delete(parent_node_path)
 
 
 @contextlib.contextmanager
@@ -3368,15 +3443,15 @@ def iter_visible_nodes_in_range(nodes, start, end):
     @memodict
     def get_visibility_mplug(node):
         """Return api 2.0 MPlug with cached memoize decorator"""
-        sel = om.MSelectionList()
+        sel = OpenMaya.MSelectionList()
         sel.add(node)
         dag = sel.getDagPath(0)
-        return om.MFnDagNode(dag).findPlug("visibility", True)
+        return OpenMaya.MFnDagNode(dag).findPlug("visibility", True)
 
     @contextlib.contextmanager
     def dgcontext(mtime):
         """MDGContext context manager"""
-        context = om.MDGContext(mtime)
+        context = OpenMaya.MDGContext(mtime)
         try:
             previous = context.makeCurrent()
             yield context
@@ -3385,9 +3460,9 @@ def iter_visible_nodes_in_range(nodes, start, end):
 
     # We skip the first frame as we already used that frame to check for
     # overall visibilities. And end+1 to include the end frame.
-    scene_units = om.MTime.uiUnit()
+    scene_units = OpenMaya.MTime.uiUnit()
     for frame in range(start + 1, end + 1):
-        mtime = om.MTime(frame, unit=scene_units)
+        mtime = OpenMaya.MTime(frame, unit=scene_units)
 
         # Build little cache so we don't query the same MPlug's value
         # again if it was checked on this frame and also is a dependency
@@ -3418,6 +3493,317 @@ def iter_visible_nodes_in_range(nodes, start, end):
         # If no more nodes to process break the frame iterations..
         if not node_dependencies:
             break
+
+
+def get_attribute_input(attr):
+    connections = cmds.listConnections(attr, plugs=True, destination=False)
+    return connections[0] if connections else None
+
+
+def convert_to_maya_fps(fps):
+    """Convert any fps to supported Maya framerates."""
+    float_framerates = [
+        23.976023976023978,
+        # WTF is 29.97 df vs fps?
+        29.97002997002997,
+        47.952047952047955,
+        59.94005994005994
+    ]
+    # 44100 fps evaluates as 41000.0. Why? Omitting for now.
+    int_framerates = [
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15,
+        16,
+        20,
+        24,
+        25,
+        30,
+        40,
+        48,
+        50,
+        60,
+        75,
+        80,
+        90,
+        100,
+        120,
+        125,
+        150,
+        200,
+        240,
+        250,
+        300,
+        375,
+        400,
+        500,
+        600,
+        750,
+        1200,
+        1500,
+        2000,
+        3000,
+        6000,
+        48000
+    ]
+
+    # If input fps is a whole number we'll return.
+    if float(fps).is_integer():
+        # Validate fps is part of Maya's fps selection.
+        if int(fps) not in int_framerates:
+            raise ValueError(
+                "Framerate \"{}\" is not supported in Maya".format(fps)
+            )
+        return int(fps)
+    else:
+        # Differences to supported float frame rates.
+        differences = []
+        for i in float_framerates:
+            differences.append(abs(i - fps))
+
+        # Validate difference does not stray too far from supported framerates.
+        min_difference = min(differences)
+        min_index = differences.index(min_difference)
+        supported_framerate = float_framerates[min_index]
+        if min_difference > 0.1:
+            raise ValueError(
+                "Framerate \"{}\" strays too far from any supported framerate"
+                " in Maya. Closest supported framerate is \"{}\"".format(
+                    fps, supported_framerate
+                )
+            )
+
+        return supported_framerate
+
+
+def write_xgen_file(data, filepath):
+    """Overwrites data in .xgen files.
+
+    Quite naive approach to mainly overwrite "xgDataPath" and "xgProjectPath".
+
+    Args:
+        data (dict): Dictionary of key, value. Key matches with xgen file.
+        For example:
+            {"xgDataPath": "some/path"}
+        filepath (string): Absolute path of .xgen file.
+    """
+    # Generate regex lookup for line to key basically
+    # match any of the keys in `\t{key}\t\t`
+    keys = "|".join(re.escape(key) for key in data.keys())
+    re_keys = re.compile("^\t({})\t\t".format(keys))
+
+    lines = []
+    with open(filepath, "r") as f:
+        for line in f:
+            match = re_keys.match(line)
+            if match:
+                key = match.group(1)
+                value = data[key]
+                line = "\t{}\t\t{}\n".format(key, value)
+
+            lines.append(line)
+
+    with open(filepath, "w") as f:
+        f.writelines(lines)
+
+
+def get_color_management_preferences():
+    """Get and resolve OCIO preferences."""
+    data = {
+        # Is color management enabled.
+        "enabled": cmds.colorManagementPrefs(
+            query=True, cmEnabled=True
+        ),
+        "rendering_space": cmds.colorManagementPrefs(
+            query=True, renderingSpaceName=True
+        ),
+        "output_transform": cmds.colorManagementPrefs(
+            query=True, outputTransformName=True
+        ),
+        "output_transform_enabled": cmds.colorManagementPrefs(
+            query=True, outputTransformEnabled=True
+        ),
+        "view_transform": cmds.colorManagementPrefs(
+            query=True, viewTransformName=True
+        )
+    }
+
+    # Split view and display from view_transform. view_transform comes in
+    # format of "{view} ({display})".
+    regex = re.compile(r"^(?P<view>.+) \((?P<display>.+)\)$")
+    if int(cmds.about(version=True)) <= 2020:
+        # view_transform comes in format of "{view} {display}" in 2020.
+        regex = re.compile(r"^(?P<view>.+) (?P<display>.+)$")
+
+    match = regex.match(data["view_transform"])
+    if not match:
+        raise ValueError(
+            "Unable to parse view and display from Maya view transform: '{}' "
+            "using regex '{}'".format(data["view_transform"], regex.pattern)
+        )
+
+    data.update({
+        "display": match.group("display"),
+        "view": match.group("view")
+    })
+
+    # Get config absolute path.
+    path = cmds.colorManagementPrefs(
+        query=True, configFilePath=True
+    )
+
+    # The OCIO config supports a custom <MAYA_RESOURCES> token.
+    maya_resources_token = "<MAYA_RESOURCES>"
+    maya_resources_path = OpenMaya.MGlobal.getAbsolutePathToResources()
+    path = path.replace(maya_resources_token, maya_resources_path)
+
+    data["config"] = path
+
+    return data
+
+
+def get_color_management_output_transform():
+    preferences = get_color_management_preferences()
+    colorspace = preferences["rendering_space"]
+    if preferences["output_transform_enabled"]:
+        colorspace = preferences["output_transform"]
+    return colorspace
+
+
+def image_info(file_path):
+    # type: (str) -> dict
+    """Based on tha texture path, get its bit depth and format information.
+    Take reference from makeTx.py in Arnold:
+        ImageInfo(filename): Get Image Information for colorspace
+        AiTextureGetFormat(filename): Get Texture Format
+        AiTextureGetBitDepth(filename): Get Texture bit depth
+    Args:
+        file_path (str): Path to the texture file.
+    Returns:
+        dict: Dictionary with the information about the texture file.
+    """
+    from arnold import (
+        AiTextureGetBitDepth,
+        AiTextureGetFormat
+    )
+    # Get Texture Information
+    img_info = {'filename': file_path}
+    if os.path.isfile(file_path):
+        img_info['bit_depth'] = AiTextureGetBitDepth(file_path)  # noqa
+        img_info['format'] = AiTextureGetFormat(file_path)  # noqa
+    else:
+        img_info['bit_depth'] = 8
+        img_info['format'] = "unknown"
+    return img_info
+
+
+def guess_colorspace(img_info):
+    # type: (dict) -> str
+    """Guess the colorspace of the input image filename.
+    Note:
+        Reference from makeTx.py
+    Args:
+        img_info (dict): Image info generated by :func:`image_info`
+    Returns:
+        str: color space name use in the `--colorconvert`
+             option of maketx.
+    """
+    from arnold import (
+        AiTextureInvalidate,
+        # types
+        AI_TYPE_BYTE,
+        AI_TYPE_INT,
+        AI_TYPE_UINT
+    )
+    try:
+        if img_info['bit_depth'] <= 16:
+            if img_info['format'] in (AI_TYPE_BYTE, AI_TYPE_INT, AI_TYPE_UINT): # noqa
+                return 'sRGB'
+            else:
+                return 'linear'
+        # now discard the image file as AiTextureGetFormat has loaded it
+        AiTextureInvalidate(img_info['filename'])       # noqa
+    except ValueError:
+        print(("[maketx] Error: Could not guess"
+               "colorspace for {}").format(img_info["filename"]))
+        return "linear"
+
+
+def len_flattened(components):
+    """Return the length of the list as if it was flattened.
+
+    Maya will return consecutive components as a single entry
+    when requesting with `maya.cmds.ls` without the `flatten`
+    flag. Though enabling `flatten` on a large list (e.g. millions)
+    will result in a slow result. This command will return the amount
+    of entries in a non-flattened list by parsing the result with
+    regex.
+
+    Args:
+        components (list): The non-flattened components.
+
+    Returns:
+        int: The amount of entries.
+
+    """
+    assert isinstance(components, (list, tuple))
+    n = 0
+
+    pattern = re.compile(r"\[(\d+):(\d+)\]")
+    for c in components:
+        match = pattern.search(c)
+        if match:
+            start, end = match.groups()
+            n += int(end) - int(start) + 1
+        else:
+            n += 1
+    return n
+
+
+def get_all_children(nodes):
+    """Return all children of `nodes` including each instanced child.
+    Using maya.cmds.listRelatives(allDescendents=True) includes only the first
+    instance. As such, this function acts as an optimal replacement with a
+    focus on a fast query.
+
+    """
+
+    sel = OpenMaya.MSelectionList()
+    traversed = set()
+    iterator = OpenMaya.MItDag(OpenMaya.MItDag.kDepthFirst)
+    for node in nodes:
+
+        if node in traversed:
+            # Ignore if already processed as a child
+            # before
+            continue
+
+        sel.clear()
+        sel.add(node)
+        dag = sel.getDagPath(0)
+
+        iterator.reset(dag)
+        # ignore self
+        iterator.next()  # noqa: B305
+        while not iterator.isDone():
+
+            path = iterator.fullPathName()
+
+            if path in traversed:
+                iterator.prune()
+                iterator.next()  # noqa: B305
+                continue
+
+            traversed.add(path)
+            iterator.next()  # noqa: B305
+
+    return list(traversed)
 
 
 @attr.s

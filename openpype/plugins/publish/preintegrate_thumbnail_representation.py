@@ -21,9 +21,8 @@ class PreIntegrateThumbnails(pyblish.api.InstancePlugin):
 
     label = "Override Integrate Thumbnail Representations"
     order = pyblish.api.IntegratorOrder - 0.1
-    families = ["review"]
 
-    integrate_profiles = {}
+    integrate_profiles = []
 
     def process(self, instance):
         repres = instance.data.get("representations")
@@ -60,6 +59,8 @@ class PreIntegrateThumbnails(pyblish.api.InstancePlugin):
 
         if not found_profile:
             return
+
+        thumbnail_repre.setdefault("tags", [])
 
         if not found_profile["integrate_thumbnail"]:
             if "delete" not in thumbnail_repre["tags"]:

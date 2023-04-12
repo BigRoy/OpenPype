@@ -262,12 +262,14 @@ class CollectMayaRender(pyblish.api.ContextPlugin):
 
             if os.environ.get("OPENPYPE_DEBUG") == "1":
                 self.log.info(
-                    "Publish meta path: {}".format(common_publish_meta_path))
+                    "Publish meta path: {}".format(common_publish_meta_path)
+                )
                 self.log.info(full_exp_files)
 
             # Get layer specific settings, might be overrides
             self.log.info("collecting layer: {}".format(layer_name))
 
+            colorspace_data = lib.get_color_management_preferences()
             data = {
                 "subset": expected_layer_name,
                 "attachTo": attach_to,
@@ -320,6 +322,12 @@ class CollectMayaRender(pyblish.api.ContextPlugin):
                 "aovSeparator": layer_render_products.layer_data.aov_separator,  # noqa: E501
                 "renderSetupIncludeLights": render_instance.data.get(
                     "renderSetupIncludeLights", False
+                ),
+                "colorspaceConfig": colorspace_data["config"],
+                "colorspaceDisplay": colorspace_data["display"],
+                "colorspaceView": colorspace_data["view"],
+                "strict_error_checking": render_instance.data.get(
+                    "strict_error_checking", True
                 )
             }
 

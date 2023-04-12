@@ -17,6 +17,22 @@ from openpype.hosts.maya.api.lib_renderproducts import (
 )
 
 
+def convert_to_int_or_float(string_value):
+    # Order of types are important here since float can convert string
+    # representation of integer.
+    types = [int, float]
+    for t in types:
+        try:
+            result = t(string_value)
+        except ValueError:
+            continue
+        else:
+            return result
+
+    # Neither integer or float.
+    return string_value
+
+
 def get_redshift_image_format_labels():
     """Return nice labels for Redshift image formats."""
     var = "$g_redshiftImageFormatLabels"
@@ -236,7 +252,12 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
         settings_lights_flag = render_settings.get("enable_all_lights", False)
         instance_lights_flag = instance.data.get("renderSetupIncludeLights")
         if settings_lights_flag != instance_lights_flag:
-            cls.log.warning('Instance flag for "Render Setup Include Lights" is set to {0} and Settings flag is set to {1}'.format(instance_lights_flag, settings_lights_flag)) # noqa
+            cls.log.warning(
+                "Instance flag for \"Render Setup Include Lights\" is set to "
+                "{} and Settings flag is set to {}".format(
+                    instance_lights_flag, settings_lights_flag
+                )
+            )
 
         # Validate render settings attributes per renderer
         if cls.get_invalid_attributes(instance):
@@ -250,16 +271,25 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
         render_settings = RenderSettings(
             project_settings=instance.context.data["project_settings"])
 
-        attr_validations = {}
+        invalid_diffs = []
 
         # project_settings/maya/publish/ValidateRenderSettings
         # Renderer specific by node type
-        for attr, required_value in (
+        for attr, values in (
             instance.context.data["project_settings"]
                                  ["maya"]
                                  ["publish"]
                                  ["ValidateRenderSettings"]
             ).get("{}_render_attributes".format(renderer)) or []:
+            values = [convert_to_int_or_float(v) for v in values if v]
+
+            # Validate the settings has values.
+            if not values:
+                cls.log.error(
+                    "Settings for {} is missing values.".format(attr)
+                )
+                continue
+
             if "." not in attr:
                 cls.log.warning("Skipping invalid attribute defined in "
                                 "validation settings: '{}'".format(attr))
@@ -274,6 +304,17 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
 
             for node in nodes:
                 plug = "{}.{}".format(node, attribute_name)
+                for value in values:
+                    diff = cls.get_attribute_diff(plug, value,
+                                                  log_on_diff=False)
+                    if diff is None:
+                        # Attribute is ok
+                        break
+                else:
+                    # Attribute does not match any of the values
+                    diff = cls.get_attribute_diff(plug, values[0])
+                    invalid_diffs.append(first_diff)
+
                 attr_validations[plug] = required_value
 
         # project_setings/maya/RenderSettings/
@@ -286,21 +327,27 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
             plug = "defaultRenderGlobals.{}".format(attr)
             attr_validations[plug] = required_value
 
-        invalid_diffs = []
         for attr, value in attr_validations.items():
-            try:
-                diff = lib.attribute_diff(attr, value)
-            except RuntimeError:
-                cls.log.error("Cannot get value of {}".format(attr))
-            else:
-                if not diff.match:
-                    invalid_diffs.append(diff)
-                    cls.log.error(
-                        "Invalid value {} set on {}. Expecting {}"
-                        "".format(diff.current_value, attr, value)
-                    )
+            diff = cls.get_attribute_diff(attr, value)
+            if diff is not None:
+                invalid_diffs.append(diff)
 
         return invalid_diffs
+
+    @classmethod
+    def get_attribute_diff(cls, attr, value, log_on_diff=True):
+        try:
+            diff = lib.attribute_diff(attr, value)
+        except RuntimeError:
+            cls.log.error("Cannot get value of {}".format(attr))
+        else:
+            if not diff.match:
+                invalid_diffs.append(diff)
+                cls.log.error(
+                    "Invalid value {} set on {}. Expecting {}"
+                    "".format(diff.current_value, attr, value)
+                )
+                return diff
 
     @classmethod
     def repair(cls, instance):

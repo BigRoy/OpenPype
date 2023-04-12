@@ -4,10 +4,12 @@ from .icons import (
     get_icon
 )
 from .widgets import (
-    StopBtn,
+    SaveBtn,
     ResetBtn,
+    StopBtn,
     ValidateBtn,
     PublishBtn,
+    CreateNextPageOverlay,
 )
 from .help_widget import (
     HelpButton,
@@ -24,10 +26,12 @@ __all__ = (
     "get_pixmap",
     "get_icon",
 
-    "StopBtn",
+    "SaveBtn",
     "ResetBtn",
+    "StopBtn",
     "ValidateBtn",
     "PublishBtn",
+    "CreateNextPageOverlay",
 
     "HelpButton",
     "HelpDialog",

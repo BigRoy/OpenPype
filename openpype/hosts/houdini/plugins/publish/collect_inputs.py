@@ -1,5 +1,4 @@
 from collections import deque
-from bson.objectid import ObjectId
 
 import pyblish.api
 
@@ -104,7 +103,7 @@ class CollectUpstreamInputs(pyblish.api.InstancePlugin):
             # If no valid output node is set then ignore it as validation
             # will be checking those cases.
             self.log.debug(
-                "No output node found, skipping " "collecting of inputs.."
+                "No output node found, skipping collecting of inputs.."
             )
             return
 
@@ -132,10 +131,9 @@ class CollectUpstreamInputs(pyblish.api.InstancePlugin):
             # Collect containers for the given set of nodes
             containers = collect_input_containers(scene_containers, nodes)
 
-            inputs = [ObjectId(c["representation"]) for c in containers]
+            inputs = [c["representation"] for c in containers]
         else:
             inputs = []
 
         instance.data["inputRepresentations"] = inputs
-
         self.log.info("Collected inputs: %s" % inputs)

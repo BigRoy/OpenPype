@@ -1,42 +1,43 @@
+# -*- coding: utf-8 -*-
+"""Creator plugin for creating openGL reviews."""
 from openpype.hosts.houdini.api import plugin
+from openpype.lib import EnumDef, BoolDef, NumberDef
 
 
-class CreateReview(plugin.Creator):
+class CreateReview(plugin.HoudiniCreator):
     """Review with OpenGL ROP"""
 
+    identifier = "io.openpype.creators.houdini.review"
     label = "Review"
     family = "review"
     icon = "video-camera"
 
-    # Default settings for the ROP
-    # todo: expose in OpenPype settings?
-    override_resolution = True
-    width = 1280
-    height = 720
-    aspect = 1.0
-
-    def __init__(self, *args, **kwargs):
-        super(CreateReview, self).__init__(*args, **kwargs)
-
-        # Remove the active, we are checking the bypass flag of the nodes
-        self.data.pop("active", None)
-
-        self.data.update({"node_type": "opengl"})
-
-    def _process(self, instance):
-        """Creator main entry point.
-
-        Args:
-            instance (hou.Node): Created Houdini instance.
-
-        """
+    def create(self, subset_name, instance_data, pre_create_data):
         import hou
+
+        instance_data.pop("active", None)
+        instance_data.update({"node_type": "opengl"})
+        instance_data["imageFormat"] = pre_create_data.get("imageFormat")
+        instance_data["keepImages"] = pre_create_data.get("keepImages")
+
+        instance = super(CreateReview, self).create(
+            subset_name,
+            instance_data,
+            pre_create_data)
+
+        instance_node = hou.node(instance.get("instance_node"))
 
         frame_range = hou.playbar.frameRange()
 
+        filepath = "{root}/{subset}/{subset}.$F4.{ext}".format(
+            root=hou.text.expandString("$HIP/pyblish"),
+            subset="`chs(\"subset\")`",  # keep dynamic link to subset
+            ext=pre_create_data.get("image_format") or "png"
+        )
+
         parms = {
-            "picture": "$HIP/pyblish/{0}/{0}.$F4.png".format(self.name),
-            # Render frame range
+            "picture": filepath,
+
             "trange": 1,
 
             # Unlike many other ROP nodes the opengl node does not default
@@ -46,28 +47,79 @@ class CreateReview(plugin.Creator):
             "f2": frame_range[1],
         }
 
-        if self.override_resolution:
-            # Override resolution
+        override_resolution = pre_create_data.get("override_resolution")
+        if override_resolution:
             parms.update({
-                "tres": True,   # Override Camera Resolution
-                "res1": self.width,
-                "res2": self.height,
-                "aspect": self.aspect
+                "tres": override_resolution,
+                "res1": pre_create_data.get("resx"),
+                "res2": pre_create_data.get("resy"),
+                "aspect": pre_create_data.get("aspect"),
             })
 
-        if self.nodes:
-            # todo: allow only object paths?
-            node_paths = " ".join(node.path() for node in self.nodes)
-            parms.update({"scenepath": node_paths})
+        if self.selected_nodes:
+            # The first camera found in selection we will use as camera
+            # Other node types we set in force objects
+            camera = None
+            force_objects = []
+            for node in self.selected_nodes:
+                path = node.path()
+                if node.type().name() == "cam":
+                    if camera:
+                        continue
+                    camera = path
+                else:
+                    force_objects.append(path)
 
-        instance.setParms(parms)
+            if not camera:
+                self.log.warning("No camera found in selection.")
 
-        # Lock any parameters in this list
-        to_lock = [
-            # Lock some Avalon attributes
-            "family",
-            "id",
+            parms.update({
+                "camera": camera or "",
+                "scenepath": "/obj",
+                "forceobjects": " ".join(force_objects),
+                "vobjects": ""  # clear candidate objects from '*' value
+            })
+
+        instance_node.setParms(parms)
+
+        to_lock = ["id", "family"]
+
+        self.lock_parameters(instance_node, to_lock)
+
+    def get_pre_create_attr_defs(self):
+        attrs = super(CreateReview, self).get_pre_create_attr_defs()
+
+        image_format_enum = [
+            "bmp", "cin", "exr", "jpg", "pic", "pic.gz", "png",
+            "rad", "rat", "rta", "sgi", "tga", "tif",
         ]
-        for name in to_lock:
-            parm = instance.parm(name)
-            parm.lock(True)
+
+        return attrs + [
+            BoolDef("keepImages",
+                    label="Keep Image Sequences",
+                    default=False),
+            EnumDef("imageFormat",
+                    image_format_enum,
+                    default="png",
+                    label="Image Format Options"),
+            BoolDef("override_resolution",
+                    label="Override resolution",
+                    tooltip="When disabled the resolution set on the camera "
+                            "is used instead.",
+                    default=True),
+            NumberDef("resx",
+                      label="Resolution Width",
+                      default=1280,
+                      minimum=2,
+                      decimals=0),
+            NumberDef("resy",
+                      label="Resolution Height",
+                      default=720,
+                      minimum=2,
+                      decimals=0),
+            NumberDef("aspect",
+                      label="Aspect Ratio",
+                      default=1.0,
+                      minimum=0.0001,
+                      decimals=3)
+        ]

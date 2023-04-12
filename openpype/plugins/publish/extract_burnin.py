@@ -10,18 +10,13 @@ import six
 import pyblish.api
 
 from openpype import resources, PACKAGE_DIR
-from openpype.pipeline import (
-    publish,
-    legacy_io
-)
+from openpype.pipeline import publish
 from openpype.lib import (
     run_openpype_process,
 
     get_transcode_temp_directory,
     convert_input_paths_for_ffmpeg,
-    should_convert_for_ffmpeg,
-
-    CREATE_NO_WINDOW
+    should_convert_for_ffmpeg
 )
 from openpype.lib.profiles_filtering import filter_profiles
 
@@ -37,6 +32,7 @@ class ExtractBurnin(publish.Extractor):
 
     label = "Extract burnins"
     order = pyblish.api.ExtractorOrder + 0.03
+
     families = ["review", "burnin"]
     hosts = [
         "nuke",
@@ -57,6 +53,7 @@ class ExtractBurnin(publish.Extractor):
         "houdini"
         # "resolve"
     ]
+
     optional = True
 
     positions = [
@@ -73,14 +70,19 @@ class ExtractBurnin(publish.Extractor):
         "y_offset": 5
     }
 
-    # Preset attributes
+    # Configurable by Settings
     profiles = None
     options = None
 
     def process(self, instance):
-        # QUESTION what is this for and should we raise an exception?
-        if "representations" not in instance.data:
-            raise RuntimeError("Burnin needs already created mov to work on.")
+        if not self.profiles:
+            self.log.warning("No profiles present for create burnin")
+            return
+
+        if not instance.data.get("representations"):
+            self.log.info(
+                "Instance does not have filled representations. Skipping")
+            return
 
         self.main_process(instance)
 
@@ -141,25 +143,29 @@ class ExtractBurnin(publish.Extractor):
         return filtered_repres
 
     def main_process(self, instance):
-        # TODO get these data from context
         host_name = instance.context.data["hostName"]
-        task_name = legacy_io.Session["AVALON_TASK"]
-        family = self.main_family_from_instance(instance)
+        family = instance.data["family"]
+        task_data = instance.data["anatomyData"].get("task", {})
+        task_name = task_data.get("name")
+        task_type = task_data.get("type")
+        subset = instance.data["subset"]
 
-        # Find profile most matching current host, task and instance family
-        profile = filter_profiles(profiles_data=self.profiles,
-                                  key_values={
-                                      "hosts": host_name,
-                                      "tasks": task_name,
-                                      "families": family,
-                                  },
+        filtering_criteria = {
+            "hosts": host_name,
+            "families": family,
+            "task_names": task_name,
+            "task_types": task_type,
+            "subset": subset
+        }
+        profile = filter_profiles(self.profiles, filtering_criteria,
                                   logger=self.log)
 
         if not profile:
             self.log.info((
                 "Skipped instance. None of profiles in presets are for"
-                " Host: \"{}\" | Family: \"{}\" | Task \"{}\""
-            ).format(host_name, family, task_name))
+                " Host: \"{}\" | Families: \"{}\" | Task \"{}\""
+                " | Task type \"{}\" | Subset \"{}\" "
+            ).format(host_name, family, task_name, task_type, subset))
             return
 
         self.log.debug("profile: {}".format(profile))
@@ -169,7 +175,8 @@ class ExtractBurnin(publish.Extractor):
         if not burnin_defs:
             self.log.info((
                 "Skipped instance. Burnin definitions are not set for profile"
-                " Host: \"{}\" | Family: \"{}\" | Task \"{}\" | Profile \"{}\""
+                " Host: \"{}\" | Families: \"{}\" | Task \"{}\""
+                " | Profile \"{}\""
             ).format(host_name, family, task_name, profile))
             return
 
@@ -246,6 +253,9 @@ class ExtractBurnin(publish.Extractor):
 
             # Add context data burnin_data.
             burnin_data["custom"] = custom_data
+
+            # Add data members.
+            burnin_data.update(instance.data.get("burninDataMembers", {}))
 
             # Add source camera name to burnin data
             camera_name = repre.get("camera_name")
@@ -328,11 +338,8 @@ class ExtractBurnin(publish.Extractor):
 
                 # Run burnin script
                 process_kwargs = {
-                    "logger": self.log,
-                    "env": {}
+                    "logger": self.log
                 }
-                if platform.system().lower() == "windows":
-                    process_kwargs["creationflags"] = CREATE_NO_WINDOW
 
                 run_openpype_process(*args, **process_kwargs)
                 # Remove the temporary json
@@ -451,12 +458,6 @@ class ExtractBurnin(publish.Extractor):
             frame_end = 1
         frame_end = int(frame_end)
 
-        handles = instance.data.get("handles")
-        if handles is None:
-            handles = context.data.get("handles")
-            if handles is None:
-                handles = 0
-
         handle_start = instance.data.get("handleStart")
         if handle_start is None:
             handle_start = context.data.get("handleStart")
@@ -479,7 +480,7 @@ class ExtractBurnin(publish.Extractor):
 
         burnin_data.update({
             "version": int(version),
-            "comment": context.data.get("comment") or ""
+            "comment": instance.data["comment"]
         })
 
         intent_label = context.data.get("intent") or ""
@@ -782,13 +783,6 @@ class ExtractBurnin(publish.Extractor):
             return True
         return any(family.lower() in families_filter_lower
                    for family in families)
-
-    def main_family_from_instance(self, instance):
-        """Return main family of entered instance."""
-        family = instance.data.get("family")
-        if not family:
-            family = instance.data["families"][0]
-        return family
 
     def families_from_instance(self, instance):
         """Return all families of entered instance."""

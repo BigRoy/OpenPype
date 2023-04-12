@@ -3,27 +3,27 @@ import re
 import copy
 import json
 import shutil
-
 from abc import ABCMeta, abstractmethod
+
 import six
-
 import clique
-
+import speedcopy
 import pyblish.api
-import openpype.api
+
 from openpype.lib import (
     get_ffmpeg_tool_path,
-    get_ffprobe_streams,
-
+    filter_profiles,
     path_to_subprocess_arg,
-
+    run_subprocess,
+)
+from openpype.lib.transcoding import (
+    IMAGE_EXTENSIONS,
+    get_ffprobe_streams,
     should_convert_for_ffmpeg,
     convert_input_paths_for_ffmpeg,
-    get_transcode_temp_directory
+    get_transcode_temp_directory,
 )
-from openpype.pipeline import legacy_io
-from openpype.lib.profiles_filtering import filter_profiles
-import speedcopy
+from openpype.pipeline.publish import KnownPublishError
 
 
 class ExtractReview(pyblish.api.InstancePlugin):
@@ -43,6 +43,7 @@ class ExtractReview(pyblish.api.InstancePlugin):
     hosts = [
         "nuke",
         "maya",
+        "blender",
         "houdini",
         "shell",
         "hiero",
@@ -89,25 +90,23 @@ class ExtractReview(pyblish.api.InstancePlugin):
 
     def _get_outputs_for_instance(self, instance):
         host_name = instance.context.data["hostName"]
-        task_name = legacy_io.Session["AVALON_TASK"]
         family = self.main_family_from_instance(instance)
 
         self.log.info("Host: \"{}\"".format(host_name))
-        self.log.info("Task: \"{}\"".format(task_name))
         self.log.info("Family: \"{}\"".format(family))
 
-        profile = filter_profiles(profiles_data=self.profiles,
-                                  key_values={
-                                      "hosts": host_name,
-                                      "tasks": task_name,
-                                      "families": family,
-                                  },
-                                  logger=self.log)
+        profile = filter_profiles(
+            self.profiles,
+            {
+                "hosts": host_name,
+                "families": family,
+            },
+            logger=self.log)
         if not profile:
             self.log.info((
                 "Skipped instance. None of profiles in presets are for"
-                " Host: \"{}\" | Family: \"{}\" | Task \"{}\""
-            ).format(host_name, family, task_name))
+                " Host: \"{}\" | Family: \"{}\""
+            ).format(host_name, family))
             return
 
         self.log.debug("Matching profile: \"{}\"".format(json.dumps(profile)))
@@ -177,11 +176,31 @@ class ExtractReview(pyblish.api.InstancePlugin):
                     "Skipped representation. All output definitions from"
                     " selected profile does not match to representation's"
                     " custom tags. \"{}\""
-                ).format(str(tags)))
+                ).format(str(custom_tags)))
                 continue
 
             outputs_per_representations.append((repre, outputs))
         return outputs_per_representations
+
+    def _single_frame_filter(self, input_filepaths, output_defs):
+        single_frame_image = False
+        if len(input_filepaths) == 1:
+            ext = os.path.splitext(input_filepaths[0])[-1]
+            single_frame_image = ext.lower() in IMAGE_EXTENSIONS
+
+        filtered_defs = []
+        for output_def in output_defs:
+            output_filters = output_def.get("filter") or {}
+            frame_filter = output_filters.get("single_frame_filter")
+            if (
+                (not single_frame_image and frame_filter == "single_frame")
+                or (single_frame_image and frame_filter == "multi_frame")
+            ):
+                continue
+
+            filtered_defs.append(output_def)
+
+        return filtered_defs
 
     @staticmethod
     def get_instance_label(instance):
@@ -203,7 +222,8 @@ class ExtractReview(pyblish.api.InstancePlugin):
         outputs_per_repres = self._get_outputs_per_representations(
             instance, profile_outputs
         )
-        for repre, repre_output_defs in outputs_per_repres:
+
+        for repre, output_defs in outputs_per_repres:
             # Check if input should be preconverted before processing
             # Store original staging dir (it's value may change)
             src_repre_staging_dir = repre["stagingDir"]
@@ -223,6 +243,16 @@ class ExtractReview(pyblish.api.InstancePlugin):
                     input_filepaths.append(filepath)
                     if first_input_path is None:
                         first_input_path = filepath
+
+            filtered_output_defs = self._single_frame_filter(
+                input_filepaths, output_defs
+            )
+            if not filtered_output_defs:
+                self.log.debug((
+                    "Repre: {} - All output definitions were filtered"
+                    " out by single frame filter. Skipping"
+                ).format(repre["name"]))
+                continue
 
             # Skip if file is not set
             if first_input_path is None:
@@ -257,7 +287,10 @@ class ExtractReview(pyblish.api.InstancePlugin):
 
             try:
                 self._render_output_definitions(
-                    instance, repre, src_repre_staging_dir, repre_output_defs
+                    instance,
+                    repre,
+                    src_repre_staging_dir,
+                    filtered_output_defs
                 )
 
             finally:
@@ -364,9 +397,7 @@ class ExtractReview(pyblish.api.InstancePlugin):
             # run subprocess
             self.log.debug("Executing: {}".format(subprcs_cmd))
 
-            openpype.api.run_subprocess(
-                subprcs_cmd, shell=True, logger=self.log
-            )
+            run_subprocess(subprcs_cmd, shell=True, logger=self.log)
 
             # delete files added to fill gaps
             if files_to_clean:
@@ -384,7 +415,6 @@ class ExtractReview(pyblish.api.InstancePlugin):
             })
 
             # Force to pop these key if are in new repre
-            new_repre.pop("preview", None)
             new_repre.pop("thumbnail", None)
             if "clean_name" in new_repre.get("tags", []):
                 new_repre.pop("outputName")
@@ -479,7 +509,7 @@ class ExtractReview(pyblish.api.InstancePlugin):
                 first_sequence_frame += handle_start
 
             ext = os.path.splitext(repre["files"][0])[1].replace(".", "")
-            if ext in self.alpha_exts:
+            if ext.lower() in self.alpha_exts:
                 input_allow_bg = True
 
         return {
@@ -576,8 +606,12 @@ class ExtractReview(pyblish.api.InstancePlugin):
         if temp_data["input_is_sequence"]:
             # Set start frame of input sequence (just frame in filename)
             # - definition of input filepath
+            # - add handle start if output should be without handles
+            start_number = temp_data["first_sequence_frame"]
+            if temp_data["without_handles"] and temp_data["handles_are_set"]:
+                start_number += temp_data["handle_start"]
             ffmpeg_input_args.extend([
-                "-start_number", str(temp_data["first_sequence_frame"])
+                "-start_number", str(start_number)
             ])
 
             # TODO add fps mapping `{fps: fraction}` ?
@@ -587,49 +621,50 @@ class ExtractReview(pyblish.api.InstancePlugin):
             #     "23.976": "24000/1001"
             # }
             # Add framerate to input when input is sequence
-            ffmpeg_input_args.append(
-                "-framerate {}".format(temp_data["fps"])
-            )
+            ffmpeg_input_args.extend([
+                "-framerate", str(temp_data["fps"])
+            ])
+            # Add duration of an input sequence if output is video
+            if not temp_data["output_is_sequence"]:
+                ffmpeg_input_args.extend([
+                    "-to", "{:0.10f}".format(duration_seconds)
+                ])
 
         if temp_data["output_is_sequence"]:
             # Set start frame of output sequence (just frame in filename)
             # - this is definition of an output
-            ffmpeg_output_args.append(
-                "-start_number {}".format(temp_data["output_frame_start"])
-            )
+            ffmpeg_output_args.extend([
+                "-start_number", str(temp_data["output_frame_start"])
+            ])
 
         # Change output's duration and start point if should not contain
         # handles
-        start_sec = 0
         if temp_data["without_handles"] and temp_data["handles_are_set"]:
-            # Set start time without handles
-            # - check if handle_start is bigger than 0 to avoid zero division
-            if temp_data["handle_start"] > 0:
-                start_sec = float(temp_data["handle_start"]) / temp_data["fps"]
-                ffmpeg_input_args.append("-ss {:0.10f}".format(start_sec))
+            # Set output duration in seconds
+            ffmpeg_output_args.extend([
+                "-t", "{:0.10}".format(duration_seconds)
+            ])
 
-            # Set output duration inn seconds
-            ffmpeg_output_args.append("-t {:0.10}".format(duration_seconds))
+            # Add -ss (start offset in seconds) if input is not sequence
+            if not temp_data["input_is_sequence"]:
+                start_sec = float(temp_data["handle_start"]) / temp_data["fps"]
+                # Set start time without handles
+                # - Skip if start sec is 0.0
+                if start_sec > 0.0:
+                    ffmpeg_input_args.extend([
+                        "-ss", "{:0.10f}".format(start_sec)
+                    ])
 
         # Set frame range of output when input or output is sequence
         elif temp_data["output_is_sequence"]:
-            ffmpeg_output_args.append("-frames:v {}".format(output_frames_len))
-
-        # Add duration of an input sequence if output is video
-        if (
-            temp_data["input_is_sequence"]
-            and not temp_data["output_is_sequence"]
-        ):
-            ffmpeg_input_args.append("-to {:0.10f}".format(
-                duration_seconds + start_sec
-            ))
+            ffmpeg_output_args.extend([
+                "-frames:v", str(output_frames_len)
+            ])
 
         # Add video/image input path
-        ffmpeg_input_args.append(
-            "-i {}".format(
-                path_to_subprocess_arg(temp_data["full_input_path"])
-            )
-        )
+        ffmpeg_input_args.extend([
+            "-i", path_to_subprocess_arg(temp_data["full_input_path"])
+        ])
 
         # Add audio arguments if there are any. Skipped when output are images.
         if not temp_data["output_ext_is_image"] and temp_data["with_audio"]:
@@ -788,53 +823,38 @@ class ExtractReview(pyblish.api.InstancePlugin):
                 is done.
 
         Raises:
-            AssertionError: if more then one collection is obtained.
-
+            KnownPublishError: if more than one collection is obtained.
         """
+
         collections = clique.assemble(files)[0]
-        msg = "Multiple collections {} found.".format(collections)
-        assert len(collections) == 1, msg
+        if len(collections) != 1:
+            raise KnownPublishError(
+                "Multiple collections {} found.".format(collections))
+
         col = collections[0]
 
-        start_frame = int(start_frame)
-        end_frame = int(end_frame)
-        missing_indexes = [
-            frame for frame in range(start_frame, end_frame + 1)
-            if frame not in col.indexes
-        ]
-        if not missing_indexes:
-            return []
+        # Prepare which hole is filled with what frame
+        #   - the frame is filled only with already existing frames
+        prev_frame = next(iter(col.indexes))
+        hole_frame_to_nearest = {}
+        for frame in range(int(start_frame), int(end_frame) + 1):
+            if frame in col.indexes:
+                prev_frame = frame
+            else:
+                # Use previous frame as source for hole
+                hole_frame_to_nearest[frame] = prev_frame
 
-        # Both collection frame indexes and the missing indexes are sorted
-        # so we can keep track of the nearest existing frame with an iterator
-        existing_indices_iter = iter(col.indexes)
-        prev_idx = next(existing_indices_iter, None)
-        next_idx = next(existing_indices_iter, prev_idx)
-        if prev_idx is None:
-            raise RuntimeError("No indices in input collection. This is a bug")
-
-        # For each missing filepath collect the nearest existing index filepath
-        col_format = col.format("{head}{padding}{tail}")
-        holes_to_nearest = {}
-        for missing_idx in missing_indexes:
-            while abs(missing_idx - prev_idx) > abs(missing_idx - next_idx):
-                prev_idx = next_idx
-                next_idx = next(existing_indices_iter, prev_idx)
-
-            nearest_fname = col_format % prev_idx
-            hole_fname = col_format % missing_idx
-
-            nearest_fpath = os.path.join(staging_dir, nearest_fname)
-            hole_fpath = os.path.join(staging_dir, hole_fname)
-            if not os.path.isfile(nearest_fpath):
-                raise RuntimeError("Missing previously detected file: "
-                                   "{}".format(nearest_fpath))
-
-            holes_to_nearest[hole_fpath] = nearest_fpath
-
+        # Calculate paths
         added_files = []
-        for hole_fpath, nearest_fpath in holes_to_nearest.items():
-            speedcopy.copyfile(nearest_fpath, hole_fpath)
+        col_format = col.format("{head}{padding}{tail}")
+        for hole_frame, src_frame in hole_frame_to_nearest.items():
+            hole_fpath = os.path.join(staging_dir, col_format % hole_frame)
+            src_fpath = os.path.join(staging_dir, col_format % src_frame)
+            if not os.path.isfile(src_fpath):
+                raise KnownPublishError(
+                    "Missing previously detected file: {}".format(src_fpath))
+
+            speedcopy.copyfile(src_fpath, hole_fpath)
             added_files.append(hole_fpath)
 
         return added_files
@@ -891,6 +911,8 @@ class ExtractReview(pyblish.api.InstancePlugin):
         # TODO Define if extension should have dot or not
         if output_ext.startswith("."):
             output_ext = output_ext[1:]
+
+        output_ext = output_ext.lower()
 
         # Store extension to representation
         new_repre["ext"] = output_ext
@@ -988,6 +1010,9 @@ class ExtractReview(pyblish.api.InstancePlugin):
 
             # Set audio duration
             audio_in_args.append("-to {:0.10f}".format(audio_duration))
+
+            # Ignore video data from audio input
+            audio_in_args.append("-vn")
 
             # Add audio input path
             audio_in_args.append("-i {}".format(
@@ -1430,9 +1455,7 @@ class ExtractReview(pyblish.api.InstancePlugin):
         return any(family.lower() in families_filter_lower
                    for family in families)
 
-    def filter_output_defs(
-        self, profile, subset_name, families
-    ):
+    def filter_output_defs(self, profile, subset_name, families):
         """Return outputs matching input instance families.
 
         Output definitions without families filter are marked as valid.
@@ -1677,9 +1700,9 @@ class PercentValueRelativeSource(_OverscanValue):
 class OverscanCrop:
     """Helper class to read overscan string and calculate output resolution.
 
-    It is possible to enter single value for both width and heigh or two values
-    for width and height. Overscan string may have a few variants. Each variant
-    define output size for input size.
+    It is possible to enter single value for both width and height, or
+    two values for width and height. Overscan string may have a few variants.
+    Each variant define output size for input size.
 
     ### Example
     For input size: 2200px

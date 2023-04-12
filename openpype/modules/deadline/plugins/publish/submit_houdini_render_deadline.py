@@ -1,13 +1,16 @@
-import hou
-
 import os
 import attr
 import getpass
+from datetime import datetime
+
 import pyblish.api
+import hou
 
 from openpype.pipeline import legacy_io
 from openpype_modules.deadline import abstract_submit_deadline
 from openpype_modules.deadline.abstract_submit_deadline import DeadlineJobInfo
+from openpype.tests.lib import is_in_tests
+from openpype.lib import is_running_from_build
 
 
 @attr.s
@@ -51,6 +54,10 @@ class HoudiniSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline):
 
         job_info.Name = "%s - %s" % (filename, instance.name)
         job_info.BatchName = filename
+
+        if is_in_tests():
+            job_info.BatchName += datetime.now().strftime("%d%m%Y%H%M%S")
+
         job_info.Plugin = "Houdini"
         job_info.UserName = context.data.get(
             "deadlineUser", getpass.getuser())
@@ -78,9 +85,13 @@ class HoudiniSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline):
             "AVALON_TASK",
             "AVALON_APP_NAME",
             "OPENPYPE_DEV",
-            "OPENPYPE_LOG_NO_COLORS",
-            "OPENPYPE_VERSION"
+            "OPENPYPE_LOG_NO_COLORS"
         ]
+
+        # Add OpenPype version if we are running from build.
+        if is_running_from_build():
+            keys.append("OPENPYPE_VERSION")
+
         # Add mongo url if it's enabled
         if self._instance.context.data.get("deadlinePassMongoUrl"):
             keys.append("OPENPYPE_MONGO")

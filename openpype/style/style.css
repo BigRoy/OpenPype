@@ -148,6 +148,10 @@ QPushButton::menu-indicator  {
     padding-right: 5px;
 }
 
+QPushButton[state="error"] {
+    background: {color:publisher:error};
+}
+
 QToolButton {
     border: 0px solid transparent;
     background: {color:bg-buttons};
@@ -688,22 +692,23 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 }
 
 /* Messages overlay */
-#OverlayMessageWidget {
+OverlayMessageWidget {
     border-radius: 0.2em;
-    background: {color:bg-buttons};
-}
-
-#OverlayMessageWidget:hover {
-    background: {color:bg-button-hover};
-}
-#OverlayMessageWidget {
     background: {color:overlay-messages:bg-success};
 }
-#OverlayMessageWidget:hover {
+
+OverlayMessageWidget:hover {
     background: {color:overlay-messages:bg-success-hover};
 }
 
-#OverlayMessageWidget QWidget {
+OverlayMessageWidget[type="error"] {
+    background: {color:overlay-messages:bg-error};
+}
+OverlayMessageWidget[type="error"]:hover {
+    background: {color:overlay-messages:bg-error-hover};
+}
+
+OverlayMessageWidget QWidget {
     background: transparent;
 }
 
@@ -883,6 +888,26 @@ PublisherTabBtn[active="1"]:hover {
     background: {color:bg};
 }
 
+PixmapButton{
+    border: 0px solid transparent;
+    border-radius: 0.2em;
+    background: {color:bg-buttons};
+}
+PixmapButton:hover {
+    background: {color:bg-button-hover};
+}
+PixmapButton:disabled {
+    background: {color:bg-buttons-disabled};
+}
+
+#ThumbnailPixmapHoverButton {
+    font-size: 11pt;
+    background: {color:bg-view};
+}
+#ThumbnailPixmapHoverButton:hover {
+    background: {color:bg-button-hover};
+}
+
 #CreatorDetailedDescription {
     padding-left: 5px;
     padding-right: 5px;
@@ -910,11 +935,11 @@ PublisherTabBtn[active="1"]:hover {
 #PublishLogConsole {
     font-family: "Noto Sans Mono";
 }
-VariantInputsWidget QLineEdit {
+#VariantInputsWidget QLineEdit {
     border-bottom-right-radius: 0px;
     border-top-right-radius: 0px;
 }
-VariantInputsWidget QToolButton {
+#VariantInputsWidget QToolButton {
     border-bottom-left-radius: 0px;
     border-top-left-radius: 0px;
     padding-top: 0.5em;
@@ -1103,6 +1128,10 @@ ValidationArtistMessage QLabel {
 }
 #ArrowBtn, #ArrowBtn:disabled, #ArrowBtn:hover {
     background: transparent;
+}
+
+CreateNextPageOverlay {
+    font-size: 32pt;
 }
 
 /* Settings - NOT USED YET
@@ -1391,6 +1420,13 @@ ValidationArtistMessage QLabel {
 }
 
 /* Globally used names */
+#ValidatedLineEdit[state="valid"], #ValidatedLineEdit[state="valid"]:focus, #ValidatedLineEdit[state="valid"]:hover {
+    border-color: {color:publisher:success};
+}
+#ValidatedLineEdit[state="invalid"], #ValidatedLineEdit[state="invalid"]:focus, #ValidatedLineEdit[state="invalid"]:hover {
+    border-color: {color:publisher:error};
+}
+
 #Separator {
     background: {color:bg-menu-separator};
 }

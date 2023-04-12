@@ -40,7 +40,6 @@ class OpenPypeMenu(QtWidgets.QWidget):
             | QtCore.Qt.WindowCloseButtonHint
             | QtCore.Qt.WindowStaysOnTopHint
         )
-        self.render_mode_widget = None
         self.setWindowTitle("OpenPype")
 
         asset_label = QtWidgets.QLabel("Context", self)
@@ -60,7 +59,6 @@ class OpenPypeMenu(QtWidgets.QWidget):
         manager_btn = QtWidgets.QPushButton("Manage...", self)
         libload_btn = QtWidgets.QPushButton("Library...", self)
         saver_manager_btn = QtWidgets.QPushButton("Saver Manager...", self)
-        rendermode_btn = QtWidgets.QPushButton("Set render mode...", self)
         set_framerange_btn = QtWidgets.QPushButton("Set Frame Range", self)
         set_resolution_btn = QtWidgets.QPushButton("Set Resolution", self)
         duplicate_with_inputs_btn = QtWidgets.QPushButton(

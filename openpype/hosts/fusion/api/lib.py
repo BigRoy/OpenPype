@@ -311,6 +311,13 @@ def get_current_comp():
 @contextlib.contextmanager
 def comp_lock_and_undo_chunk(comp, undo_queue_name="Script CMD"):
     """Lock comp and open an undo chunk during the context"""
+
+    # If comp is already locked do nothing and consider us to
+    # be inside another undo chunk currently. This allows nesting the chunks.
+    if comp.IsLocked():
+        yield
+        return
+
     try:
         comp.Lock()
         comp.StartUndo(undo_queue_name)

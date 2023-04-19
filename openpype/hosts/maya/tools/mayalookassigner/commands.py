@@ -155,7 +155,7 @@ def create_items_from_nodes(nodes):
     return asset_view_items
 
 
-def remove_unused_looks():
+def remove_unused_looks(containers=None):
     """Removes all loaded looks for which none of the shaders are used.
 
     This will cleanup all loaded "LookLoader" containers that are unused in
@@ -163,10 +163,13 @@ def remove_unused_looks():
 
     """
 
-    host = registered_host()
+
+    if containers is None:
+        host = registered_host()
+        containers = host.ls()
 
     unused = []
-    for container in host.ls():
+    for container in containers:
         if container['loader'] == "LookLoader":
             members = lib.get_container_members(container['objectName'])
             look_sets = cmds.ls(members, type="objectSet")
@@ -182,3 +185,4 @@ def remove_unused_looks():
         remove_container(container)
 
     log.info("Finished removing unused looks. (see log for details)")
+    return unused

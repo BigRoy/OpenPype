@@ -14,7 +14,10 @@ import qtawesome
 from openpype.style import load_stylesheet
 
 from openpype import resources
-from openpype.hosts.fusion.api import get_current_comp
+from openpype.hosts.fusion.api import (
+    get_current_comp,
+    comp_lock_and_undo_chunk
+)
 from openpype.tools.utils.models import TreeModel, Item
 from openpype.tools.utils import lib
 from openpype.tools.utils.delegates import PrettyTimeDelegate
@@ -293,7 +296,11 @@ class Model(TreeModel):
             # No change
             return False
 
-        saver.Clip = new_path
+        with comp_lock_and_undo_chunk(
+            saver.Composition, undo_queue_name="Set saver version"
+        ):
+            saver.Clip = new_path
+
         self.update_row(index)
         return True
 
@@ -401,14 +408,25 @@ class View(QtWidgets.QTreeView):
         proxy = self.model()
         model = proxy.sourceModel()
         source_indexes = [proxy.mapToSource(index) for index in selected_rows]
-        for source_index in source_indexes:
-            item = source_index.data(ITEM_ROLE)
-            version = item["version"]
-            if version is NO_VERSION:
-                continue
-            version += relative_change
+        if not source_indexes:
+            return
 
-            model.set_version(source_index, version)
+        # Get first index for comp
+        first_index = source_indexes[0]
+        comp = first_index.data(ITEM_ROLE)["tool"].Composition
+
+        with comp_lock_and_undo_chunk(
+            comp,
+            undo_queue_name=f"Increment saver version by {relative_change}"
+        ):
+            for source_index in source_indexes:
+                item = source_index.data(ITEM_ROLE)
+                version = item["version"]
+                if version is NO_VERSION:
+                    continue
+                version += relative_change
+
+                model.set_version(source_index, version)
 
     def _select_selected_tools(self):
         selected_rows = self.selectionModel().selectedRows()
@@ -425,11 +443,6 @@ class View(QtWidgets.QTreeView):
         if not index.isValid():
             return
 
-        # item = index.data(ITEM_ROLE)
-        # saver = item["tool"]
-        # flow = saver.Composition.CurrentFrame.FlowView
-        # flow.Select()  # clear selection
-        # flow.Select(saver, True)
         self._select_selected_tools()
 
 
@@ -545,7 +558,6 @@ class FusionSaverManager(QtWidgets.QWidget):
         if not rows:
             return
 
-        paths = []
         for row in rows:
             item = row.data(ITEM_ROLE)
             existing_files = item["existing_files"]
@@ -561,20 +573,27 @@ class FusionSaverManager(QtWidgets.QWidget):
         if not rows:
             return
 
-        source_indexes = [self.proxy.mapToSource(index) for index in rows]
-        for source_index in source_indexes:
-            item = source_index.data(ITEM_ROLE)
-            path = item["path"]
-            new_path = path.replace(src, dst)
-            saver = item["tool"]
-            if path == new_path:
-                continue
+        # Get comp from first saver
+        first_index = rows[0]
+        saver = first_index.data(ITEM_ROLE)["tool"]
+        comp = saver.Composition
 
-            saver.Clip = new_path
-            print(f"{saver.Name}:")
-            print(f"Before: {path}")
-            print(f"After:  {new_path}")
-            self.model.update_row(source_index)
+        source_indexes = [self.proxy.mapToSource(index) for index in rows]
+        with comp_lock_and_undo_chunk(comp,
+                                      undo_queue_name="Search/replace savers"):
+            for source_index in source_indexes:
+                item = source_index.data(ITEM_ROLE)
+                path = item["path"]
+                new_path = path.replace(src, dst)
+                saver = item["tool"]
+                if path == new_path:
+                    continue
+
+                saver.Clip = new_path
+                print(f"{saver.Name}:")
+                print(f"Before: {path}")
+                print(f"After:  {new_path}")
+                self.model.update_row(source_index)
 
     def on_set_default_path(self):
         # TODO: This is a rudimentary prototype and needs improvements!
@@ -596,23 +615,27 @@ class FusionSaverManager(QtWidgets.QWidget):
         renders_root = os.path.join(task_root, "renders", version_formatted)
 
         source_indexes = [self.proxy.mapToSource(index) for index in rows]
-        for source_index in source_indexes:
 
-            item = source_index.data(ITEM_ROLE)
-            saver = item["tool"]
-            path = item["path"]
-            base, ext = os.path.splitext(path)
-            frame = "" if path_is_movie_format(path) else ".0000"
-            fname = f"{saver.Name}_{version_formatted}{frame}{ext}"
-            default_saver_path = os.path.join(renders_root, fname)
-            if path == default_saver_path:
-                continue
+        with comp_lock_and_undo_chunk(
+            comp, undo_queue_name="Set default saver paths"
+        ):
+            for source_index in source_indexes:
 
-            saver.Clip = default_saver_path
-            print(f"{saver.Name}:")
-            print(f"Before: {path}")
-            print(f"After:  {default_saver_path}")
-            self.model.update_row(source_index)
+                item = source_index.data(ITEM_ROLE)
+                saver = item["tool"]
+                path = item["path"]
+                base, ext = os.path.splitext(path)
+                frame = "" if path_is_movie_format(path) else ".0000"
+                fname = f"{saver.Name}_{version_formatted}{frame}{ext}"
+                default_saver_path = os.path.join(renders_root, fname)
+                if path == default_saver_path:
+                    continue
+
+                saver.Clip = default_saver_path
+                print(f"{saver.Name}:")
+                print(f"Before: {path}")
+                print(f"After:  {default_saver_path}")
+                self.model.update_row(source_index)
 
     def on_match_comp_version(self):
 
@@ -629,8 +652,12 @@ class FusionSaverManager(QtWidgets.QWidget):
 
         print(f"Detected comp version: {lib.format_version(comp_version)}")
         source_indexes = [self.proxy.mapToSource(index) for index in rows]
-        for source_index in source_indexes:
-            self.model.set_version(source_index, comp_version)
+
+        with comp_lock_and_undo_chunk(
+            comp, undo_queue_name="Saver path math comp version"
+        ):
+            for source_index in source_indexes:
+                self.model.set_version(source_index, comp_version)
 
     def __get_version(self, path):
 

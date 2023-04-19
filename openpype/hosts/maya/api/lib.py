@@ -39,6 +39,7 @@ from openpype.pipeline.context_tools import (
     get_current_project_name,
     get_current_task_name
 )
+from openpype.lib.profiles_filtering import filter_profiles
 
 
 self = sys.modules[__name__]
@@ -104,6 +105,18 @@ INT_FPS = {15, 24, 25, 30, 48, 50, 60, 44100, 48000}
 FLOAT_FPS = {23.98, 23.976, 29.97, 47.952, 59.94}
 
 RENDERLIKE_INSTANCE_FAMILIES = ["rendering", "vrayscene"]
+
+DISPLAY_LIGHTS_VALUES = [
+    "project_settings", "default", "all", "selected", "flat", "none"
+]
+DISPLAY_LIGHTS_LABELS = [
+    "Use Project Settings",
+    "Default Lighting",
+    "All Lights",
+    "Selected Lights",
+    "Flat Lighting",
+    "No Lights"
+]
 
 
 def get_main_window():
@@ -3919,3 +3932,48 @@ def attribute_diff(attr, value, tolerance=1e-6):
                     value == attr_value,
                     attr_value,
                     value)
+
+
+def get_capture_preset(task_name, task_type, subset, project_settings, log):
+    """Get capture preset for playblasting.
+
+    Logic for transitioning from old style capture preset to new capture preset
+    profiles.
+
+    Args:
+        task_name (str): Task name.
+        take_type (str): Task type.
+        subset (str): Subset name.
+        project_settings (dict): Project settings.
+        log (object): Logging object.
+    """
+    capture_preset = None
+    filtering_criteria = {
+        "hosts": "maya",
+        "families": "review",
+        "task_names": task_name,
+        "task_types": task_type,
+        "subset": subset
+    }
+
+    plugin_settings = project_settings["maya"]["publish"]["ExtractPlayblast"]
+    if plugin_settings["profiles"]:
+        profile = filter_profiles(
+            plugin_settings["profiles"],
+            filtering_criteria,
+            logger=log
+        )
+        capture_preset = profile.get("capture_preset")
+    else:
+        log.warning("No profiles present for Extract Playblast")
+
+    # Backward compatibility for deprecated Extract Playblast settings
+    # without profiles.
+    if capture_preset is None:
+        log.debug(
+            "Falling back to deprecated Extract Playblast capture preset "
+            "because no new style playblast profiles are defined."
+        )
+        capture_preset = plugin_settings["capture_preset"]
+
+    return capture_preset or {}

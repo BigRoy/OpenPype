@@ -1,10 +1,7 @@
 import os
 
 from openpype.modules import OpenPypeModule
-from openpype_interfaces import (
-    ITrayModule,
-    IPluginPaths
-)
+from openpype.modules.interfaces import IPluginPaths
 
 
 class ColorbleedModule(OpenPypeModule, IPluginPaths):

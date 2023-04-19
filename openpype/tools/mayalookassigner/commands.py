@@ -196,7 +196,6 @@ def remove_unused_looks(containers=None):
 
     """
 
-
     if containers is None:
         host = registered_host()
         containers = host.ls()

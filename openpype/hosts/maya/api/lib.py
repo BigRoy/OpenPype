@@ -2039,7 +2039,6 @@ def get_id_from_sibling(node, history_only=True):
             return first_id
 
 
-
 # Project settings
 def set_scene_fps(fps, update=True):
     """Set FPS from project configuration

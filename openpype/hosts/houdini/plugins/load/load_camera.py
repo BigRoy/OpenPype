@@ -215,6 +215,9 @@ class CameraLoader(load.LoaderPlugin):
         new_node.moveToGoodPosition()
         return new_node
 
+    def switch(self, container, representation):
+        self.update(container, representation)
+
     def _match_maya_render_mask(self, camera):
         """Workaround to match Maya render mask in Houdini"""
         import hou

@@ -2040,6 +2040,7 @@ def get_id_from_sibling(node, history_only=True):
             return first_id
 
 
+# Project settings
 def set_scene_fps(fps, update=True):
     """Set FPS from project configuration
 
@@ -2248,42 +2249,105 @@ def reset_scene_resolution():
     set_scene_resolution(width, height, pixelAspect)
 
 
-def set_context_settings():
+def set_context_settings(
+        fps=True,
+        resolution=True,
+        frame_range=True,
+        colorspace=True
+):
     """Apply the project settings from the project definition
 
     Settings can be overwritten by an asset if the asset.data contains
     any information regarding those settings.
 
-    Examples of settings:
-        fps
-        resolution
-        renderer
+    Args:
+        fps (bool): Whether to set the scene FPS.
+        resolution (bool): Whether to set the render resolution.
+        frame_range (bool): Whether to reset the time slide frame ranges.
+        colorspace (bool): Whether to reset the colorspace.
 
     Returns:
         None
+
     """
 
-    # Todo (Wijnand): apply renderer and resolution of project
-    project_name = legacy_io.active_project()
-    project_doc = get_project(project_name)
-    project_data = project_doc["data"]
-    asset_doc = get_current_project_asset(fields=["data.fps"])
-    asset_data = asset_doc.get("data", {})
+    if fps:
+        project_name = legacy_io.active_project()
+        project_doc = get_project(project_name)
+        project_data = project_doc["data"]
+        asset_doc = get_current_project_asset(fields=["data.fps"])
+        asset_data = asset_doc.get("data", {})
 
-    # Set project fps
-    fps = convert_to_maya_fps(
-        asset_data.get("fps", project_data.get("fps", 25))
-    )
-    legacy_io.Session["AVALON_FPS"] = str(fps)
-    set_scene_fps(fps)
+        # Set project fps
+        fps = convert_to_maya_fps(
+            asset_data.get("fps", project_data.get("fps", 25))
+        )
+        legacy_io.Session["AVALON_FPS"] = str(fps)
+        set_scene_fps(fps)
 
-    reset_scene_resolution()
+    if resolution:
+        reset_scene_resolution()
 
     # Set frame range.
-    reset_frame_range()
+    if frame_range:
+        reset_frame_range()
 
     # Set colorspace
-    set_colorspace()
+    if colorspace:
+        set_colorspace()
+
+
+def prompt_reset_context():
+    """Prompt the user what context settings to reset.
+
+    This prompt is used on saving to a different task to allow the scene to
+    get matched to the new context.
+
+    """
+    # TODO: Cleanup this prototyped mess of imports and odd dialog
+    import openpype.tools.utils.widgets as widgets
+    from qtpy import QtWidgets
+    from collections import OrderedDict
+    import qargparse  # noqa
+    from openpype.style import load_stylesheet
+
+    option_labels = OrderedDict([
+        ("fps", "FPS"),
+        ("frame_range", "Frame Range"),
+        ("resolution", "Resolution"),
+        ("colorspace", "Colorspace"),
+        ("instances", "Publish instances asset"),
+    ])
+    definitions = [
+        qargparse.Boolean(key, label=label, default=True)
+        for key, label in option_labels.items()
+    ]
+
+    parent = get_main_window()
+    dialog = widgets.OptionDialog(parent)
+    dialog.create(definitions)
+    dialog.setWindowTitle("Saving to different context. Reset options")
+    dialog.setStyleSheet(load_stylesheet())
+
+    # Insert descriptive label into the pup-up
+    label = QtWidgets.QLabel("You are saving your scene into a different task."
+                             "\n\n"
+                             "Would you like to reset some settings for the "
+                             "for the new context?\n")
+    dialog.layout().insertWidget(0, label)
+
+    if not dialog.exec_():
+        return None
+
+    # Dialog will only return overrides so we merge with defaults
+    options = {key: True for key in option_labels.keys()}
+    options.update(dialog.parse())
+    update_instances = options.pop("instances")
+
+    with suspended_refresh():
+        set_context_settings(**options)
+        if update_instances:
+            update_content_on_context_change()
 
 
 # Valid FPS

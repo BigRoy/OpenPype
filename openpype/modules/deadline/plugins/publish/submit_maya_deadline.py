@@ -225,6 +225,19 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline):
             job_info.OutputDirectory += os.path.dirname(filepath)
             job_info.OutputFilename += os.path.basename(filepath)
 
+        # Colorbleed: Insert asset label into ExtraInfo[0]
+        # ----------------------------------
+        # TODO: Implement this more separate from OpenPype code
+        if 0 not in job_info.ExtraInfo:
+            asset_doc = instance.data.get("assetEntity", {})
+            asset_label = asset_doc.get("data", {}).get("label", "")
+            if asset_label:
+                job_info.ExtraInfo[0] = asset_label
+        else:
+            self.log.debug("Deadline Job Info submission already contains "
+                           "ExtraInfo[0] data: '{}'. Inserting asset label is "
+                           "skipped..".format(job_info.ExtraInfo[0]))
+
         return job_info
 
     def get_plugin_info(self):

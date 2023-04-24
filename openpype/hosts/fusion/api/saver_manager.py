@@ -147,7 +147,6 @@ def path_is_movie_format(path):
 def get_saver_files(saver):
     """Mimics Fusion bmd.scriptlib's `SV_GetFrames`"""
 
-    attrs = saver.GetAttrs()
     if saver.ID != "Saver":
         return []
 
@@ -597,6 +596,9 @@ class FusionSaverManager(QtWidgets.QWidget):
 
     def on_set_default_path(self):
         # TODO: This is a rudimentary prototype and needs improvements!
+        from openpype.pipeline import legacy_io
+        workdir = legacy_io.Session["AVALON_WORKDIR"]
+        asset = legacy_io.Session["AVALON_ASSET"]
 
         rows = self.view.selectionModel().selectedRows()
         if not rows:
@@ -610,9 +612,8 @@ class FusionSaverManager(QtWidgets.QWidget):
         version = self.__get_version(os.path.basename(comp_path)) or 1
 
         # TODO: Implement better way to define default path
-        task_root = os.path.dirname(os.path.dirname(comp_path))
         version_formatted = lib.format_version(version)
-        renders_root = os.path.join(task_root, "renders", version_formatted)
+        renders_root = os.path.join(workdir, "renders", version_formatted)
 
         source_indexes = [self.proxy.mapToSource(index) for index in rows]
 
@@ -626,7 +627,7 @@ class FusionSaverManager(QtWidgets.QWidget):
                 path = item["path"]
                 base, ext = os.path.splitext(path)
                 frame = "" if path_is_movie_format(path) else ".0000"
-                fname = f"{saver.Name}_{version_formatted}{frame}{ext}"
+                fname = f"{asset}_{saver.Name}_{version_formatted}{frame}{ext}"
                 default_saver_path = os.path.join(renders_root, fname)
                 if path == default_saver_path:
                     continue

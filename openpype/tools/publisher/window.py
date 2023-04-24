@@ -403,8 +403,8 @@ class PublisherWindow(QtWidgets.QDialog):
         self._window_is_visible = False
         self._uninstall_app_event_listener()
         # TODO capture changes and ask user if wants to save changes on close
-        if not self._controller.host_context_has_changed:
-            self._save_changes(False)
+        # if not self._controller.host_context_has_changed:
+        #     self._save_changes(False)
         self._comment_input.setText("")  # clear comment
         self._reset_on_show = True
         self._controller.clear_thumbnail_temp_dir_path()

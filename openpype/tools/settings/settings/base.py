@@ -312,7 +312,7 @@ class BaseWidget(QtWidgets.QWidget):
         # Only show in project settings category
         for attr_name in ("project_name", "get_project_names"):
             if not hasattr(self.category_widget, attr_name):
-                return
+                return []
 
         def _copy_to_projects():
             dialog = CopyProjectSettingsEntityDialog(entity=self.entity,

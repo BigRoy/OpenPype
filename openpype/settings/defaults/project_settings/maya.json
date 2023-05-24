@@ -575,7 +575,9 @@
                 "pointcache",
                 "model",
                 "vrayproxy"
-            ]
+            ],
+            "bake_attributes": [],
+            "bake_attribute_prefixes": []
         },
         "ExtractObj": {
             "enabled": false,

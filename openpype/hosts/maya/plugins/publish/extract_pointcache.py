@@ -28,6 +28,10 @@ class ExtractAlembic(publish.Extractor):
                 "vrayproxy"]
     targets = ["local", "remote"]
 
+    # Configurable in project settings
+    bake_attributes = []
+    bake_attribute_prefixes = []
+
     def process(self, instance):
         if instance.data.get("farm"):
             self.log.debug("Should be processed on farm, skipping.")
@@ -45,6 +49,10 @@ class ExtractAlembic(publish.Extractor):
 
         attr_prefixes = instance.data.get("attrPrefix", "").split(";")
         attr_prefixes = [value for value in attr_prefixes if value.strip()]
+
+        # Allow a project to force certain attributes for alembic exports
+        attrs += self.bake_attributes
+        attr_prefixes += self.bake_attribute_prefixes
 
         self.log.info("Extracting pointcache..")
         dirname = self.staging_dir(instance)

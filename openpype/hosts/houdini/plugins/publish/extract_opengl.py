@@ -41,7 +41,7 @@ class ExtractOpenGL(openpype.api.Extractor):
         representation = {
             "name": "png",
             "ext": "png",
-            "files": files,
+            "files": files if len(files) > 1 else files[0],
             "stagingDir": staging_dir,
             "frameStart": instance.data["frameStart"],
             "frameEnd": instance.data["frameEnd"],

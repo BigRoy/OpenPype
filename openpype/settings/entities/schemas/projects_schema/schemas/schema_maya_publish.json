@@ -749,6 +749,18 @@
                             "label": "Families",
                             "type": "list",
                             "object_type": "text"
+                        },
+                        {
+                            "key": "bake_attributes",
+                            "label": "Always include attributes",
+                            "type": "list",
+                            "object_type": "text"
+                        },
+                        {
+                            "key": "bake_attribute_prefixes",
+                            "label": "Always include attributes with prefix",
+                            "type": "list",
+                            "object_type": "text"
                         }
                     ]
                 },

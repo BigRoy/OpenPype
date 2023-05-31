@@ -38,7 +38,7 @@ class ExtractComposite(publish.Extractor):
         representation = {
             "name": ext,
             "ext": ext,
-            "files": output,
+            "files": output if len(output) > 1 else output[0],
             "stagingDir": staging_dir,
             "frameStart": instance.data["frameStart"],
             "frameEnd": instance.data["frameEnd"],

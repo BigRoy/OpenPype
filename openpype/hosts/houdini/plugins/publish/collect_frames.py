@@ -38,7 +38,7 @@ class CollectFrames(pyblish.api.InstancePlugin):
             allowed_multidot_extensions=[".ass.gz"]
         )
         file_name = os.path.basename(output)
-        result = file_name
+        result = [file_name]
 
         # Get the filename pattern match from the output
         # path, so we can compute all frames that would

@@ -38,7 +38,7 @@ class ExtractVDBCache(publish.Extractor):
         representation = {
             "name": "vdb",
             "ext": "vdb",
-            "files": output,
+            "files": output if len(output) > 1 else output[0],
             "stagingDir": staging_dir,
             "frameStart": instance.data["frameStart"],
             "frameEnd": instance.data["frameEnd"],

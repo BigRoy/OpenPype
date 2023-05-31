@@ -1348,6 +1348,10 @@ class SyncEntitiesFactory:
             if ftrack_id != self.ft_project_id:
                 data["description"] = entity["description"]
 
+                # Colorbleed-specific edit to sync the Ftrack description
+                # value towards OpenPype as the asset's 'label' data.
+                data["label"] = entity["description"]
+
                 ent_path_items = [ent["name"] for ent in entity["link"]]
                 parents = ent_path_items[1:len(ent_path_items) - 1:]
 

@@ -69,6 +69,7 @@ class CollectAnatomyContextData(pyblish.api.ContextPlugin):
         # Store
         context.data["anatomyData"] = anatomy_data
 
-        self.log.info("Global anatomy Data collected")
         if os.environ.get("OPENPYPE_DEBUG") == "1":
-            self.log.debug(json.dumps(anatomy_data, indent=4))
+            self.log.debug("Global Anatomy Context Data collected:\n{}".format(
+                json.dumps(anatomy_data, indent=4)
+            ))

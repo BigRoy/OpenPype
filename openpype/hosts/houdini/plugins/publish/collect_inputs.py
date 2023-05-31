@@ -136,4 +136,4 @@ class CollectUpstreamInputs(pyblish.api.InstancePlugin):
             inputs = []
 
         instance.data["inputRepresentations"] = inputs
-        self.log.info("Collected inputs: %s" % inputs)
+        self.log.debug("Collected inputs: %s" % inputs)

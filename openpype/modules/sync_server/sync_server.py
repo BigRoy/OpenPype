@@ -3,10 +3,15 @@ import os
 import asyncio
 import threading
 import concurrent.futures
-from concurrent.futures._base import CancelledError
+from time import sleep
 
 from .providers import lib
+from openpype.client.entity_links import get_linked_representation_id
 from openpype.lib import Logger
+from openpype.lib.local_settings import get_local_site_id
+from openpype.modules.base import ModulesManager
+from openpype.pipeline import Anatomy
+from openpype.pipeline.load.utils import get_representation_path_with_anatomy
 
 from .utils import SyncStatus, ResumableError
 
@@ -50,13 +55,10 @@ async def upload(module, project_name, file, representation, provider_name,
                                                   presets=preset)
 
         file_path = file.get("path", "")
-        try:
-            local_file_path, remote_file_path = resolve_paths(
-                module, file_path, project_name,
-                remote_site_name, remote_handler
-            )
-        except Exception as exp:
-            print(exp)
+        local_file_path, remote_file_path = resolve_paths(
+            module, file_path, project_name,
+            remote_site_name, remote_handler
+        )
 
         target_folder = os.path.dirname(remote_file_path)
         folder_id = remote_handler.create_folder(target_folder)
@@ -169,7 +171,7 @@ def resolve_paths(module, file_path, project_name,
     return local_file_path, remote_file_path
 
 
-def site_is_working(module, project_name, site_name):
+def _site_is_working(module, project_name, site_name, site_config):
     """
         Confirm that 'site_name' is configured correctly for 'project_name'.
 
@@ -179,54 +181,108 @@ def site_is_working(module, project_name, site_name):
             module (SyncServerModule)
             project_name(string):
             site_name(string):
+            site_config (dict): configuration for site from Settings
         Returns
             (bool)
     """
-    if _get_configured_sites(module, project_name).get(site_name):
-        return True
-    return False
+    provider = module.get_provider_for_site(site=site_name)
+    handler = lib.factory.get_provider(provider,
+                                       project_name,
+                                       site_name,
+                                       presets=site_config)
+
+    return handler.is_active()
 
 
-def _get_configured_sites(module, project_name):
+def download_last_published_workfile(
+    host_name: str,
+    project_name: str,
+    task_name: str,
+    workfile_representation: dict,
+    max_retries: int,
+    anatomy: Anatomy = None,
+) -> str:
+    """Download the last published workfile
+
+    Args:
+        host_name (str): Host name.
+        project_name (str): Project name.
+        task_name (str): Task name.
+        workfile_representation (dict): Workfile representation.
+        max_retries (int): complete file failure only after so many attempts
+        anatomy (Anatomy, optional): Anatomy (Used for optimization).
+            Defaults to None.
+
+    Returns:
+        str: last published workfile path localized
     """
-        Loops through settings and looks for configured sites and checks
-        its handlers for particular 'project_name'.
 
-        Args:
-            project_setting(dict): dictionary from Settings
-            only_project_name(string, optional): only interested in
-                particular project
-        Returns:
-            (dict of dict)
-            {'ProjectA': {'studio':True, 'gdrive':False}}
-    """
-    settings = module.get_sync_project_setting(project_name)
-    return _get_configured_sites_from_setting(module, project_name, settings)
+    if not anatomy:
+        anatomy = Anatomy(project_name)
 
+    # Get sync server module
+    sync_server = ModulesManager().modules_by_name.get("sync_server")
+    if not sync_server or not sync_server.enabled:
+        print("Sync server module is disabled or unavailable.")
+        return
 
-def _get_configured_sites_from_setting(module, project_name, project_setting):
-    if not project_setting.get("enabled"):
-        return {}
+    if not workfile_representation:
+        print(
+            "Not published workfile for task '{}' and host '{}'.".format(
+                task_name, host_name
+            )
+        )
+        return
 
-    initiated_handlers = {}
-    configured_sites = {}
-    all_sites = module._get_default_site_configs()
-    all_sites.update(project_setting.get("sites"))
-    for site_name, config in all_sites.items():
-        provider = module.get_provider_for_site(site=site_name)
-        handler = initiated_handlers.get((provider, site_name))
-        if not handler:
-            handler = lib.factory.get_provider(provider,
-                                               project_name,
-                                               site_name,
-                                               presets=config)
-            initiated_handlers[(provider, site_name)] = \
-                handler
+    last_published_workfile_path = get_representation_path_with_anatomy(
+        workfile_representation, anatomy
+    )
+    if not last_published_workfile_path:
+        return
 
-        if handler.is_active():
-            configured_sites[site_name] = True
+    # If representation isn't available on remote site, then return.
+    if not sync_server.is_representation_on_site(
+        project_name,
+        workfile_representation["_id"],
+        sync_server.get_remote_site(project_name),
+    ):
+        print(
+            "Representation for task '{}' and host '{}'".format(
+                task_name, host_name
+            )
+        )
+        return
 
-    return configured_sites
+    # Get local site
+    local_site_id = get_local_site_id()
+
+    # Add workfile representation to local site
+    representation_ids = {workfile_representation["_id"]}
+    representation_ids.update(
+        get_linked_representation_id(
+            project_name, repre_id=workfile_representation["_id"]
+        )
+    )
+    for repre_id in representation_ids:
+        if not sync_server.is_representation_on_site(project_name, repre_id,
+                                                     local_site_id):
+            sync_server.add_site(
+                project_name,
+                repre_id,
+                local_site_id,
+                force=True,
+                priority=99
+            )
+    sync_server.reset_timer()
+    print("Starting to download:{}".format(last_published_workfile_path))
+    # While representation unavailable locally, wait.
+    while not sync_server.is_representation_on_site(
+        project_name, workfile_representation["_id"], local_site_id,
+        max_retries=max_retries
+    ):
+        sleep(5)
+
+    return last_published_workfile_path
 
 
 class SyncServerThread(threading.Thread):
@@ -236,6 +292,7 @@ class SyncServerThread(threading.Thread):
     """
     def __init__(self, module):
         self.log = Logger.get_logger(self.__class__.__name__)
+
         super(SyncServerThread, self).__init__()
         self.module = module
         self.loop = None
@@ -287,7 +344,8 @@ class SyncServerThread(threading.Thread):
                 for project_name in enabled_projects:
                     preset = self.module.sync_project_settings[project_name]
 
-                    local_site, remote_site = self._working_sites(project_name)
+                    local_site, remote_site = self._working_sites(project_name,
+                                                                  preset)
                     if not all([local_site, remote_site]):
                         continue
 
@@ -319,9 +377,6 @@ class SyncServerThread(threading.Thread):
                     # building folder tree structure in memory
                     # call only if needed, eg. DO_UPLOAD or DO_DOWNLOAD
                     for sync in sync_repres:
-                        if self.module.\
-                                is_representation_paused(sync['_id']):
-                            continue
                         if limit <= 0:
                             continue
                         files = sync.get("files") or []
@@ -399,7 +454,6 @@ class SyncServerThread(threading.Thread):
 
                 duration = time.time() - start_time
                 self.log.debug("One loop took {:.2f}s".format(duration))
-
                 delay = self.module.get_loop_delay(project_name)
                 self.log.debug(
                     "Waiting for {} seconds to new loop".format(delay)
@@ -411,8 +465,8 @@ class SyncServerThread(threading.Thread):
                 self.log.warning(
                     "ConnectionResetError in sync loop, trying next loop",
                     exc_info=True)
-            except CancelledError:
-                # just stopping server
+            except asyncio.exceptions.CancelledError:
+                # cancelling timer
                 pass
             except ResumableError:
                 self.log.warning(
@@ -463,7 +517,7 @@ class SyncServerThread(threading.Thread):
             self.timer.cancel()
             self.timer = None
 
-    def _working_sites(self, project_name):
+    def _working_sites(self, project_name, sync_config):
         if self.module.is_project_paused(project_name):
             self.log.debug("Both sites same, skipping")
             return None, None
@@ -475,9 +529,12 @@ class SyncServerThread(threading.Thread):
                 local_site, remote_site))
             return None, None
 
-        configured_sites = _get_configured_sites(self.module, project_name)
-        if not all([local_site in configured_sites,
-                    remote_site in configured_sites]):
+        local_site_config = sync_config.get('sites')[local_site]
+        remote_site_config = sync_config.get('sites')[remote_site]
+        if not all([_site_is_working(self.module, project_name, local_site,
+                                     local_site_config),
+                    _site_is_working(self.module, project_name, remote_site,
+                                     remote_site_config)]):
             self.log.debug(
                 "Some of the sites {} - {} is not working properly".format(
                     local_site, remote_site

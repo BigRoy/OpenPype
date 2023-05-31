@@ -1,19 +1,52 @@
 {
+    "imageio": {
+        "ocio_config": {
+            "enabled": false,
+            "filepath": []
+        },
+        "file_rules": {
+            "enabled": false,
+            "rules": {}
+        }
+    },
     "create": {
-        "CreateImage": {
-            "defaults": [
+        "ImageCreator": {
+            "enabled": true,
+            "active_on_create": true,
+            "mark_for_review": false,
+            "default_variants": [
                 "Main"
             ]
+        },
+        "AutoImageCreator": {
+            "enabled": false,
+            "active_on_create": true,
+            "mark_for_review": false,
+            "default_variant": ""
+        },
+        "ReviewCreator": {
+            "enabled": true,
+            "active_on_create": true,
+            "default_variant": ""
+        },
+        "WorkfileCreator": {
+            "enabled": true,
+            "active_on_create": true,
+            "default_variant": "Main"
         }
     },
     "publish": {
         "CollectColorCodedInstances": {
+            "enabled": true,
             "create_flatten_image": "no",
             "flatten_subset_template": "",
             "color_code_mapping": []
         },
-        "CollectInstances": {
-            "flatten_subset_template": ""
+        "CollectReview": {
+            "enabled": true
+        },
+        "CollectVersion": {
+            "enabled": false
         },
         "ValidateContainers": {
             "enabled": true,
@@ -34,7 +67,10 @@
             "make_image_sequence": false,
             "max_downscale_size": 8192,
             "jpg_options": {
-                "tags": []
+                "tags": [
+                    "review",
+                    "ftrackreview"
+                ]
             },
             "mov_options": {
                 "tags": [

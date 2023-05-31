@@ -1,14 +1,14 @@
 """Events holding data about specific event."""
 import os
 import re
+import copy
 import inspect
 import logging
 import weakref
 from uuid import uuid4
-try:
-    from weakref import WeakMethod
-except Exception:
-    from openpype.lib.python_2_comp import WeakMethod
+
+from .python_2_comp import WeakMethod
+from .python_module_tools import is_func_signature_supported
 
 
 class MissingEventSystem(Exception):
@@ -73,22 +73,20 @@ class EventCallback(object):
                 "Registered callback is not callable. \"{}\""
             ).format(str(func)))
 
-        # Collect additional data about function
-        #   - name
-        #   - path
-        #   - if expect argument or not
+        # Collect function name and path to file for logging
         func_name = func.__name__
         func_path = os.path.abspath(inspect.getfile(func))
-        if hasattr(inspect, "signature"):
-            sig = inspect.signature(func)
-            expect_args = len(sig.parameters) > 0
-        else:
-            expect_args = len(inspect.getargspec(func)[0]) > 0
+
+        # Get expected arguments from function spec
+        # - positional arguments are always preferred
+        expect_args = is_func_signature_supported(func, "fake")
+        expect_kwargs = is_func_signature_supported(func, event="fake")
 
         self._func_ref = func_ref
         self._func_name = func_name
         self._func_path = func_path
         self._expect_args = expect_args
+        self._expect_kwargs = expect_kwargs
         self._ref_valid = func_ref is not None
         self._enabled = True
 
@@ -125,7 +123,7 @@ class EventCallback(object):
         self._enabled = enabled
 
     def deregister(self):
-        """Calling this funcion will cause that callback will be removed."""
+        """Calling this function will cause that callback will be removed."""
         # Fake reference
         self._ref_valid = False
 
@@ -156,6 +154,10 @@ class EventCallback(object):
             try:
                 if self._expect_args:
                     callback(event)
+
+                elif self._expect_kwargs:
+                    callback(event=event)
+
                 else:
                     callback()
 
@@ -207,6 +209,12 @@ class Event(object):
 
     @property
     def source(self):
+        """Event's source used for triggering callbacks.
+
+        Returns:
+            Union[str, None]: Source string or None. Source is optional.
+        """
+
         return self._source
 
     @property
@@ -215,6 +223,12 @@ class Event(object):
 
     @property
     def topic(self):
+        """Event's topic used for triggering callbacks.
+
+        Returns:
+            str: Topic string.
+        """
+
         return self._topic
 
     def emit(self):
@@ -226,6 +240,42 @@ class Event(object):
                 )
             )
         self._event_system.emit_event(self)
+
+    def to_data(self):
+        """Convert Event object to data.
+
+        Returns:
+            Dict[str, Any]: Event data.
+        """
+
+        return {
+            "id": self.id,
+            "topic": self.topic,
+            "source": self.source,
+            "data": copy.deepcopy(self.data)
+        }
+
+    @classmethod
+    def from_data(cls, event_data, event_system=None):
+        """Create event from data.
+
+        Args:
+            event_data (Dict[str, Any]): Event data with defined keys. Can be
+                created using 'to_data' method.
+            event_system (EventSystem): System to which the event belongs.
+
+        Returns:
+            Event: Event with attributes from passed data.
+        """
+
+        obj = cls(
+            event_data["topic"],
+            event_data["data"],
+            event_data["source"],
+            event_system
+        )
+        obj._id = event_data["id"]
+        return obj
 
 
 class EventSystem(object):

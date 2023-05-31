@@ -1,10 +1,11 @@
 import os
-import pyblish.api
-import openpype
 from pprint import pformat
+import pyblish.api
+
+from openpype.pipeline import publish
 
 
-class ExtractReviewData(openpype.api.Extractor):
+class ExtractReviewData(publish.Extractor):
     """Extracts review tag into available representation
     """
 
@@ -22,9 +23,9 @@ class ExtractReviewData(openpype.api.Extractor):
         representations = instance.data.get("representations", [])
 
         # review can be removed since `ProcessSubmittedJobOnFarm` will create
-        # reviable representation if needed
+        # reviewable representation if needed
         if (
-            "render.farm" in instance.data["families"]
+            instance.data.get("farm")
             and "review" in instance.data["families"]
         ):
             instance.data["families"].remove("review")

@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Unreal Editor OpenPype host API."""
+"""Unreal Editor Ayon host API."""
 
 from .plugin import (
-    Loader,
-    Creator
+    UnrealActorCreator,
+    UnrealAssetCreator,
+    Loader
 )
+
 from .pipeline import (
     install,
     uninstall,
@@ -20,12 +22,14 @@ from .pipeline import (
     show_tools_popup,
     instantiate,
     UnrealHost,
+    set_sequence_hierarchy,
+    generate_sequence,
+    maintained_selection
 )
 
 __all__ = [
     "install",
     "uninstall",
-    "Creator",
     "Loader",
     "ls",
     "publish",
@@ -39,4 +43,7 @@ __all__ = [
     "show_tools_popup",
     "instantiate",
     "UnrealHost",
+    "set_sequence_hierarchy",
+    "generate_sequence",
+    "maintained_selection"
 ]

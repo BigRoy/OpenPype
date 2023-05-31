@@ -47,10 +47,17 @@ class CollectInstances(pyblish.api.ContextPlugin):
             if node.evalParm("id") != "pyblish.avalon.instance":
                 continue
 
+            # instance was created by new creator code, skip it as
+            # it is already collected.
+            if node.parm("creator_identifier"):
+                continue
+
             has_family = node.evalParm("family")
             assert has_family, "'%s' is missing 'family'" % node.name()
 
-            self.log.info("processing {}".format(node))
+            self.log.info(
+                "Processing legacy instance node {}".format(node.path())
+            )
 
             data = lib.read(node)
             # Check bypass state and reverse
@@ -58,7 +65,8 @@ class CollectInstances(pyblish.api.ContextPlugin):
                 data.update({"active": not node.isBypassed()})
 
             # temporarily translation of `active` to `publish` till issue has
-            # been resolved, https://github.com/pyblish/pyblish-base/issues/307
+            # been resolved.
+            # https://github.com/pyblish/pyblish-base/issues/307
             if "active" in data:
                 data["publish"] = data["active"]
 
@@ -78,6 +86,7 @@ class CollectInstances(pyblish.api.ContextPlugin):
             instance.data["families"] = [instance.data["family"]]
 
             instance[:] = [node]
+            instance.data["instance_node"] = node.path()
             instance.data.update(data)
 
         def sort_by_family(instance):

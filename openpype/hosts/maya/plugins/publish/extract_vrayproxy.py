@@ -2,11 +2,11 @@ import os
 
 from maya import cmds
 
-import openpype.api
+from openpype.pipeline import publish
 from openpype.hosts.maya.api.lib import maintained_selection
 
 
-class ExtractVRayProxy(openpype.api.Extractor):
+class ExtractVRayProxy(publish.Extractor):
     """Extract the content of the instance to a vrmesh file
 
     Things to pay attention to:
@@ -16,7 +16,7 @@ class ExtractVRayProxy(openpype.api.Extractor):
 
     label = "VRay Proxy (.vrmesh)"
     hosts = ["maya"]
-    families = ["vrayproxy"]
+    families = ["vrayproxy.vrmesh"]
 
     def process(self, instance):
 
@@ -30,9 +30,7 @@ class ExtractVRayProxy(openpype.api.Extractor):
             # non-animated subsets
             keys = ["frameStart", "frameEnd",
                     "handleStart", "handleEnd",
-                    "frameStartHandle", "frameEndHandle",
-                    # Backwards compatibility
-                    "handles"]
+                    "frameStartHandle", "frameEndHandle"]
             for key in keys:
                 instance.data.pop(key, None)
 

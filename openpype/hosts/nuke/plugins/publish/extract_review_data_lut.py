@@ -1,11 +1,12 @@
 import os
 import pyblish.api
-import openpype
+
+from openpype.pipeline import publish
 from openpype.hosts.nuke.api import plugin
 from openpype.hosts.nuke.api.lib import maintained_selection
 
 
-class ExtractReviewDataLut(openpype.api.Extractor):
+class ExtractReviewDataLut(publish.Extractor):
     """Extracts movie and thumbnail with baked in luts
 
     must be run after extract_render_local.py
@@ -48,7 +49,12 @@ class ExtractReviewDataLut(openpype.api.Extractor):
                 exporter.stagingDir, exporter.file).replace("\\", "/")
             instance.data["representations"] += data["representations"]
 
-        if "render.farm" in families:
+        # review can be removed since `ProcessSubmittedJobOnFarm` will create
+        # reviewable representation if needed
+        if (
+            instance.data.get("farm")
+            and "review" in instance.data["families"]
+        ):
             instance.data["families"].remove("review")
 
         self.log.debug(

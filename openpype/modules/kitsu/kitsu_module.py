@@ -3,8 +3,11 @@
 import click
 import os
 
-from openpype.modules import OpenPypeModule
-from openpype_interfaces import IPluginPaths, ITrayAction
+from openpype.modules import (
+    OpenPypeModule,
+    IPluginPaths,
+    ITrayAction,
+)
 
 
 class KitsuModule(OpenPypeModule, IPluginPaths, ITrayAction):
@@ -89,7 +92,10 @@ class KitsuModule(OpenPypeModule, IPluginPaths, ITrayAction):
         """Implementation of abstract method for `IPluginPaths`."""
         current_dir = os.path.dirname(os.path.abspath(__file__))
 
-        return {"publish": [os.path.join(current_dir, "plugins", "publish")]}
+        return {
+            "publish": [os.path.join(current_dir, "plugins", "publish")],
+            "actions": [os.path.join(current_dir, "actions")],
+        }
 
     def cli(self, click_group):
         click_group.add_command(cli_main)
@@ -122,15 +128,35 @@ def push_to_zou(login, password):
 @click.option(
     "-p", "--password", envvar="KITSU_PWD", help="Password for kitsu username"
 )
-def sync_service(login, password):
+@click.option(
+    "-prj",
+    "--project",
+    "projects",
+    multiple=True,
+    default=[],
+    help="Sync specific kitsu projects",
+)
+@click.option(
+    "-lo",
+    "--listen-only",
+    "listen_only",
+    is_flag=True,
+    default=False,
+    help="Listen to events only without any syncing",
+)
+def sync_service(login, password, projects, listen_only):
     """Synchronize openpype database from Zou sever database.
 
     Args:
         login (str): Kitsu user login
         password (str): Kitsu user password
+        projects (tuple): specific kitsu projects
+        listen_only (bool): run listen only without any syncing
     """
     from .utils.update_op_with_zou import sync_all_projects
     from .utils.sync_service import start_listeners
 
-    sync_all_projects(login, password)
+    if not listen_only:
+        sync_all_projects(login, password, filter_projects=projects)
+
     start_listeners(login, password)

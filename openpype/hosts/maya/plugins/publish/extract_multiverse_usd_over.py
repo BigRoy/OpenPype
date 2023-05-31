@@ -1,12 +1,12 @@
 import os
 
-import openpype.api
+from openpype.pipeline import publish
 from openpype.hosts.maya.api.lib import maintained_selection
 
 from maya import cmds
 
 
-class ExtractMultiverseUsdOverride(openpype.api.Extractor):
+class ExtractMultiverseUsdOverride(publish.Extractor):
     """Extractor for Multiverse USD Override data.
 
     This will extract settings for a Multiverse Write Override operation:
@@ -102,7 +102,7 @@ class ExtractMultiverseUsdOverride(openpype.api.Extractor):
                               long=True)
             self.log.info("Collected object {}".format(members))
 
-            # TODO: Deal with asset, composition, overide with options.
+            # TODO: Deal with asset, composition, override with options.
             import multiverse
 
             time_opts = None

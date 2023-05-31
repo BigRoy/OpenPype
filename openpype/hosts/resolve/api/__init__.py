@@ -1,10 +1,6 @@
 """
 resolve api
 """
-
-bmdvr = None
-bmdvf = None
-
 from .utils import (
     get_resolve_module
 )
@@ -28,6 +24,8 @@ from .lib import (
     get_project_manager,
     get_current_project,
     get_current_timeline,
+    get_any_timeline,
+    get_new_timeline,
     create_bin,
     get_media_pool_item,
     create_media_pool_item,
@@ -70,6 +68,9 @@ from .workio import (
 from .testing_utils import TestGUI
 
 
+bmdvr = None
+bmdvf = None
+
 __all__ = [
     "bmdvr",
     "bmdvf",
@@ -96,6 +97,8 @@ __all__ = [
     "get_project_manager",
     "get_current_project",
     "get_current_timeline",
+    "get_any_timeline",
+    "get_new_timeline",
     "create_bin",
     "get_media_pool_item",
     "create_media_pool_item",

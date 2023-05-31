@@ -14,10 +14,7 @@ from openpype.pipeline.create import get_subset_name
 
 
 class CollectReview(pyblish.api.ContextPlugin):
-    """Gather the active document as review instance.
-
-    Triggers once even if no 'image' is published as by defaults it creates
-    flatten image from a workfile.
+    """Adds review to families for instances marked to be reviewable.
     """
 
     label = "Collect Review"
@@ -25,25 +22,11 @@ class CollectReview(pyblish.api.ContextPlugin):
     hosts = ["photoshop"]
     order = pyblish.api.CollectorOrder + 0.1
 
-    def process(self, context):
-        family = "review"
-        subset = get_subset_name(
-            family,
-            context.data.get("variant", ''),
-            context.data["anatomyData"]["task"]["name"],
-            context.data["assetEntity"],
-            context.data["anatomyData"]["project"]["name"],
-            host_name=context.data["hostName"],
-            project_settings=context.data["project_settings"]
-        )
+    publish = True
 
-        instance = context.create_instance(subset)
-        instance.data.update({
-            "subset": subset,
-            "label": subset,
-            "name": subset,
-            "family": family,
-            "families": [],
-            "representations": [],
-            "asset": os.environ["AVALON_ASSET"]
-        })
+    def process(self, context):
+        for instance in context:
+            creator_attributes = instance.data["creator_attributes"]
+            if (creator_attributes.get("mark_for_review") and
+                    "review" not in instance.data["families"]):
+                instance.data["families"].append("review")

@@ -1,17 +1,68 @@
 import logging
 
-from Qt import QtWidgets, QtCore, QtGui
+from qtpy import QtWidgets, QtCore, QtGui
 import qargparse
 import qtawesome
+
 from openpype.style import (
     get_objected_colors,
     get_style_image_path
 )
+from openpype.lib.attribute_definitions import AbstractAttrDef
 
 log = logging.getLogger(__name__)
 
 
-class CustomTextComboBox(QtWidgets.QComboBox):
+class FocusSpinBox(QtWidgets.QSpinBox):
+    """QSpinBox which allow scroll wheel changes only in active state."""
+
+    def __init__(self, *args, **kwargs):
+        super(FocusSpinBox, self).__init__(*args, **kwargs)
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+
+    def wheelEvent(self, event):
+        if not self.hasFocus():
+            event.ignore()
+        else:
+            super(FocusSpinBox, self).wheelEvent(event)
+
+
+class FocusDoubleSpinBox(QtWidgets.QDoubleSpinBox):
+    """QDoubleSpinBox which allow scroll wheel changes only in active state."""
+
+    def __init__(self, *args, **kwargs):
+        super(FocusDoubleSpinBox, self).__init__(*args, **kwargs)
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+
+    def wheelEvent(self, event):
+        if not self.hasFocus():
+            event.ignore()
+        else:
+            super(FocusDoubleSpinBox, self).wheelEvent(event)
+
+
+class ComboBox(QtWidgets.QComboBox):
+    """Base of combobox with pre-implement changes used in tools.
+
+    Combobox is using styled delegate by default so stylesheets are propagated.
+
+    Items are not changed on scroll until the combobox is in focus.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(ComboBox, self).__init__(*args, **kwargs)
+        delegate = QtWidgets.QStyledItemDelegate()
+        self.setItemDelegate(delegate)
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+
+        self._delegate = delegate
+
+    def wheelEvent(self, event):
+        if self.hasFocus():
+            return super(ComboBox, self).wheelEvent(event)
+
+
+class CustomTextComboBox(ComboBox):
     """Combobox which can have different text showed."""
 
     def __init__(self, *args, **kwargs):
@@ -40,7 +91,7 @@ class PlaceholderLineEdit(QtWidgets.QLineEdit):
         # Change placeholder palette color
         if hasattr(QtGui.QPalette, "PlaceholderText"):
             filter_palette = self.palette()
-            color_obj = get_objected_colors()["font"]
+            color_obj = get_objected_colors("font")
             color = color_obj.get_qcolor()
             color.setAlpha(67)
             filter_palette.setColor(
@@ -48,6 +99,46 @@ class PlaceholderLineEdit(QtWidgets.QLineEdit):
                 color
             )
             self.setPalette(filter_palette)
+
+
+class ExpandingTextEdit(QtWidgets.QTextEdit):
+    """QTextEdit which does not have sroll area but expands height."""
+
+    def __init__(self, parent=None):
+        super(ExpandingTextEdit, self).__init__(parent)
+
+        size_policy = self.sizePolicy()
+        size_policy.setHeightForWidth(True)
+        size_policy.setVerticalPolicy(QtWidgets.QSizePolicy.Preferred)
+        self.setSizePolicy(size_policy)
+
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+
+        doc = self.document()
+        doc.contentsChanged.connect(self._on_doc_change)
+
+    def _on_doc_change(self):
+        self.updateGeometry()
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        margins = self.contentsMargins()
+
+        document_width = 0
+        if width >= margins.left() + margins.right():
+            document_width = width - margins.left() - margins.right()
+
+        document = self.document().clone()
+        document.setTextWidth(document_width)
+
+        return margins.top() + document.size().height() + margins.bottom()
+
+    def sizeHint(self):
+        width = super(ExpandingTextEdit, self).sizeHint().width()
+        return QtCore.QSize(width, self.heightForWidth(width))
 
 
 class BaseClickableFrame(QtWidgets.QFrame):
@@ -110,19 +201,34 @@ class ClickableLabel(QtWidgets.QLabel):
 
 class ExpandBtnLabel(QtWidgets.QLabel):
     """Label showing expand icon meant for ExpandBtn."""
+    state_changed = QtCore.Signal()
+
+
     def __init__(self, parent):
         super(ExpandBtnLabel, self).__init__(parent)
-        self._source_collapsed_pix = QtGui.QPixmap(
-            get_style_image_path("branch_closed")
-        )
-        self._source_expanded_pix = QtGui.QPixmap(
-            get_style_image_path("branch_open")
-        )
+        self._source_collapsed_pix = self._create_collapsed_pixmap()
+        self._source_expanded_pix = self._create_expanded_pixmap()
 
         self._current_image = self._source_collapsed_pix
         self._collapsed = True
 
-    def set_collapsed(self, collapsed):
+    def _create_collapsed_pixmap(self):
+        return QtGui.QPixmap(
+            get_style_image_path("branch_closed")
+        )
+
+    def _create_expanded_pixmap(self):
+        return QtGui.QPixmap(
+            get_style_image_path("branch_open")
+        )
+
+    @property
+    def collapsed(self):
+        return self._collapsed
+
+    def set_collapsed(self, collapsed=None):
+        if collapsed is None:
+            collapsed = not self._collapsed
         if self._collapsed == collapsed:
             return
         self._collapsed = collapsed
@@ -131,6 +237,7 @@ class ExpandBtnLabel(QtWidgets.QLabel):
         else:
             self._current_image = self._source_expanded_pix
         self._set_resized_pix()
+        self.state_changed.emit()
 
     def resizeEvent(self, event):
         self._set_resized_pix()
@@ -152,19 +259,53 @@ class ExpandBtnLabel(QtWidgets.QLabel):
 
 
 class ExpandBtn(ClickableFrame):
+    state_changed = QtCore.Signal()
+
     def __init__(self, parent=None):
         super(ExpandBtn, self).__init__(parent)
 
-        pixmap_label = ExpandBtnLabel(self)
+        pixmap_label = self._create_pix_widget(self)
 
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(pixmap_label)
 
+        pixmap_label.state_changed.connect(self.state_changed)
+
         self._pixmap_label = pixmap_label
 
-    def set_collapsed(self, collapsed):
+    def _create_pix_widget(self, parent=None):
+        if parent is None:
+            parent = self
+        return ExpandBtnLabel(parent)
+
+    @property
+    def collapsed(self):
+        return self._pixmap_label.collapsed
+
+    def set_collapsed(self, collapsed=None):
         self._pixmap_label.set_collapsed(collapsed)
+
+
+class ClassicExpandBtnLabel(ExpandBtnLabel):
+    def _create_collapsed_pixmap(self):
+        return QtGui.QPixmap(
+            get_style_image_path("right_arrow")
+        )
+
+    def _create_expanded_pixmap(self):
+        return QtGui.QPixmap(
+            get_style_image_path("down_arrow")
+        )
+
+
+class ClassicExpandBtn(ExpandBtn):
+    """Same as 'ExpandBtn' but with arrow images."""
+
+    def _create_pix_widget(self, parent=None):
+        if parent is None:
+            parent = self
+        return ClassicExpandBtnLabel(parent)
 
 
 class ImageButton(QtWidgets.QPushButton):
@@ -223,6 +364,9 @@ class PixmapLabel(QtWidgets.QLabel):
         self._empty_pixmap = QtGui.QPixmap(0, 0)
         self._source_pixmap = pixmap
 
+        self._last_width = 0
+        self._last_height = 0
+
     def set_source_pixmap(self, pixmap):
         """Change source image."""
         self._source_pixmap = pixmap
@@ -232,6 +376,12 @@ class PixmapLabel(QtWidgets.QLabel):
         size = self.fontMetrics().height()
         size += size % 2
         return size, size
+
+    def minimumSizeHint(self):
+        width, height = self._get_pix_size()
+        if width != self._last_width or height != self._last_height:
+            self._set_resized_pix()
+        return QtCore.QSize(width, height)
 
     def _set_resized_pix(self):
         if self._source_pixmap is None:
@@ -246,10 +396,99 @@ class PixmapLabel(QtWidgets.QLabel):
                 QtCore.Qt.SmoothTransformation
             )
         )
+        self._last_width = width
+        self._last_height = height
 
     def resizeEvent(self, event):
         self._set_resized_pix()
         super(PixmapLabel, self).resizeEvent(event)
+
+
+class PixmapButtonPainter(QtWidgets.QWidget):
+    def __init__(self, pixmap, parent):
+        super(PixmapButtonPainter, self).__init__(parent)
+
+        self._pixmap = pixmap
+        self._cached_pixmap = None
+
+    def set_pixmap(self, pixmap):
+        self._pixmap = pixmap
+        self._cached_pixmap = None
+
+        self.repaint()
+
+    def _cache_pixmap(self):
+        size = self.size()
+        self._cached_pixmap = self._pixmap.scaled(
+            size.width(),
+            size.height(),
+            QtCore.Qt.KeepAspectRatio,
+            QtCore.Qt.SmoothTransformation
+        )
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter()
+        painter.begin(self)
+        if self._pixmap is None:
+            painter.end()
+            return
+
+        render_hints = (
+            QtGui.QPainter.Antialiasing
+            | QtGui.QPainter.SmoothPixmapTransform
+        )
+        if hasattr(QtGui.QPainter, "HighQualityAntialiasing"):
+            render_hints |= QtGui.QPainter.HighQualityAntialiasing
+
+        painter.setRenderHints(render_hints)
+        if self._cached_pixmap is None:
+            self._cache_pixmap()
+
+        painter.drawPixmap(0, 0, self._cached_pixmap)
+
+        painter.end()
+
+
+class PixmapButton(ClickableFrame):
+    def __init__(self, pixmap=None, parent=None):
+        super(PixmapButton, self).__init__(parent)
+
+        button_painter = PixmapButtonPainter(pixmap, self)
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(2, 2, 2, 2)
+
+        self._button_painter = button_painter
+
+    def setContentsMargins(self, *args):
+        layout = self.layout()
+        layout.setContentsMargins(*args)
+        self._update_painter_geo()
+
+    def set_pixmap(self, pixmap):
+        self._button_painter.set_pixmap(pixmap)
+
+    def sizeHint(self):
+        font_height = self.fontMetrics().height()
+        return QtCore.QSize(font_height, font_height)
+
+    def resizeEvent(self, event):
+        super(PixmapButton, self).resizeEvent(event)
+        self._update_painter_geo()
+
+    def showEvent(self, event):
+        super(PixmapButton, self).showEvent(event)
+        self._update_painter_geo()
+
+    def _update_painter_geo(self):
+        size = self.size()
+        layout = self.layout()
+        left, top, right, bottom = layout.getContentsMargins()
+        self._button_painter.setGeometry(
+            left,
+            top,
+            size.width() - (left + right),
+            size.height() - (top + bottom)
+        )
 
 
 class OptionalMenu(QtWidgets.QMenu):
@@ -317,8 +556,26 @@ class OptionalAction(QtWidgets.QWidgetAction):
 
     def set_option_tip(self, options):
         sep = "\n\n"
-        mak = (lambda opt: opt["name"] + " :\n    " + opt["help"])
-        self.option_tip = sep.join(mak(opt) for opt in options)
+        if not options or not isinstance(options[0], AbstractAttrDef):
+            mak = (lambda opt: opt["name"] + " :\n    " + opt["help"])
+            self.option_tip = sep.join(mak(opt) for opt in options)
+            return
+
+        option_items = []
+        for option in options:
+            option_lines = []
+            if option.label:
+                option_lines.append(
+                    "{} ({}) :".format(option.label, option.key)
+                )
+            else:
+                option_lines.append("{} :".format(option.key))
+
+            if option.tooltip:
+                option_lines.append("    - {}".format(option.tooltip))
+            option_items.append("\n".join(option_lines))
+
+        self.option_tip = sep.join(option_items)
 
     def on_option(self):
         self.optioned = True
@@ -448,3 +705,57 @@ class OptionDialog(QtWidgets.QDialog):
 
     def parse(self):
         return self._options.copy()
+
+
+class SeparatorWidget(QtWidgets.QFrame):
+    """Prepared widget that can be used as separator with predefined color.
+
+    Args:
+        size (int): Size of separator (width or height).
+        orientation (Qt.Horizontal|Qt.Vertical): Orintation of widget.
+        parent (QtWidgets.QWidget): Parent widget.
+    """
+
+    def __init__(self, size=2, orientation=QtCore.Qt.Horizontal, parent=None):
+        super(SeparatorWidget, self).__init__(parent)
+
+        self.setObjectName("Separator")
+
+        maximum_width = self.maximumWidth()
+        maximum_height = self.maximumHeight()
+
+        self._size = None
+        self._orientation = orientation
+        self._maximum_width = maximum_width
+        self._maximum_height = maximum_height
+        self.set_size(size)
+
+    def set_size(self, size):
+        if size != self._size:
+            self._set_size(size)
+
+    def _set_size(self, size):
+        if self._orientation == QtCore.Qt.Vertical:
+            self.setMinimumWidth(size)
+            self.setMaximumWidth(size)
+        else:
+            self.setMinimumHeight(size)
+            self.setMaximumHeight(size)
+
+        self._size = size
+
+    def set_orientation(self, orientation):
+        if self._orientation == orientation:
+            return
+
+        # Reset min/max sizes in opossite direction
+        if self._orientation == QtCore.Qt.Vertical:
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(self._maximum_height)
+        else:
+            self.setMinimumWidth(0)
+            self.setMaximumWidth(self._maximum_width)
+
+        self._orientation = orientation
+
+        self._set_size(self._size)

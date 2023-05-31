@@ -47,10 +47,14 @@ Context discovers creator and publish plugins. Trigger collections of existing i
 
 Creator plugins can call **creator_adds_instance** or **creator_removed_instance** to add/remove instances but these methods are not meant to be called directly out of the creator. The reason is that it is the creator's responsibility to remove metadata or decide if it should remove the instance.
 
-#### Required functions in host implementation
-Host implementation **must** implement **get_context_data** and **update_context_data**. These two functions are needed to store metadata that are not related to any instance but are needed for Creating and publishing process. Right now only data about enabled/disabled optional publish plugins is stored there. When data is not stored and loaded properly, reset of publishing will cause that they will be set to default value. Context data also parsed to json string similarly as instance data.
+During reset are re-cached Creator plugins, re-collected instances, refreshed host context and more. Object of `CreateContext` supply shared data during the reset. They can be used by creators to share same data needed during collection phase or during creation for autocreators.
 
-There are also few optional functions. For UI purposes it is possible to implement **get_context_title** which can return a string shown in UI as a title. Output string may contain html tags. It is recommended to return context path (it will be created function this purposes) in this order `"{project name}/{asset hierarchy}/<b>{asset name}</b>/{task name}"`.
+#### Required functions in host implementation
+It is recommended to use `HostBase` class (`from openpype.host import HostBase`) as base for host implementation with combination of `IPublishHost` interface (`from openpype.host import IPublishHost`). These abstract classes should guide you to fill missing attributes and methods.
+
+To sum them and in case host implementation is inheriting `HostBase` the implementation **must** implement **get_context_data** and **update_context_data**. These two functions are needed to store metadata that are not related to any instance but are needed for Creating and publishing process. Right now only data about enabled/disabled optional publish plugins is stored there. When data is not stored and loaded properly, reset of publishing will cause that they will be set to default value. Context data also parsed to json string similarly as instance data.
+
+There are also few optional functions. For UI purposes it is possible to implement **get_context_title** which can return a string shown in UI as a title. Output string may contain html tags. It is recommended to return context path (it will be created function this purposes) in this order `"{project name}/{asset hierarchy}/<b>{asset name}</b>/{task name}"` (this is default implementation in `HostBase`).
 
 Another optional function is **get_current_context**. This function is handy in hosts where it is possible to open multiple workfiles in one process so using global context variables is not relevant because artists can switch between opened workfiles without being acknowledged. When a function is not implemented or won't return the right keys the global context is used.
 ```json
@@ -67,6 +71,9 @@ Main responsibility of create plugin is to create, update, collect and remove in
 
 #### *BaseCreator*
 Base implementation of creator plugin. It is not recommended to use this class as base for production plugins but rather use one of **HiddenCreator**, **AutoCreator** and **Creator** variants.
+
+**Access to shared data**
+Functions to work with "Collection shared data" can be used during reset phase of `CreateContext`. Creators can cache there data that are common for them. For example list of nodes in scene. Methods are implemented on `CreateContext` but their usage is primarily for Create plugins as nothing else should use it. Each creator can access `collection_shared_data` attribute which is a dictionary where shared data can be stored.
 
 **Abstractions**
 - **`family`** (class attr) - Tells what kind of instance will be created.
@@ -197,6 +204,37 @@ class RenderLayerCreator(Creator):
 - **`get_subset_name`** (method) - Calculate subset name based on passed data. Data can be extended using the `get_dynamic_data` method. Default implementation is using `get_subset_name` from `openpype.lib` which is recommended.
 
 - **`get_dynamic_data`** (method) - Can be used to extend data for subset templates which may be required in some cases.
+
+Methods are used before instance creation and on instance subset name update. Update may require to have access to existing instance because dynamic data should be filled from there. Because of that is instance passed to `get_subset_name` and `get_dynamic_data` so the creator can handle that cases.
+
+This is one example where subset name template may contain `"{layer}"` which is filled during creation because the value is taken from selection. In that case `get_dynamic_data` returns value for `"layer"` -> `"{layer}"` so it can be filled in creation. But when subset name of already existing instance is updated it should return already existing value. Note: Creator must make sure the value is available on instance.
+
+```python
+from openpype.lib import prepare_template_data
+from my_host import get_selected_layer
+
+
+class SomeCreator(Creator):
+    def get_dynamic_data(
+        self, variant, task_name, asset_doc, project_name, host_name, instance
+    ):
+        # Before instance is created return unfilled key
+        # - the key will be filled during creation
+        if instance is None:
+            return {"layer": "{layer}"}
+        # Take value from existing instance
+        # - creator must know where to look for the value
+        return {"layer": instance.data["layer"]}
+
+    def create(self, subset_name, instance_data, pre_create_data):
+        # Fill the layer name in
+        layer = get_selected_layer()
+        layer_name = layer["name"]
+        layer_fill_data = prepare_template_data({"layer": layer_name})
+        subset_name = subset_name.format(**layer_fill_data)
+        instance_data["layer"] = layer_name
+        ...
+```
 
 
 #### *HiddenCreator*
@@ -377,7 +415,7 @@ class CreateRender(Creator):
         #    - 'asset' - asset name
         #    - 'task' - task name
         #    - 'variant' - variant
-        #    - 'family' - instnace family
+        #    - 'family' - instance family
 
         # Check if should use selection or not
         if pre_create_data.get("use_selection"):
@@ -467,6 +505,67 @@ or the scene file was copy pasted from different context.
 
 #### *Known errors*
 When there is a known error that can't be fixed by the user (e.g. can't connect to deadline service, etc.) `KnownPublishError` should be raised. The only difference is that its message is shown in UI to the artist otherwise a neutral message without context is shown.
+
+### Plugins
+Plugin is a single processing unit that can work with publish context and instances.
+
+#### Plugin types
+There are 2 types of plugins - `InstancePlugin` and `ContextPlugin`.  Be aware that inheritance of plugin from `InstancePlugin` or `ContextPlugin` actually does not affect if plugin is instance or context plugin, that is affected by argument name in `process` method.
+
+```python
+import pyblish.api
+
+
+# Context plugin
+class MyContextPlugin(pyblish.api.ContextPlugin):
+    def process(self, context):
+        ...
+
+# Instance plugin
+class MyInstancePlugin(pyblish.api.InstancePlugin):
+    def process(self, instance):
+        ...
+
+# Still an instance plugin
+class MyOtherInstancePlugin(pyblish.api.ContextPlugin):
+    def process(self, instance):
+        ...
+```
+
+#### Plugin filtering
+By pyblish logic, plugins have predefined filtering class attributes `hosts`, `targets` and `families`. Filter by `hosts` and `targets` are filters that are applied for current publishing process. Both filters are registered in `pyblish` module, `hosts` filtering may not match OpenPype host name (e.g. farm publishing uses `shell` in pyblish). Filter `families` works only on instance plugins and is dynamic during publish process by changing families of an instance.
+
+All filters are list of a strings `families = ["image"]`. Empty list is invalid filter and plugin will be skipped, to allow plugin for all values use a start `families = ["*"]`. For more detailed filtering options check [pyblish documentation](https://api.pyblish.com/pluginsystem).
+
+Each plugin must have order, there are 4 order milestones - Collect, Validate, Extract, Integration. Any plugin below collection order won't be processed. for more details check [pyblish documentation](https://api.pyblish.com/ordering).
+
+#### Plugin settings
+Pyblish plugins may have settings. There are 2 ways how settings are applied, first is automated, and it's logic is based on function `filter_pyblish_plugins` in `./openpype/pipeline/publish/lib.py`, second is explicit by implementing class method `apply_settings` on a plugin.
+
+
+Automated logic is expecting specific structure of project settings `project_settings[{category}]["plugins"]["publish"][{plugin class name}]`. The category is a key in root of project settings. There are currently 3 ways how the category key is received.
+1. Use `settings_category` class attribute value from plugin. If `settings_category` is not `None` there is not any fallback to other way.
+2. Use currently registered pyblish host. This will be probably deprecated soon.
+3. Use 3rd folder name from a plugin filepath. From path `./maya/plugins/publish/collect_render.py` is used `maya` as the key.
+
+For any other use-case is recommended to use explicit approach by implementing `apply_settings` method. Must use `@classmethod` decorator and expect arguments for project settings and system settings. We're planning to support single argument with only project settings.
+```python
+import pyblish.api
+
+
+class MyPlugin(pyblish.api.InstancePlugin):
+    profiles = []
+
+    @classmethod
+    def apply_settings(cls, project_settings, system_settings):
+        cls.profiles = (
+            project_settings
+            ["addon"]
+            ["plugins"]
+            ["publish"]
+            ["vfx_profiles"]
+        )
+```
 
 ### Plugin extension
 Publish plugins can be extended by additional logic when inheriting from `OpenPypePyblishPluginMixin` which can be used as mixin (additional inheritance of class). Publish plugins that inherit from this mixin can define attributes that will be shown in **CreatedInstance**. One of the most important usages is to be able turn on/off optional plugins.

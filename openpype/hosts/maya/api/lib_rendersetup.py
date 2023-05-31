@@ -19,6 +19,8 @@ from maya.app.renderSetup.model.override import (
     UniqueOverride
 )
 
+from openpype.hosts.maya.api.lib import get_attribute
+
 EXACT_MATCH = 0
 PARENT_MATCH = 1
 CLIENT_MATCH = 2
@@ -96,9 +98,6 @@ def get_attr_in_layer(node_attr, layer):
 
     """
 
-    # Delay pymel import to here because it's slow to load
-    import pymel.core as pm
-
     def _layer_needs_update(layer):
         """Return whether layer needs updating."""
         # Use `getattr` as e.g. DEFAULT_RENDER_LAYER does not have
@@ -125,7 +124,7 @@ def get_attr_in_layer(node_attr, layer):
             node = history_overrides[-1] if history_overrides else override
             node_attr_ = node + ".original"
 
-        return pm.getAttr(node_attr_, asString=True)
+        return get_attribute(node_attr_, asString=True)
 
     layer = get_rendersetup_layer(layer)
     rs = renderSetup.instance()
@@ -145,7 +144,7 @@ def get_attr_in_layer(node_attr, layer):
                 # we will let it error out.
                 rs.switchToLayer(current_layer)
 
-        return pm.getAttr(node_attr, asString=True)
+        return get_attribute(node_attr, asString=True)
 
     overrides = get_attr_overrides(node_attr, layer)
     default_layer_value = get_default_layer_value(node_attr)
@@ -156,7 +155,7 @@ def get_attr_in_layer(node_attr, layer):
     for match, layer_override, index in overrides:
         if isinstance(layer_override, AbsOverride):
             # Absolute override
-            value = pm.getAttr(layer_override.name() + ".attrValue")
+            value = get_attribute(layer_override.name() + ".attrValue")
             if match == EXACT_MATCH:
                 # value = value
                 pass
@@ -168,8 +167,8 @@ def get_attr_in_layer(node_attr, layer):
         elif isinstance(layer_override, RelOverride):
             # Relative override
             # Value = Original * Multiply + Offset
-            multiply = pm.getAttr(layer_override.name() + ".multiply")
-            offset = pm.getAttr(layer_override.name() + ".offset")
+            multiply = get_attribute(layer_override.name() + ".multiply")
+            offset = get_attribute(layer_override.name() + ".offset")
 
             if match == EXACT_MATCH:
                 value = value * multiply + offset
@@ -348,3 +347,71 @@ def get_attr_overrides(node_attr, layer,
             break
 
     return reversed(plug_overrides)
+
+
+def get_shader_in_layer(node, layer):
+    """Return the assigned shader in a renderlayer without switching layers.
+
+    This has been developed and tested for Legacy Renderlayers and *not* for
+    Render Setup.
+
+    Note: This will also return the shader for any face assignments, however
+        it will *not* return the components they are assigned to. This could
+        be implemented, but since Maya's renderlayers are famous for breaking
+        with face assignments there has been no need for this function to
+        support that.
+
+    Returns:
+        list: The list of assigned shaders in the given layer.
+
+    """
+
+    def _get_connected_shader(plug):
+        """Return current shader"""
+        return cmds.listConnections(plug,
+                                    source=False,
+                                    destination=True,
+                                    plugs=False,
+                                    connections=False,
+                                    type="shadingEngine") or []
+
+    # We check the instObjGroups (shader connection) for layer overrides.
+    plug = node + ".instObjGroups"
+
+    # Ignore complex query if we're in the layer anyway (optimization)
+    current_layer = cmds.editRenderLayerGlobals(query=True,
+                                                currentRenderLayer=True)
+    if layer == current_layer:
+        return _get_connected_shader(plug)
+
+    connections = cmds.listConnections(plug,
+                                       plugs=True,
+                                       source=False,
+                                       destination=True,
+                                       type="renderLayer") or []
+    connections = filter(lambda x: x.endswith(".outPlug"), connections)
+    if not connections:
+        # If no overrides anywhere on the shader, just get the current shader
+        return _get_connected_shader(plug)
+
+    def _get_override(connections, layer):
+        """Return the overridden connection for that layer in connections"""
+        # If there's an override on that layer, return that.
+        for connection in connections:
+            if (connection.startswith(layer + ".outAdjustments") and
+                    connection.endswith(".outPlug")):
+
+                # This is a shader override on that layer so get the shader
+                # connected to .outValue of the .outAdjustment[i]
+                out_adjustment = connection.rsplit(".", 1)[0]
+                connection_attr = out_adjustment + ".outValue"
+                override = cmds.listConnections(connection_attr) or []
+
+                return override
+
+    override_shader = _get_override(connections, layer)
+    if override_shader is not None:
+        return override_shader
+    else:
+        # Get the override for "defaultRenderLayer" (=masterLayer)
+        return _get_override(connections, layer="defaultRenderLayer")

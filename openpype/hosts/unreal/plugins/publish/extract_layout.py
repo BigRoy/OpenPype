@@ -3,18 +3,15 @@ import os
 import json
 import math
 
-from bson.objectid import ObjectId
-
 import unreal
 from unreal import EditorLevelLibrary as ell
 from unreal import EditorAssetLibrary as eal
 
 from openpype.client import get_representation_by_name
-import openpype.api
-from openpype.pipeline import legacy_io
+from openpype.pipeline import legacy_io, publish
 
 
-class ExtractLayout(openpype.api.Extractor):
+class ExtractLayout(publish.Extractor):
     """Extract a layout."""
 
     label = "Extract Layout"
@@ -51,7 +48,7 @@ class ExtractLayout(openpype.api.Extractor):
                 # Search the reference to the Asset Container for the object
                 path = unreal.Paths.get_path(mesh.get_path_name())
                 filter = unreal.ARFilter(
-                    class_names=["AssetContainer"], package_paths=[path])
+                    class_names=["AyonAssetContainer"], package_paths=[path])
                 ar = unreal.AssetRegistryHelpers.get_asset_registry()
                 try:
                     asset_container = ar.get_assets(filter)[0].get_asset()

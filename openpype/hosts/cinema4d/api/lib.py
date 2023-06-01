@@ -8,24 +8,15 @@ from collections import OrderedDict
 from openpype.pipeline import legacy_io
 from openpype.client import (
     get_project,
-    get_asset_by_name,
-    get_versions,
-    get_last_versions,
-    get_representations,
+    get_asset_by_name
 )
-from openpype.api import (
-    Logger,
-    BuildWorkfile,
-    get_version_from_path,
-    get_workdir_data,
-    get_asset,
-    get_current_project_settings,
-)
+
 '''
 TODO:
 Add other objects types to ObjectAttrs
 Add shader nodes to attrs + path
 '''
+
 
 class ObjectAttrs:
     '''
@@ -39,10 +30,11 @@ class ObjectAttrs:
     ObjectAttrs(op)["test_strength"]
 
     '''
+
     def __init__(self, op, tags=False, auto_update=True):
         self.op = op
         self.doc = op.GetDocument()
-        self.auto_update=auto_update
+        self.auto_update = auto_update
         self.user_data = dict()
         self.object_data = dict()
         self.tag_data = dict()
@@ -54,18 +46,22 @@ class ObjectAttrs:
         for bc, paramid, groupid in desc:
             if isinstance(bc[c4d.DESC_IDENT], str):
                 try:
-                    self.object_data[bc[c4d.DESC_IDENT]] = {"value":self.op[paramid[0].id], "access_id":paramid[0].id}
+                    self.object_data[bc[c4d.DESC_IDENT]] = {
+                        "value": self.op[paramid[0].id],
+                        "access_id": paramid[0].id}
                 except AttributeError:
                     if bc[c4d.DESC_IDENT] == "ID_USERDATA":
                         for id, ud_bc in self.op.GetUserDataContainer():
-                            if ud_bc[c4d.DESC_CUSTOMGUI] == c4d.CUSTOMGUI_CYCLE:
+                            if ud_bc[
+                                c4d.DESC_CUSTOMGUI] == c4d.CUSTOMGUI_CYCLE:
                                 choices = ud_bc[c4d.DESC_CYCLE]
-                                value = choices.GetString(self.op[id[0].id, id[1].id])
-                            else: 
+                                value = choices.GetString(
+                                    self.op[id[0].id, id[1].id])
+                            else:
                                 value = self.op[c4d.ID_USERDATA, id[1].id]
                             self.user_data[ud_bc.GetString(c4d.DESC_NAME)] = {
-                                "value":value,
-                                "access_id":id[1].id
+                                "value": value,
+                                "access_id": id[1].id
                             }
 
     def reset_attrs(self):
@@ -94,7 +90,8 @@ class ObjectAttrs:
             self.object_data[key]["value"] = value
 
         elif key in self.user_data.keys():
-            desc, ud_bc = self.op.GetUserDataContainer()[self.user_data[key]["access_id"]-1]
+            desc, ud_bc = self.op.GetUserDataContainer()[
+                self.user_data[key]["access_id"] - 1]
             if ud_bc[c4d.DESC_CUSTOMGUI] == c4d.CUSTOMGUI_CYCLE:
                 choices = ud_bc[c4d.DESC_CYCLE]
                 for choice in choices:
@@ -104,10 +101,11 @@ class ObjectAttrs:
             else:
                 new_value = value
 
-            self.op[c4d.ID_USERDATA, self.user_data[key]["access_id"]] = new_value
+            self.op[
+                c4d.ID_USERDATA, self.user_data[key]["access_id"]] = new_value
             self.user_data[key]["value"] = value
         else:
-            #raise AttributeError
+            # raise AttributeError
             self.add_attr(key, value)
         self.doc.EndUndo()
         if self.auto_update:
@@ -116,7 +114,7 @@ class ObjectAttrs:
     def __iter__(self):
         for key, values in self.object_data.items():
             yield key, values["value"]
-        
+
         for key, values in self.user_data.items():
             yield key, values["value"]
 
@@ -126,7 +124,7 @@ class ObjectAttrs:
     def keys(self):
         for key in self.object_data.keys():
             yield key
-        
+
         for key in self.user_data.keys():
             yield key
 
@@ -145,7 +143,7 @@ class ObjectAttrs:
                 self.__setitem__[key] = value
                 return
             else:
-                raise AttributeError("Attribute already exists")  
+                raise AttributeError("Attribute already exists")
         if isinstance(value, bool):
             bc = c4d.GetCustomDataTypeDefault(c4d.DTYPE_BOOL)
             bc[c4d.DESC_NAME] = key
@@ -181,7 +179,7 @@ class ObjectAttrs:
                     choices.SetString(idx, str(choice))
 
                 bc.SetContainer(c4d.DESC_CYCLE, choices)
-                value=0
+                value = 0
         else:
             raise TypeError("Unsupported type: %r" % type(value))
 
@@ -206,15 +204,17 @@ class ObjectAttrs:
     def __repr__(self):
         return f'<ObjectAttrs: {self.op.GetName()}>'
 
+
 class ObjectPath():
     """
-    Representing the c4d hiearchy in a namespace/pathlike manner.
+    Representing the c4d hierarchy in a namespace/pathlike manner.
     This is intended to make serialization of hierarchy and assets easier,
     as well as using naming patterns for searching
 
-    Each unique space in c4d can kind of be thought like a drive in a file system with
-    the main exception that you can stack "drives" in the hierarchy for example if there is an 
-    xpresso tag on an object and you you want to address a node in the node graph it could look like
+    Each unique space in c4d can kind of be thought like a drive in a file
+    system with the main exception that you can stack "drives" in the hierarchy
+    for example if there is an xpresso tag on an object and you you want to
+    address a node in the node graph it could look like
     :obj:/first_obj/child_obj:tag:/xpresso_tag:node:/xgroup/object_node
     """
 
@@ -231,7 +231,6 @@ class ObjectPath():
             self.from_obj(self._obj)
         else:
             self._initialize_path(*parts)
-
 
     def _initialize_path(self, *parts):
         p = []
@@ -259,6 +258,7 @@ class ObjectPath():
             self.parts.append([""])
         else:
             self.parts.append(p)
+
     def _get_obj_parts(self, obj):
         parts = []
         while obj:
@@ -284,21 +284,21 @@ class ObjectPath():
         self.parts = list()
         self.roots = list()
 
-        if self._get_obj_root(obj) ==  self._id.format(space="node"):
+        if self._get_obj_root(obj) == self._id.format(space="node"):
             self.roots = [self._get_obj_root(obj)] + self.roots
             self.parts = [self._get_obj_parts(obj)] + self.parts
             obj = obj.GetMain().GetOwner()
 
-        if self._get_obj_root(obj) ==  self._id.format(space="tag"):
+        if self._get_obj_root(obj) == self._id.format(space="tag"):
             self.roots = [self._get_obj_root(obj)] + self.roots
             self.parts = [self._get_obj_parts(obj)] + self.parts
             obj = obj.GetObject()
 
-        if self._get_obj_root(obj) ==  self._id.format(space="mat"):
+        if self._get_obj_root(obj) == self._id.format(space="mat"):
             self.roots = [self._get_obj_root(obj)] + self.roots
             self.parts = [self._get_obj_parts(obj)] + self.parts
 
-        if self._get_obj_root(obj) ==  self._id.format(space="obj"):
+        if self._get_obj_root(obj) == self._id.format(space="obj"):
             self.roots = [self._get_obj_root(obj)] + self.roots
             self.parts = [self._get_obj_parts(obj)] + self.parts
 
@@ -314,7 +314,7 @@ class ObjectPath():
 
     @property
     def parent(self):
-        if len(self.parts[-1])>0:
+        if len(self.parts[-1]) > 0:
             temp_parts = self.parts[:-1]
             temp_parts.append(self.parts[-1][:-1])
             new_path = self.__class__()
@@ -337,11 +337,12 @@ class ObjectPath():
                 self._attrs = ObjectAttrs(self.obj)
             return self._attrs
         raise AttributeError("Object Does Not Exist")
+
     def __repr__(self):
         return "<%s(%s)>" % (self.__class__.__name__, self.__str__())
 
     def __str__(self):
-        if len(self.roots)<len(self.parts):
+        if len(self.roots) < len(self.parts):
             temp_roots = [""] + self.roots
         elif len(self.roots) == 0:
             temp_roots = [""]
@@ -357,6 +358,7 @@ class ObjectPath():
             path_str += self.sep.join(self.parts[idx])
 
         return path_str
+
     '''
     def __eq__(self, other):
         return hash(self) == hash(other)
@@ -367,11 +369,12 @@ class ObjectPath():
         else:
             return hash(str(self))
     '''
+
     def re_match(self, pattern, full=True):
         if full:
-            return re.fullmatch(pattern,str(self))
+            return re.fullmatch(pattern, str(self))
         else:
-            return re.match(pattern,str(self))
+            return re.match(pattern, str(self))
 
     def _get_obj(self, root, parts, parent=None):
 
@@ -420,6 +423,7 @@ class ObjectPath():
     def exists(self):
         return self.obj != None
 
+
 def get_main_window():
     return None
 
@@ -457,6 +461,7 @@ def maintained_selection(doc=None):
             for select in doc.GetSelection():
                 doc.SetSelection(select, c4d.SELECTION_SUB)
 
+
 def read(node):
     """Return user-defined attributes from `node`"""
 
@@ -464,13 +469,14 @@ def read(node):
 
     return data
 
+
 def create_selection(objs, name, doc=None):
     if not doc:
         if len(objs) > 0:
             doc = objs[0].GetDocument()
         else:
             doc = c4d.documents.GetActiveDocument()
-    
+
     selection = c4d.BaseObject(c4d.Oselection)
     selection.SetName(name)
     doc.InsertObject(selection)
@@ -481,10 +487,10 @@ def create_selection(objs, name, doc=None):
 
     return selection
 
-def add_update_layer( name, doc=None, layer_data={}):
+
+def add_update_layer(name, doc=None, layer_data={}):
     if not doc:
         doc = c4d.documents.GetActiveDocument()
-
 
     layer_root = doc.GetLayerObjectRoot()
     layer = layer_root.GetDown()
@@ -501,17 +507,18 @@ def add_update_layer( name, doc=None, layer_data={}):
 
     if not layer_data and not update_layer:
         layer_data = {
-                        "solo":False,
-                        "view":True,
-                        "render":True,
-                        "manager":True,
-                        "locked":False,
-                        "generators":True,
-                        "expressions":True,
-                        "animation":True,
-                        "color":c4d.Vector(random.random(),random.random(),random.random()),
-                        "xref":True
-                    }
+            "solo": False,
+            "view": True,
+            "render": True,
+            "manager": True,
+            "locked": False,
+            "generators": True,
+            "expressions": True,
+            "animation": True,
+            "color": c4d.Vector(random.random(), random.random(),
+                                random.random()),
+            "xref": True
+        }
 
     if layer_data and update_layer:
         old_data = update_layer.GetLayerData(doc, rawdata=True)
@@ -519,17 +526,18 @@ def add_update_layer( name, doc=None, layer_data={}):
         old_data.update(layer_data)
         layer_data = old_data
 
-    if layer_data: 
+    if layer_data:
         update_layer.SetLayerData(doc, layer_data)
 
     return update_layer
+
 
 def add_object_to_layer(layer_name, obj):
     layer = add_update_layer(layer_name, doc=obj.GetDocument())
     obj[c4d.ID_LAYER_LINK] = layer
     return obj[c4d.ID_LAYER_LINK] == layer
 
-    
+
 def collect_animation_data(fps=False, doc=None):
     """Get the basic animation data
 
@@ -558,13 +566,12 @@ def collect_animation_data(fps=False, doc=None):
     return data
 
 
-
 def imprint(op, data, doc=None, objs=None):
     """Write `data` to `op` as userDefined attributes
 
 
     """
-    #op = get_baseobject_by_name(obj_name, doc=doc, objs=objs)
+    # op = get_baseobject_by_name(obj_name, doc=doc, objs=objs)
     if op:
         op_attrs = ObjectAttrs(op)
         for key, value in data.items():
@@ -601,7 +608,8 @@ def serialize_c4d_data(data, doc=None):
     elif data_type == c4d.InExcludeData:
         data_list = list()
         for idx in range(data.GetObjectCount()):
-            data_list.append(serialize_c4d_data(data.ObjectFromIndex(doc, idx)))
+            data_list.append(
+                serialize_c4d_data(data.ObjectFromIndex(doc, idx)))
         return data_list
     elif data_type in [str, float, int] or data is None:
         return data
@@ -612,27 +620,28 @@ def serialize_c4d_data(data, doc=None):
     else:
         raise TypeError(f"Unsupported Data Type {data_type.__name__}")
 
-def deserialize_c4d_data(data):
 
+def deserialize_c4d_data(data):
     data_type = type(data)
 
     if data_type == list:
         if len(data) == 3 and type(data[0]) == float:
             return c4d.Vector(*data)
-        elif len(data) == 4 and type(data[0]) == list and type(data[0][0]) == float:
+        elif len(data) == 4 and type(data[0]) == list and type(
+                data[0][0]) == float:
             return c4d.Matrix(
                 c4d.Vector(*data[0]),
                 c4d.Vector(*data[1]),
                 c4d.Vector(*data[2]),
                 c4d.Vector(*data[3])
-                )
+            )
         else:
             data_inexclude = c4d.InExcludeData()
             for item in data:
                 op = ObjectPath(item)
                 if op.exists():
                     data_inexclude.InsertObject(op.obj)
-                        
+
             return data_inexclude
     elif data_type == str and data.startswith(":obj:"):
         return ObjectPath(data).obj
@@ -641,7 +650,7 @@ def deserialize_c4d_data(data):
     elif data_type == str and data.startswith(":node:"):
         return ObjectPath(data).obj
     elif data_type == str and data.startswith(":tag:"):
-        return ObjectPath(data).obj   
+        return ObjectPath(data).obj
     else:
         return data
 
@@ -654,6 +663,7 @@ def get_siblings(obj):
         yield start_obj
         start_obj = start_obj.GetNext()
 
+
 def walk_hierarchy(root):
     while root:
         yield ObjectPath(obj=root)
@@ -661,70 +671,73 @@ def walk_hierarchy(root):
             yield obj
         root = root.GetNext()
 
-def visible_in_viewport(obj):
-    if obj[c4d.ID_BASEOBJECT_VISIBILITY_EDITOR] == 1:
+
+def _get_visibility(obj, obj_visibility_key, layer_visibility_key):
+    visibility = obj[obj_visibility_key]
+    if visibility == 1:
         return False
-    if obj[c4d.ID_BASEOBJECT_VISIBILITY_EDITOR] == 2:
+    elif visibility == 2:
         temp_obj = obj.GetUp()
         while temp_obj:
-            if temp_obj[c4d.ID_BASEOBJECT_VISIBILITY_EDITOR] == 1:
+            if temp_obj[obj_visibility_key] == 1:
                 return False
             temp_obj = temp_obj.GetUp()
-    if obj[c4d.ID_LAYER_LINK]:
-        if not obj[c4d.ID_LAYER_LINK].GetLayerData(obj.GetDocument()).get("view"):
+
+    layer = obj[c4d.ID_LAYER_LINK]
+    if layer:
+        layer_data = layer.GetLayerData(obj.GetDocument())
+        if not layer_data.get(layer_visibility_key):
             return False
 
     return True
+
+
+
+def visible_in_viewport(obj):
+    return _get_visibility(
+        obj,
+        obj_visibility_key=c4d.ID_BASEOBJECT_VISIBILITY_EDITOR,
+        layer_visibility_key="view"
+    )
+
 
 def visible_in_render(obj):
-    if obj[c4d.ID_BASEOBJECT_VISIBILITY_RENDER] == 1:
-        return False
-    if obj[c4d.ID_BASEOBJECT_VISIBILITY_RENDER] == 2:
-        temp_obj = obj.GetUp()
-        while temp_obj:
-            if temp_obj[c4d.ID_BASEOBJECT_VISIBILITY_RENDER] == 1:
-                return False
-            temp_obj = temp_obj.GetUp()
-    if obj[c4d.ID_LAYER_LINK]:
-        if not obj[c4d.ID_LAYER_LINK].GetLayerData(obj.GetDocument()).get("render"):
-            return False
-
-    return True
+    return _get_visibility(
+        obj,
+        obj_visibility_key=c4d.ID_BASEOBJECT_VISIBILITY_RENDER,
+        layer_visibility_key="render"
+    )
 
 
-
-
-'''
-Vaguely based on the maya ls, mainly I just wanted a unified way to iterate over
-all the objects in a project file and find what I am looking for without having
-to write bespoke functions every single time. 
-
-I don't know if this level of complexity is worthwhile. I will probably change this
-back into something simpler.
-'''
 def ls(
-    search_list=None,
-    name="",
-    exact_name=False,
-    absolute_path=False,
-    regex_pattern=False,
-    selected=False,
-    include_children=False,
-    as_string=False,
-    visible=False,
-    rendered=False,
-    _type=None,
-    exact_type=None,
-    tags=False,
-    materials=False,
-    objects=True,
-    layers=False,
-    nodes=False,
-    doc=None,
-    attrs = {}
-    ):
+        search_list=None,
+        name="",
+        exact_name=False,
+        absolute_path=False,
+        regex_pattern=False,
+        selected=False,
+        include_children=False,
+        as_string=False,
+        visible=False,
+        rendered=False,
+        _type=None,
+        exact_type=None,
+        tags=False,
+        materials=False,
+        objects=True,
+        layers=False,
+        nodes=False,
+        doc=None,
+        attrs={}
+):
+    """
+    Vaguely based on the maya ls, mainly I just wanted a unified way to
+    iterate over all the objects in a project file and find what I am looking
+    for without having to write bespoke functions every single time.
 
-
+    I don't know if this level of complexity is worthwhile.
+    I will probably change this back into something simpler.
+    """
     if not doc:
         doc = c4d.documents.GetActiveDocument()
 
@@ -737,9 +750,9 @@ def ls(
             if regex_pattern:
                 _name = name
             elif exact_name:
-                _name = ".*/"+name  
+                _name = ".*/" + name
             else:
-                _name = ".*"+name+"(?!.*/).*"
+                _name = ".*" + name + "(?!.*/).*"
 
             match = op_path.re_match(_name)
 
@@ -753,7 +766,7 @@ def ls(
                 return False
             if rendered and not visible_in_render(op_path.obj):
                 return False
-        if exact_type and  type(op_path.obj) != exact_type:
+        if exact_type and type(op_path.obj) != exact_type:
             return False
         if selected and op_path.obj not in doc.GetSelection():
             return False
@@ -761,7 +774,8 @@ def ls(
         if attrs:
             if op_path.exists():
                 for key, value in attrs.items():
-                    if not op_path.attrs.get(key) or op_path.attrs.get(key) != value:
+                    if not op_path.attrs.get(key) or op_path.attrs.get(
+                            key) != value:
                         return False
         return True
 
@@ -780,7 +794,7 @@ def ls(
             search_list += [x for x in walk_hierarchy(doc.GetFirstObject())]
         if materials:
             search_list += [x for x in walk_hierarchy(doc.GetFirstMaterial())]
-    
+
     for op_path in search_list:
 
         if objects or materials:
@@ -800,14 +814,15 @@ def ls(
                             items.append(str(op_path))
                         else:
                             items.append(op_path)
-                if nodes and isinstance(op_path.obj, c4d.modules.graphview.XPressoTag):
-                    for op_path in walk_hierarchy(op_path.obj.GetNodeMaster().GetRoot()):
+                if nodes and isinstance(op_path.obj,
+                                        c4d.modules.graphview.XPressoTag):
+                    for op_path in walk_hierarchy(
+                            op_path.obj.GetNodeMaster().GetRoot()):
                         if _is_valid(op_path):
                             if as_string:
                                 items.append(str(op_path))
                             else:
                                 items.append(op_path)
-
 
     return items
 
@@ -819,10 +834,11 @@ def get_doc_session(doc=None):
     session_obj_paths = ls(name="__session__")
     if len(session_obj_paths) == 0:
         return {}
-    
+
     session_op = session_obj_paths[0]
 
     return dict(**session_op.attrs)
+
 
 def update_global_session_from_doc(doc=None):
     if not doc:
@@ -831,6 +847,7 @@ def update_global_session_from_doc(doc=None):
     for key, value in legacy_io.Session.items():
         if doc_session.get(key):
             legacy_io.Session[key] = doc_session[key]
+
 
 def set_doc_session(doc=None, session=None):
     if not session:
@@ -843,9 +860,11 @@ def set_doc_session(doc=None, session=None):
         null_obj = c4d.BaseObject(c4d.Onull)
         null_obj.SetName("__session__")
         doc.InsertObject(null_obj)
-        add_update_layer('__session__', doc, {"locked":True, "view":False, "render":False, "manager":False})
+        add_update_layer('__session__', doc,
+                         {"locked": True, "view": False, "render": False,
+                          "manager": False})
         add_object_to_layer("__session__", null_obj)
-        c4d.EventAdd()    
+        c4d.EventAdd()
         obj_attrs = ObjectAttrs(null_obj)
     else:
         obj_attrs = session_obj_paths[0].attrs
@@ -857,8 +876,7 @@ def set_doc_session(doc=None, session=None):
 
 class WorkfileSettings(object):
 
-
-    def __init__(self,  doc=None, **kwargs):
+    def __init__(self, doc=None, **kwargs):
         if not doc:
             self.doc = c4d.documents.GetActiveDocument()
         project_doc = kwargs.get("project")
@@ -867,17 +885,16 @@ class WorkfileSettings(object):
             project_doc = get_project(project_name)
 
         self._asset = (
-            kwargs.get("asset_name")
-            or legacy_io.Session["AVALON_ASSET"]
+                kwargs.get("asset_name")
+                or legacy_io.Session["AVALON_ASSET"]
         )
-        self._asset_entity = get_asset(self._asset)
-
+        self._asset_entity = get_asset_by_name(self._asset)
 
         self.data = kwargs
 
     def set_frame_range_handles(self):
         data = self._asset_entity["data"]
-        #log.debug("__ asset data: `{}`".format(data))
+        # log.debug("__ asset data: `{}`".format(data))
 
         missing_cols = []
         check_cols = ["fps", "frameStart", "frameEnd",
@@ -891,7 +908,7 @@ class WorkfileSettings(object):
             missing = ", ".join(missing_cols)
             msg = "'{}' are not set for asset '{}'!".format(
                 missing, self._asset)
-            #log.warning(msg)
+            # log.warning(msg)
             return
 
         # get handles values
@@ -904,7 +921,7 @@ class WorkfileSettings(object):
         frame_end = int(data["frameEnd"]) + handle_end
         bt_frame_start = c4d.BaseTime(frame_start, i_fps)
         bt_frame_end = c4d.BaseTime(frame_end, i_fps)
-        #set document fps
+        # set document fps
         self.doc.SetFps(i_fps)
         # set document frame range
         self.doc.SetMinTime(bt_frame_start)
@@ -912,7 +929,6 @@ class WorkfileSettings(object):
         self.doc.SetLoopMinTime(bt_frame_start)
         self.doc.SetLoopMaxTime(bt_frame_end)
 
-        
         rd = self.doc.GetFirstRenderData()
 
         while rd:
@@ -927,7 +943,7 @@ class WorkfileSettings(object):
 
     def set_colorspace_viewport(self):
         pass
-    
+
     def set_colorspace_redshift(self):
         pass
 
@@ -936,7 +952,7 @@ class WorkfileSettings(object):
 
     def set_resolution(self):
         data = self._asset_entity["data"]
-        #log.debug("__ asset data: `{}`".format(data))
+        # log.debug("__ asset data: `{}`".format(data))
 
         missing_cols = []
         check_cols = ["resolutionWidth", "resolutionHeight"]
@@ -949,7 +965,7 @@ class WorkfileSettings(object):
             missing = ", ".join(missing_cols)
             msg = "'{}' are not set for asset '{}'!".format(
                 missing, self._asset)
-            #log.warning(msg)
+            # log.warning(msg)
             return
         rd = self.doc.GetFirstRenderData()
 
@@ -958,5 +974,6 @@ class WorkfileSettings(object):
             rd[c4d.RDATA_YRES] = int(data["resolutionHeight"])
             rd = rd.GetNext()
         c4d.EventAdd()
+
     def set_all_colorspace(self):
         pass

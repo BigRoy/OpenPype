@@ -1,9 +1,7 @@
 import os
 import sys
 
-# C4D doesn't ship with python3.dll which PySide is
-# built against. 
-# 
+# C4D doesn't ship with python3.dll which PySide is built against.
 # Python3.8+ uses os.add_dll_directory to load dlls
 # Previous version just add to the path
 if "win" in sys.platform:
@@ -24,10 +22,11 @@ from openpype.resources import get_resource
 from openpype.pipeline import install_host
 from openpype.hosts.cinema4d.api import Cinema4DHost
 from openpype.hosts.cinema4d.api.lib import get_main_window
-from openpype.hosts.cinema4d.api import OnDocumentChanged
+from openpype.hosts.cinema4d.api.callbacks import on_document_changed
 from openpype.hosts.cinema4d.api.commands import (
     reset_frame_range,
-    reset_resolution
+    reset_resolution,
+    reset_colorspace
 )
 from openpype.api import BuildWorkfile
 from openpype.pipeline import legacy_io
@@ -117,7 +116,7 @@ class ResetSceneResolution(c4d.plugins.CommandData):
 
 class ResetColorspace(c4d.plugins.CommandData):
     def Execute(self, doc):
-        reset_resolution()
+        reset_colorspace()
         return True
 
 
@@ -135,19 +134,26 @@ class DocumentChanged(c4d.plugins.MessageData):
         doc = c4d.documents.GetActiveDocument()
         if not doc:
             return True
+
+        changed = False
         try:
             if doc != self.last_doc:
                 self.last_doc = doc
-                OnDocumentChanged()
+                changed = True
         except ReferenceError:
             self.last_doc = doc
-            OnDocumentChanged()
+            changed = True
+
+        if changed:
+            on_document_changed()
+
         return True
 
 
-def EnhanceMainMenu():
-    mainMenu = c4d.gui.GetMenuResource("M_EDITOR")
-    pluginsMenu = c4d.gui.SearchPluginMenuResource()
+def install_menu():
+    """Register the OpenPype menu with Cinema4D"""
+    main_menu = c4d.gui.GetMenuResource("M_EDITOR")
+    plugins_menu = c4d.gui.SearchPluginMenuResource()
 
     menu = c4d.BaseContainer()
 
@@ -165,16 +171,16 @@ def EnhanceMainMenu():
     menu.InsData(c4d.MENURESOURCE_COMMAND, "PLUGIN_CMD_1059874")
     menu.InsData(c4d.MENURESOURCE_COMMAND, "PLUGIN_CMD_1059872")
 
-    if pluginsMenu:
-        mainMenu.InsDataAfter(c4d.MENURESOURCE_STRING, menu, pluginsMenu)
+    if plugins_menu:
+        main_menu.InsDataAfter(c4d.MENURESOURCE_STRING, menu, plugins_menu)
     else:
-        mainMenu.InsData(c4d.MENURESOURCE_STRING, menu)
+        main_menu.InsData(c4d.MENURESOURCE_STRING, menu)
 
 
 def PluginMessage(id, data):
     """Entry point to add menu items to Cinema4D"""
     if id == c4d.C4DPL_BUILDMENU:
-        EnhanceMainMenu()
+        install_menu()
 
 
 def get_icon_by_name(name):

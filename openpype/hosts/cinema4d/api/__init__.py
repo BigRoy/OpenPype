@@ -13,7 +13,7 @@ from .workio import (
 )
 
 from .callbacks import (
-    OnDocumentChanged
+    on_document_changed
 )
 
 from .exporters import (
@@ -26,9 +26,6 @@ __all__ = [
     "save_file",
     "current_file",
     "has_unsaved_changes",
-    "OnDocumentChanged"
+    "on_document_changed"
     "export_abc"
 ]
-
-
-

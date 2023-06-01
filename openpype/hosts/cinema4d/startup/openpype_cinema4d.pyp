@@ -198,7 +198,7 @@ if __name__ == '__main__':
     host = Cinema4DHost()
     install_host(host)
 
-    from Qt import QtWidgets
+    from qtpy import QtWidgets
 
     app = QtWidgets.QApplication.instance()
     if not app:

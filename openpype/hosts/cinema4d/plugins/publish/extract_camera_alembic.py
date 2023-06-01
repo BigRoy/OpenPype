@@ -1,10 +1,11 @@
 import os
 import c4d
-import openpype.api
+
+import openpype.plugin
 from openpype.hosts.cinema4d.api import lib, export_abc
 
 
-class ExtractCameraAlembic(openpype.api.Extractor):
+class ExtractCameraAlembic(openpype.plugin.Extractor):
     """Extract a Camera as Alembic.
 
     The cameras gets baked to world space by default. Only when the instance's

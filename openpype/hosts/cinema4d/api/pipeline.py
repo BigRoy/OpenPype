@@ -31,7 +31,6 @@ from .workio import (
 
 from . import lib
 
-
 log = logging.getLogger("openpype.hosts.cinema4d")
 
 HOST_DIR = os.path.dirname(os.path.abspath(openpype.hosts.cinema4d.__file__))
@@ -50,12 +49,11 @@ class Cinema4DHost(HostBase, IWorkfileHost, ILoadHost):
     def __init__(self):
         super(Cinema4DHost, self).__init__()
 
-
     def install(self):
         project_settings = get_project_settings(os.getenv("AVALON_PROJECT"))
         # process path mapping
-        #dirmap_processor = MayaDirmap("maya", project_settings)
-        #dirmap_processor.process_dirmap()
+        # dirmap_processor = MayaDirmap("maya", project_settings)
+        # dirmap_processor.process_dirmap()
 
         pyblish.api.register_plugin_path(PUBLISH_PATH)
         pyblish.api.register_host("commandline")
@@ -67,7 +65,6 @@ class Cinema4DHost(HostBase, IWorkfileHost, ILoadHost):
         register_inventory_action_path(INVENTORY_PATH)
         self.log.info(PUBLISH_PATH)
 
-       
     def open_workfile(self, filepath):
         return open_file(filepath)
 
@@ -91,6 +88,7 @@ class Cinema4DHost(HostBase, IWorkfileHost, ILoadHost):
         with lib.maintained_selection():
             yield
 
+
 def parse_container(container):
     """Return the container node's full container data.
 
@@ -111,12 +109,13 @@ def parse_container(container):
 
     return data
 
+
 def ls(doc=None):
     ids = {AVALON_CONTAINER_ID}
     if not doc:
         doc = c4d.documents.GetActiveDocument()
     for obj in lib.walk_hierarchy(doc.GetFirstObject()):
-        #print(obj.get("id"))
+        # print(obj.get("id"))
         if obj.get("id") in ids:
             yield obj
 
@@ -170,7 +169,8 @@ def containerise(name,
 
     main_container = None
     for obj_path in lib.walk_hierarchy(doc.GetFirstObject()):
-        if obj_path.re_match("*AVALON_CONTAINERS") and obj_path.obj.GetType() == c4d.Oselection:
+        if obj_path.re_match(
+                "*AVALON_CONTAINERS") and obj_path.obj.GetType() == c4d.Oselection:
             main_container = obj_path.obj
             break
 
@@ -178,13 +178,15 @@ def containerise(name,
         main_container = c4d.BaseObject(c4d.Oselection)
         doc.InsertObject(main_container)
         main_container.SetName("AVALON_CONTAINERS")
-        layer = lib.add_update_layer("__containers__", doc=doc, data={"manager":False})
+        layer = lib.add_update_layer("__containers__", doc=doc,
+                                     data={"manager": False})
         lib.add_object_to_layer("__containers__", main_container)
 
     main_container[c4d.SELECTIONOBJECT_LIST].InsertObject(container)
     lib.add_object_to_layer("__containers__", container)
     c4d.EventAdd()
     return container
+
 
 def uninstall():
     pyblish.api.deregister_plugin_path(PUBLISH_PATH)
@@ -196,4 +198,4 @@ def uninstall():
     deregister_creator_plugin_path(CREATE_PATH)
     deregister_inventory_action_path(INVENTORY_PATH)
 
-    #menu.uninstall()
+    # menu.uninstall()

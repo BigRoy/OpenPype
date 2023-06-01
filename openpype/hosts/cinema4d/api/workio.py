@@ -22,8 +22,8 @@ def save_file(filepath=None, doc=None):
     if filepath:
         doc.SetDocumentPath(os.path.dirname(filepath))
         doc.SetDocumentName(os.path.basename(filepath))
-    
-    c4d.CallCommand(12098) #save
+
+    c4d.CallCommand(12098)  # save
     set_doc_session()
 
 

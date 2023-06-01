@@ -20,14 +20,16 @@ if "win" in sys.platform:
 
 import c4d
 
-
+from openpype.resources import get_resource
 from openpype.pipeline import install_host
 from openpype.hosts.cinema4d.api import Cinema4DHost
 from openpype.hosts.cinema4d.api.lib import get_main_window
-from openpype.hosts.cinema4d.api import lib, OnDocumentChanged
-from openpype.hosts.cinema4d.api.commands import reset_frame_range, reset_colorspace, reset_resolution
+from openpype.hosts.cinema4d.api import OnDocumentChanged
+from openpype.hosts.cinema4d.api.commands import (
+    reset_frame_range,
+    reset_resolution
+)
 from openpype.api import BuildWorkfile
-from openpype.settings import get_current_project_settings
 from openpype.pipeline import legacy_io
 from openpype.tools.utils import host_tools
 
@@ -45,6 +47,7 @@ reset_colorspace_id = 1059874
 experimental_tools_id = 1059872
 document_changed_id = 1060025
 
+
 class Loader(c4d.plugins.CommandData):
     def Execute(self, doc):
         host_tools.show_loader(
@@ -53,12 +56,14 @@ class Loader(c4d.plugins.CommandData):
         )
         return True
 
+
 class Creator(c4d.plugins.CommandData):
     def Execute(self, doc):
         host_tools.show_creator(
             parent=get_main_window()
         )
         return True
+
 
 class Publish(c4d.plugins.CommandData):
     def Execute(self, doc):
@@ -67,12 +72,14 @@ class Publish(c4d.plugins.CommandData):
         )
         return True
 
+
 class SceneInventory(c4d.plugins.CommandData):
     def Execute(self, doc):
         host_tools.show_scene_inventory(
             parent=get_main_window()
         )
         return True
+
 
 class Library(c4d.plugins.CommandData):
     def Execute(self, doc):
@@ -81,6 +88,7 @@ class Library(c4d.plugins.CommandData):
         )
         return True
 
+
 class Workfiles(c4d.plugins.CommandData):
     def Execute(self, doc):
         host_tools.show_workfiles(
@@ -88,25 +96,30 @@ class Workfiles(c4d.plugins.CommandData):
         )
         return True
 
+
 class BuildWorkFile(c4d.plugins.CommandData):
     def Execute(self, doc):
         BuildWorkfile().process()
         return True
+
 
 class ResetFrameRange(c4d.plugins.CommandData):
     def Execute(self, doc):
         reset_frame_range()
         return True
 
+
 class ResetSceneResolution(c4d.plugins.CommandData):
     def Execute(self, doc):
         reset_resolution()
         return True
 
+
 class ResetColorspace(c4d.plugins.CommandData):
     def Execute(self, doc):
         reset_resolution()
         return True
+
 
 class ExperimentalTools(c4d.plugins.CommandData):
     def Execute(self, doc):
@@ -114,6 +127,7 @@ class ExperimentalTools(c4d.plugins.CommandData):
             get_main_window()
         )
         return True
+
 
 class DocumentChanged(c4d.plugins.MessageData):
     last_doc = None
@@ -129,6 +143,7 @@ class DocumentChanged(c4d.plugins.MessageData):
             self.last_doc = doc
             OnDocumentChanged()
         return True
+
 
 def EnhanceMainMenu():
     mainMenu = c4d.gui.GetMenuResource("M_EDITOR")
@@ -155,15 +170,22 @@ def EnhanceMainMenu():
     else:
         mainMenu.InsData(c4d.MENURESOURCE_STRING, menu)
 
+
 def PluginMessage(id, data):
-    if id==c4d.C4DPL_BUILDMENU:
+    """Entry point to add menu items to Cinema4D"""
+    if id == c4d.C4DPL_BUILDMENU:
         EnhanceMainMenu()
 
 
 def get_icon_by_name(name):
+    """Return OpenPype icon"""
     if name == "pyblish":
-        return os.path.join(os.environ["OPENPYPE_ROOT"], "openpype", "tools", "pyblish_pype", "img", "logo-extrasmall.png") 
-    return os.path.join(os.environ["OPENPYPE_ROOT"], "openpype", "resources", "icons", name + ".png")
+        return os.path.join(
+            os.environ["OPENPYPE_ROOT"], "openpype", "tools", "pyblish_pype",
+            "img", "logo-extrasmall.png"
+        )
+    return get_resource("icons", "{}.png".format(name))
+
 
 if __name__ == '__main__':
 
@@ -176,66 +198,80 @@ if __name__ == '__main__':
     if not app:
         app = QtWidgets.QApplication([])
 
-
     loader_bmp = c4d.bitmaps.BaseBitmap()
     loader_bmp.InitWith(get_icon_by_name("loader"))
 
     c4d.plugins.RegisterCommandPlugin(
-            loader_id, "Loader", c4d.PLUGINFLAG_HIDEPLUGINMENU, loader_bmp, "", Loader()
-              )
+        loader_id, "Loader", c4d.PLUGINFLAG_HIDEPLUGINMENU, loader_bmp, "",
+        Loader()
+    )
 
-    creator_bmp = c4d.bitmaps.InitResourceBitmap(1018791) # split poly cube thing
+    creator_bmp = c4d.bitmaps.InitResourceBitmap(
+        1018791)  # split poly cube thing
     c4d.plugins.RegisterCommandPlugin(
-            creator_id, "Creator", c4d.PLUGINFLAG_HIDEPLUGINMENU, creator_bmp, "", Creator()
-            )
+        creator_id, "Creator", c4d.PLUGINFLAG_HIDEPLUGINMENU, creator_bmp, "",
+        Creator()
+    )
 
     pyblish_bmp = c4d.bitmaps.BaseBitmap()
     pyblish_bmp.InitWith(get_icon_by_name("pyblish"))
     c4d.plugins.RegisterCommandPlugin(
-        publish_id, "Publish", c4d.PLUGINFLAG_HIDEPLUGINMENU, pyblish_bmp, "", Publish()
-        )
+        publish_id, "Publish", c4d.PLUGINFLAG_HIDEPLUGINMENU, pyblish_bmp, "",
+        Publish()
+    )
 
     inventory_bmp = c4d.bitmaps.BaseBitmap()
     inventory_bmp.InitWith(get_icon_by_name("inventory"))
     c4d.plugins.RegisterCommandPlugin(
-        scene_inventory_id, "Inventory", c4d.PLUGINFLAG_HIDEPLUGINMENU, inventory_bmp, "", SceneInventory()
-        )
+        scene_inventory_id, "Inventory", c4d.PLUGINFLAG_HIDEPLUGINMENU,
+        inventory_bmp, "", SceneInventory()
+    )
 
     library_bmp = c4d.bitmaps.BaseBitmap()
     library_bmp.InitWith(get_icon_by_name("folder-favorite"))
     c4d.plugins.RegisterCommandPlugin(
-        library_id,"Library", c4d.PLUGINFLAG_HIDEPLUGINMENU, library_bmp, "", Library()
-        )
+        library_id, "Library", c4d.PLUGINFLAG_HIDEPLUGINMENU, library_bmp, "",
+        Library()
+    )
 
     workfiles_bmp = c4d.bitmaps.BaseBitmap()
     workfiles_bmp.InitWith(get_icon_by_name("workfiles"))
     c4d.plugins.RegisterCommandPlugin(
-        workfiles_id, "Workfiles", c4d.PLUGINFLAG_HIDEPLUGINMENU, workfiles_bmp, "", Workfiles()
-        )
+        workfiles_id, "Workfiles", c4d.PLUGINFLAG_HIDEPLUGINMENU,
+        workfiles_bmp, "", Workfiles()
+    )
 
-    build_bmp = c4d.bitmaps.InitResourceBitmap(1024542) # wrench
+    build_bmp = c4d.bitmaps.InitResourceBitmap(1024542)  # wrench
     c4d.plugins.RegisterCommandPlugin(
-        build_workfile_id, "Build Workfile", c4d.PLUGINFLAG_HIDEPLUGINMENU, build_bmp, "", BuildWorkFile()
-        )
+        build_workfile_id, "Build Workfile", c4d.PLUGINFLAG_HIDEPLUGINMENU,
+        build_bmp, "", BuildWorkFile()
+    )
 
-    frame_range_bmp = c4d.bitmaps.InitResourceBitmap(1038339) # filmstrip
+    frame_range_bmp = c4d.bitmaps.InitResourceBitmap(1038339)  # filmstrip
     c4d.plugins.RegisterCommandPlugin(
-        reset_frame_range_id, "Reset Frame Range", c4d.PLUGINFLAG_HIDEPLUGINMENU, frame_range_bmp, "", ResetFrameRange()
-        )
+        reset_frame_range_id, "Reset Frame Range",
+        c4d.PLUGINFLAG_HIDEPLUGINMENU, frame_range_bmp, "", ResetFrameRange()
+    )
 
-    res_bmp = c4d.bitmaps.InitResourceBitmap(1040962) # expandy icon
+    res_bmp = c4d.bitmaps.InitResourceBitmap(1040962)  # expandy icon
     c4d.plugins.RegisterCommandPlugin(
-        reset_scene_resolution_id, "Reset Scene Resolution", c4d.PLUGINFLAG_HIDEPLUGINMENU, res_bmp, "", ResetSceneResolution()
-        )
+        reset_scene_resolution_id, "Reset Scene Resolution",
+        c4d.PLUGINFLAG_HIDEPLUGINMENU, res_bmp, "", ResetSceneResolution()
+    )
 
-    color_bmp = c4d.bitmaps.InitResourceBitmap(440000312) # color
+    color_bmp = c4d.bitmaps.InitResourceBitmap(440000312)  # color
     c4d.plugins.RegisterCommandPlugin(
-        reset_colorspace_id, "Reset Colorspace", c4d.PLUGINFLAG_HIDEPLUGINMENU, color_bmp, "", ResetColorspace()
-        )
+        reset_colorspace_id, "Reset Colorspace", c4d.PLUGINFLAG_HIDEPLUGINMENU,
+        color_bmp, "", ResetColorspace()
+    )
 
-    experiment_bmp = c4d.bitmaps.InitResourceBitmap(18186) # ghost
+    experiment_bmp = c4d.bitmaps.InitResourceBitmap(18186)  # ghost
     c4d.plugins.RegisterCommandPlugin(
-        experimental_tools_id, "Experimental Tools", c4d.PLUGINFLAG_HIDEPLUGINMENU, experiment_bmp, "", ExperimentalTools()
-        )
+        experimental_tools_id, "Experimental Tools",
+        c4d.PLUGINFLAG_HIDEPLUGINMENU, experiment_bmp, "", ExperimentalTools()
+    )
 
-    c4d.plugins.RegisterMessagePlugin(id=document_changed_id, str="", info=0, dat=DocumentChanged())
+    c4d.plugins.RegisterMessagePlugin(id=document_changed_id,
+                                      str="",
+                                      info=0,
+                                      dat=DocumentChanged())

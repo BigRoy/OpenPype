@@ -1,23 +1,21 @@
 import pyblish.api
-import c4d
+
 from openpype.hosts.cinema4d import api
+from openpype.pipeline import registered_host
+
 
 class SaveCurrentScene(pyblish.api.ContextPlugin):
-    """Save current scene
-
-    """
+    """Save current scene"""
 
     label = "Save current file"
     order = pyblish.api.ExtractorOrder - 0.49
     hosts = ["cinema4d"]
-    #families = []
 
     def process(self, context):
 
-        doc = c4d.documents.GetActiveDocument()
+        host = registered_host()
 
-        
-        assert context.data['currentFile'] == api.current_file()
+        assert context.data['currentFile'] == host.current_file()
 
         # If file has no modifications, skip forcing a file save
         if not api.has_unsaved_changes():
@@ -26,4 +24,4 @@ class SaveCurrentScene(pyblish.api.ContextPlugin):
             return
 
         self.log.info("Saving current file..")
-        api.save_file(doc=doc)
+        host.save_file()

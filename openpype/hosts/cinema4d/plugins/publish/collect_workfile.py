@@ -5,6 +5,7 @@ import pyblish.api
 from openpype.pipeline import legacy_io
 from openpype.hosts.cinema4d.api import current_file
 
+
 class CollectWorkfile(pyblish.api.ContextPlugin):
     """Inject the current working file into context"""
 

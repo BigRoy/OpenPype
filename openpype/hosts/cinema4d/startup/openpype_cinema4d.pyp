@@ -28,7 +28,7 @@ from openpype.hosts.cinema4d.api.commands import (
     reset_resolution,
     reset_colorspace
 )
-from openpype.api import BuildWorkfile
+from openpype.pipeline.workfile import BuildWorkfile
 from openpype.pipeline import legacy_io
 from openpype.tools.utils import host_tools
 
@@ -96,7 +96,7 @@ class Workfiles(c4d.plugins.CommandData):
         return True
 
 
-class BuildWorkFile(c4d.plugins.CommandData):
+class BuildWorkFileCommand(c4d.plugins.CommandData):
     def Execute(self, doc):
         BuildWorkfile().process()
         return True
@@ -250,7 +250,7 @@ if __name__ == '__main__':
     build_bmp = c4d.bitmaps.InitResourceBitmap(1024542)  # wrench
     c4d.plugins.RegisterCommandPlugin(
         build_workfile_id, "Build Workfile", c4d.PLUGINFLAG_HIDEPLUGINMENU,
-        build_bmp, "", BuildWorkFile()
+        build_bmp, "", BuildWorkFileCommand()
     )
 
     frame_range_bmp = c4d.bitmaps.InitResourceBitmap(1038339)  # filmstrip

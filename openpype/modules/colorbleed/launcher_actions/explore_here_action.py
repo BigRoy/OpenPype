@@ -52,7 +52,7 @@ class ExploreToCurrent(LauncherAction):
         #)
         workdir = result["work"]["folder"]
 
-        # Keep only the part of the path that was formatted y splitting up to
+        # Keep only the part of the path that was formatted by splitting up to
         # the first stub - we can only explore up to there
         valid_dir = workdir.split(STUB, 1)[0]
 
@@ -60,6 +60,15 @@ class ExploreToCurrent(LauncherAction):
         # after splitting then we get the dirname.
         if not valid_dir.replace("\\", "/").endswith("/"):
             valid_dir = os.path.dirname(valid_dir)
+
+        # If the path endswith `/work` and the path does not exist but the
+        # parent does then we allow to go to the parent because it could for
+        # example be the hierarchical folder for `asset` in e.g. `asset/hero`
+        if not os.path.exists(valid_dir) and valid_dir.endswith("/work/"):
+            # /folder/ dirname is /folder so we rstrip the last / to be sure
+            parent_dir = os.path.dirname(valid_dir.rstrip("/"))
+            if os.path.exists(parent_dir):
+                valid_dir = parent_dir
 
         path = os.path.normpath(valid_dir)
 

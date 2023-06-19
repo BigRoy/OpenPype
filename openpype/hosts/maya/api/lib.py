@@ -3482,6 +3482,11 @@ def iter_visible_nodes_in_range(nodes, start, end):
             break
 
 
+def get_attribute_input(attr):
+    connections = cmds.listConnections(attr, plugs=True, destination=False)
+    return connections[0] if connections else None
+
+
 @attr.s
 class AttrDiff:
     attribute = attr.ib(type=str)

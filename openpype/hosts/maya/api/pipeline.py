@@ -558,7 +558,8 @@ def on_save():
     # update_task_from_path(cmds.file(query=True, sceneName=True))
 
     # Generate ids of the current context on nodes in the scene
-    nodes = lib.get_id_required_nodes(referenced_nodes=False)
+    nodes = lib.get_id_required_nodes(referenced_nodes=False,
+                                      existing_ids=False)
     for node, new_id in lib.generate_ids(nodes):
         lib.set_id(node, new_id, overwrite=False)
 

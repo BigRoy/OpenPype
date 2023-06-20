@@ -1240,24 +1240,25 @@ def extract_alembic(file,
 
 
 # region ID
-def get_id_required_nodes(referenced_nodes=False, nodes=None):
-    """Filter out any node which are locked (reference) or readOnly
+def get_id_required_nodes(referenced_nodes=False,
+                          nodes=None,
+                          existing_ids=True):
+    """Return nodes that should receive a `cbId` attribute.
+
+    This includes only mesh and curve nodes, parent transforms of the shape
+    nodes, file texture nodes and object sets (including shading engines).
+
+    This filters out any node which is locked, referenced, read-only,
+    intermediate object.
 
     Args:
-        referenced_nodes (bool): set True to filter out reference nodes
+        referenced_nodes (bool): set True to include referenced nodes
         nodes (list, Optional): nodes to consider
+        existing_ids (bool): set True to include nodes with `cbId` attribute
+
     Returns:
         nodes (set): list of filtered nodes
     """
-
-    lookup = None
-    if nodes is None:
-        # Consider all nodes
-        nodes = cmds.ls()
-    else:
-        # Build a lookup for the only allowed nodes in output based
-        # on `nodes` input of the function (+ ensure long names)
-        lookup = set(cmds.ls(nodes, long=True))
 
     def _node_type_exists(node_type):
         try:
@@ -1266,24 +1267,58 @@ def get_id_required_nodes(referenced_nodes=False, nodes=None):
         except RuntimeError:
             return False
 
+    def iterate(maya_iterator):
+        while not maya_iterator.isDone():
+            yield maya_iterator.thisNode()
+            maya_iterator.next()
+
     # `readOnly` flag is obsolete as of Maya 2016 therefore we explicitly
     # remove default nodes and reference nodes
-    camera_shapes = ["frontShape", "sideShape", "topShape", "perspShape"]
+    default_camera_shapes = {
+        "frontShape", "sideShape", "topShape", "perspShape"
+    }
 
-    ignore = set()
-    if not referenced_nodes:
-        ignore |= set(cmds.ls(long=True, referencedNodes=True))
+    fn_dag = om.MFnDagNode()
+    fn_dep = om.MFnDependencyNode()
+    iterator_type = om.MIteratorType()
+    iterator_type.filterList = [
+        om.MFn.kDagNode,  # dag nodes like transforms, shapes, etc
+        om.MFn.kSet,  # object sets, shading engines, etc.
+        om.MFn.kFileTexture
+    ]
+    it = om.MItDependencyNodes(iterator_type)
 
-    # list all defaultNodes to filter out from the rest
-    ignore |= set(cmds.ls(long=True, defaultNodes=True))
-    ignore |= set(cmds.ls(camera_shapes, long=True))
+    result = []
+    for obj in iterate(it):
+        fn_dep.setObject(obj)
+        if not existing_ids and fn_dep.hasAttribute("cbId"):
+            continue
 
-    # Remove Turtle from the result of `cmds.ls` if Turtle is loaded
-    # TODO: This should be a less specific check for a single plug-in.
-    if _node_type_exists("ilrBakeLayer"):
-        ignore |= set(cmds.ls(type="ilrBakeLayer", long=True))
+        if not referenced_nodes and fn_dep.isFromReferencedFile:
+            continue
 
-    # Establish set of nodes types to include
+        if fn_dep.isDefaultNode:
+            continue
+
+        if fn_dep.isLocked:
+            continue
+
+        # Skip intermediate objects
+        if obj.hasFn(om.MFn.kDagNode):
+            fn_dag.setObject(obj)
+            if fn_dag.isIntermediateObject:
+                continue
+
+        if obj.hasFn(om.MFn.kCamera) and \
+                fn_dep.name() in default_camera_shapes:
+            continue
+
+        path = fn_dep.uniqueName()
+        result.append(path)
+
+    if not result:
+        return result
+
     types = ["objectSet", "file", "mesh", "nurbsCurve", "nurbsSurface"]
 
     # Check if plugin nodes are available for Maya by checking if the plugin
@@ -1291,38 +1326,42 @@ def get_id_required_nodes(referenced_nodes=False, nodes=None):
     if cmds.pluginInfo("pgYetiMaya", query=True, loaded=True):
         types.append("pgYetiMaya")
 
-    # We *always* ignore intermediate shapes, so we filter them out directly
-    nodes = cmds.ls(nodes, type=types, long=True, noIntermediate=True)
+    # Filter to the types
+    result = cmds.ls(result, long=True, type=types)
 
-    # The items which need to pass the id to their parent
-    # Add the collected transform to the nodes
-    dag = cmds.ls(nodes, type="dagNode", long=True)  # query only dag nodes
-    transforms = cmds.listRelatives(dag,
-                                    parent=True,
-                                    fullPath=True) or []
+    # The filtered types do not include transforms because we only want the
+    # parent transforms that have a child shape that we filtered to, so we
+    # include the parents here
+    parents = cmds.listRelatives(result,
+                                 parent=True,
+                                 fullPath=True,
+                                 noIntermediate=True)
+    if parents:
+        result.extend(parents)
 
-    nodes = set(nodes)
-    nodes |= set(transforms)
+    # Exclude some additional types
+    exclude_types = []
+    if _node_type_exists("ilrBakeLayer"):
+        exclude_types.append("ilrBakeLayer")
 
-    nodes -= ignore  # Remove the ignored nodes
-    if not nodes:
-        return nodes
+    if exclude_types:
+        exclude_nodes = set(cmds.ls(nodes, long=True, types=exclude_types))
+        if exclude_nodes:
+            result = [node for node in nodes if node not in exclude_nodes]
 
-    # Ensure only nodes from the input `nodes` are returned when a
-    # filter was applied on function call because we also iterated
-    # to parents and alike
-    if lookup is not None:
-        nodes &= lookup
+    # Filter to explicit input nodes if provided
+    if nodes:
+        # The amount of input nodes to filter to can be large and querying
+        # many nodes can be slow in Maya. As such we want to try and reduce
+        # it as much as possible, so we include the type filter to try and
+        # reduce the result of `maya.cmds.ls` here.
+        nodes = set(cmds.ls(nodes, long=True, type=types + ["dagNode"]))
+        if nodes:
+            nodes = [node for node in result if node in nodes]
+        else:
+            return []
 
-    # Avoid locked nodes
-    nodes_list = list(nodes)
-    locked = cmds.lockNode(nodes_list, query=True, lock=True)
-    for node, lock in zip(nodes_list, locked):
-        if lock:
-            log.warning("Skipping locked node: %s" % node)
-            nodes.remove(node)
-
-    return nodes
+    return result
 
 
 def get_id(node):

@@ -1278,13 +1278,27 @@ def get_id_required_nodes(referenced_nodes=False,
         "frontShape", "sideShape", "topShape", "perspShape"
     }
 
+    # The filtered types do not include transforms because we only want the
+    # parent transforms that have a child shape that we filtered to, so we
+    # include the parents here
+    types = ["mesh", "nurbsCurve", "nurbsSurface", "file", "objectSet"]
+
+    # Check if plugin nodes are available for Maya by checking if the plugin
+    # is loaded
+    if cmds.pluginInfo("pgYetiMaya", query=True, loaded=True):
+        types.append("pgYetiMaya")
+
     fn_dag = om.MFnDagNode()
     fn_dep = om.MFnDependencyNode()
     iterator_type = om.MIteratorType()
+    # This tries to be closest matching API equivalents of `types` variable
     iterator_type.filterList = [
-        om.MFn.kDagNode,  # dag nodes like transforms, shapes, etc
-        om.MFn.kSet,  # object sets, shading engines, etc.
-        om.MFn.kFileTexture
+        om.MFn.kMesh,  # mesh
+        om.MFn.kNurbsSurface,  # nurbsSurface
+        om.MFn.kNurbsCurve,  # nurbsCurve
+        om.MFn.kFileTexture,  # file
+        om.MFn.kSet,  # objectSet
+        om.MFn.kPluginShape  # pgYetiMaya
     ]
     it = om.MItDependencyNodes(iterator_type)
 
@@ -1319,19 +1333,10 @@ def get_id_required_nodes(referenced_nodes=False,
     if not result:
         return result
 
-    types = ["objectSet", "file", "mesh", "nurbsCurve", "nurbsSurface"]
-
-    # Check if plugin nodes are available for Maya by checking if the plugin
-    # is loaded
-    if cmds.pluginInfo("pgYetiMaya", query=True, loaded=True):
-        types.append("pgYetiMaya")
-
     # Filter to the types
     result = cmds.ls(result, long=True, type=types)
 
-    # The filtered types do not include transforms because we only want the
-    # parent transforms that have a child shape that we filtered to, so we
-    # include the parents here
+    # Include any parents
     parents = cmds.listRelatives(result,
                                  parent=True,
                                  fullPath=True,

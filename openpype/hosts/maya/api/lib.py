@@ -1390,7 +1390,7 @@ def get_id_required_nodes(referenced_nodes=False,
         # reduce the result of `maya.cmds.ls` here.
         nodes = set(cmds.ls(nodes, long=True, type=types + ["dagNode"]))
         if nodes:
-            nodes = [node for node in result if node in nodes]
+            result = [node for node in result if node in nodes]
         else:
             return []
 

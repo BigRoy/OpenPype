@@ -300,6 +300,9 @@ def _remove_workfile_lock():
 
 
 def handle_workfile_locks():
+    # Colorbleed edit: Optimization (just never handle file locks)
+    return False
+
     if lib.IS_HEADLESS:
         return False
     project_name = legacy_io.active_project()

@@ -1288,8 +1288,6 @@ def get_id_required_nodes(referenced_nodes=False,
     if cmds.pluginInfo("pgYetiMaya", query=True, loaded=True):
         types.append("pgYetiMaya")
 
-    fn_dag = om.MFnDagNode()
-    fn_dep = om.MFnDependencyNode()
     iterator_type = om.MIteratorType()
     # This tries to be closest matching API equivalents of `types` variable
     iterator_type.filterList = [
@@ -1302,51 +1300,81 @@ def get_id_required_nodes(referenced_nodes=False,
     ]
     it = om.MItDependencyNodes(iterator_type)
 
+    fn_dep = om.MFnDependencyNode()
+    fn_dag = om.MFnDagNode()
     result = []
-    for obj in iterate(it):
+
+    def _should_include_parents(obj):
+        """Whether to include parents of obj in output"""
+        if not obj.hasFn(om.MFn.kShape):
+            return False
+
+        fn_dag.setObject(obj)
+        if fn_dag.isIntermediateObject:
+            return False
+
+        # Skip default cameras
+        if (
+            obj.hasFn(om.MFn.kCamera) and
+            fn_dag.name() in default_camera_shapes
+        ):
+            return False
+
+        return True
+
+    def _add_to_result_if_valid(obj):
+        """Add to `result` if the object should be included"""
         fn_dep.setObject(obj)
         if not existing_ids and fn_dep.hasAttribute("cbId"):
-            continue
+            return
 
         if not referenced_nodes and fn_dep.isFromReferencedFile:
-            continue
+            return
 
         if fn_dep.isDefaultNode:
-            continue
+            return
 
         if fn_dep.isLocked:
-            continue
+            return
+
+        # Skip default cameras
+        if (
+            obj.hasFn(om.MFn.kCamera) and
+            fn_dep.name() in default_camera_shapes
+        ):
+            return
 
         # Skip intermediate objects
         if obj.hasFn(om.MFn.kDagNode):
             fn_dag.setObject(obj)
             if fn_dag.isIntermediateObject:
-                continue
+                return
 
-        if obj.hasFn(om.MFn.kCamera) and \
-                fn_dep.name() in default_camera_shapes:
-            continue
-
-        path = fn_dep.uniqueName()
+            path = fn_dag.fullPathName()
+        else:
+            path = fn_dep.name()
         result.append(path)
+
+    for obj in iterate(it):
+        # For any non-intermediate shape node always include the parent
+        # even if we exclude the shape itself (e.g. when locked, default)
+        if _should_include_parents(obj):
+            fn_dag.setObject(obj)
+            parents = [
+                fn_dag.parent(index) for index in range(fn_dag.parentCount())
+            ]
+            for parent_obj in parents:
+                _add_to_result_if_valid(parent_obj)
+
+        _add_to_result_if_valid(obj)
 
     if not result:
         return result
 
-    # Filter to the types
-    result = cmds.ls(result, long=True, type=types)
-
-    # Include any parents
-    parents = cmds.listRelatives(result,
-                                 parent=True,
-                                 fullPath=True,
-                                 noIntermediate=True)
-    if parents:
-        result.extend(parents)
-
     # Exclude some additional types
     exclude_types = []
     if _node_type_exists("ilrBakeLayer"):
+        # Remove Turtle from the result if Turtle is loaded
         exclude_types.append("ilrBakeLayer")
 
     if exclude_types:

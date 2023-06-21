@@ -1346,14 +1346,21 @@ def get_id_required_nodes(referenced_nodes=False,
 
         # Skip intermediate objects
         if obj.hasFn(om.MFn.kDagNode):
+            # DAG nodes
             fn_dag.setObject(obj)
             if fn_dag.isIntermediateObject:
                 return
 
-            path = fn_dag.fullPathName()
+            # DAG nodes can be instanced and thus may have multiple paths.
+            # We need to identify each path and apply `nodes_filter`
+            paths = om.MDagPath.getAllPathsTo(obj)
+            for dag in paths:
+                path = dag.fullPathName()
+                result.append(path)
         else:
+            # Dependency node
             path = fn_dep.name()
-        result.append(path)
+            result.append(path)
 
     for obj in iterate(it):
         # For any non-intermediate shape node always include the parent

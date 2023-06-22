@@ -1344,15 +1344,16 @@ def get_id_required_nodes(referenced_nodes=False,
         ):
             return
 
-        # Skip intermediate objects
         if obj.hasFn(om.MFn.kDagNode):
             # DAG nodes
             fn_dag.setObject(obj)
+
+            # Skip intermediate objects
             if fn_dag.isIntermediateObject:
                 return
 
             # DAG nodes can be instanced and thus may have multiple paths.
-            # We need to identify each path and apply `nodes_filter`
+            # We need to identify each path
             paths = om.MDagPath.getAllPathsTo(obj)
             for dag in paths:
                 path = dag.fullPathName()

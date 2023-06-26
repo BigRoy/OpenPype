@@ -12,7 +12,8 @@ from openpype.pipeline import (
 from openpype.hosts.maya.api.lib import (
     unique_namespace,
     get_attribute_input,
-    maintained_selection
+    maintained_selection,
+    convert_to_maya_fps
 )
 from openpype.hosts.maya.api.pipeline import containerise
 
@@ -22,13 +23,12 @@ def is_sequence(files):
     collections, remainder = clique.assemble(files, minimum_items=1)
     if collections:
         sequence = True
-
     return sequence
 
 
 def get_current_session_fps():
     session_fps = float(legacy_io.Session.get('AVALON_FPS', 25))
-    return session_fps
+    return convert_to_maya_fps(session_fps)
 
 
 class ArnoldStandinLoader(load.LoaderPlugin):
@@ -43,7 +43,6 @@ class ArnoldStandinLoader(load.LoaderPlugin):
     color = "orange"
 
     def load(self, context, name, namespace, options):
-
         if not cmds.pluginInfo("mtoa", query=True, loaded=True):
             cmds.loadPlugin("mtoa")
             # Create defaultArnoldRenderOptions before creating aiStandin

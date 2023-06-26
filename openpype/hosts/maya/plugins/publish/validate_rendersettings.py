@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Maya validator for render settings."""
 import re
+from collections import OrderedDict
 
 from maya import cmds, mel
 
@@ -259,28 +260,47 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                 )
             )
 
-        # Validate render settings attributes per renderer
-        if cls.get_invalid_attributes(instance):
-            invalid = True
+        # go through definitions and test if such node.attribute exists.
+        # if so, compare its value from the one required.
+        for data in cls.get_nodes(instance, renderer):
+            for node in data["nodes"]:
+                try:
+                    render_value = cmds.getAttr(
+                        "{}.{}".format(node, data["attribute"])
+                    )
+                except RuntimeError:
+                    invalid = True
+                    cls.log.error(
+                        "Cannot get value of {}.{}".format(
+                            node, data["attribute"]
+                        )
+                    )
+                else:
+                    if render_value not in data["values"]:
+                        invalid = True
+                        cls.log.error(
+                            "Invalid value {} set on {}.{}. Expecting "
+                            "{}".format(
+                                render_value,
+                                node,
+                                data["attribute"],
+                                data["values"]
+                            )
+                        )
 
         return invalid
 
     @classmethod
-    def get_invalid_attributes(cls, instance):
-        renderer = instance.data["renderer"]
-        render_settings = RenderSettings(
-            project_settings=instance.context.data["project_settings"])
+    def get_nodes(cls, instance, renderer):
+        maya_settings = instance.context.data["project_settings"]["maya"]
+        validation_settings = (
+            maya_settings["publish"]["ValidateRenderSettings"].get(
+                "{}_render_attributes".format(renderer)
+            ) or []
+        )
 
-        invalid_diffs = []
-
-        # project_settings/maya/publish/ValidateRenderSettings
-        # Renderer specific by node type
-        for attr, values in (
-            instance.context.data["project_settings"]
-                                 ["maya"]
-                                 ["publish"]
-                                 ["ValidateRenderSettings"]
-            ).get("{}_render_attributes".format(renderer)) or []:
+        result = []
+        for attr, values in OrderedDict(validation_settings).items():
             values = [convert_to_int_or_float(v) for v in values if v]
 
             # Validate the settings has values.
@@ -302,58 +322,37 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                     "No nodes of type '{}' found.".format(node_type))
                 continue
 
-            for node in nodes:
-                plug = "{}.{}".format(node, attribute_name)
-                for value in values:
-                    diff = cls.get_attribute_diff(plug, value,
-                                                  log_on_diff=False)
-                    if diff is None:
-                        # Attribute is ok
-                        break
-                else:
-                    # Attribute does not match any of the values
-                    diff = cls.get_attribute_diff(plug, values[0])
-                    invalid_diffs.append(first_diff)
-
-                attr_validations[plug] = required_value
-
-        # project_setings/maya/RenderSettings/
-        #   {renderer}_renderer/additional_options
-        additional_options = dict(render_settings.get(
-            "{}_renderer/additional_options".format(renderer), []))
-        attr_validations.update(additional_options)
+            result.append(
+                {
+                    "attribute": attribute_name,
+                    "nodes": nodes,
+                    "values": values
+                }
+            )
 
         for attr, required_value in cls._required_globals.items():
-            plug = "defaultRenderGlobals.{}".format(attr)
-            attr_validations[plug] = required_value
-
-        for attr, value in attr_validations.items():
-            diff = cls.get_attribute_diff(attr, value)
-            if diff is not None:
-                invalid_diffs.append(diff)
-
-        return invalid_diffs
-
-    @classmethod
-    def get_attribute_diff(cls, attr, value, log_on_diff=True):
-        try:
-            diff = lib.attribute_diff(attr, value)
-        except RuntimeError:
-            cls.log.error("Cannot get value of {}".format(attr))
-        else:
-            if not diff.match:
-                invalid_diffs.append(diff)
-                cls.log.error(
-                    "Invalid value {} set on {}. Expecting {}"
-                    "".format(diff.current_value, attr, value)
-                )
-                return diff
+            result.append({
+                "attribute": attr,
+                "nodes": ["defaultRenderGlobals"],
+                "values": [required_value]
+            })
 
     @classmethod
     def repair(cls, instance):
         renderer = instance.data['renderer']
         layer_node = instance.data['setMembers']
 
+        # Apply attribute differences
+        # TODO: This sets values even for the correct attributes which
+        #  is not what we'd want if it's matching ANY of the correct values
+        for data in cls.get_nodes(instance, renderer):
+            if not data["values"]:
+                continue
+            for node in data["nodes"]:
+                lib.set_attribute(data["attribute"],
+                                  data["values"][0], node)
+
+        # Apply render settings
         render_settings = RenderSettings(
             project_settings=instance.context.data["project_settings"])
 
@@ -364,6 +363,18 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
 
             # Repair animation must be enabled
             cmds.setAttr("defaultRenderGlobals.animation", True)
+
+            # Repair prefix
+            if renderer == "arnold":
+                multipart = cmds.getAttr("defaultArnoldDriver.mergeAOVs")
+                if multipart:
+                    separator_variations = [
+                        "_<RenderPass>",
+                        "<RenderPass>_",
+                        "<RenderPass>",
+                    ]
+                    for variant in separator_variations:
+                        default_prefix = default_prefix.replace(variant, "")
 
             if renderer != "renderman":
                 # Repair prefix
@@ -414,9 +425,3 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                                                asString=True)
                     cmds.setAttr("{}.fileFormat".format(aov),
                                  default_ext)
-
-            # Apply the changes
-            for attr_diff in cls.get_invalid_attributes(instance):
-                cls.log.info("Setting {diff.attribute} = {diff.to_set_value}"
-                             "".format(diff=attr_diff))
-                attr_diff.apply()

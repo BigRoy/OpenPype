@@ -1,15 +1,15 @@
+import hou
+
 import os
 import attr
 import getpass
 from datetime import datetime
-
 import pyblish.api
-import hou
 
 from openpype.pipeline import legacy_io
+from openpype.tests.lib import is_in_tests
 from openpype_modules.deadline import abstract_submit_deadline
 from openpype_modules.deadline.abstract_submit_deadline import DeadlineJobInfo
-from openpype.tests.lib import is_in_tests
 from openpype.lib import is_running_from_build
 
 
@@ -39,7 +39,10 @@ class HoudiniSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline):
     hosts = ["houdini"]
     families = ["usdrender",
                 "redshift_rop",
-                "arnold_rop"]
+                "arnold_rop",
+                "mantra_rop",
+                "karma_rop",
+                "vray_rop"]
     targets = ["local"]
     use_published = True
 
@@ -52,15 +55,14 @@ class HoudiniSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline):
         filepath = context.data["currentFile"]
         filename = os.path.basename(filepath)
 
-        job_info.Name = "%s - %s" % (filename, instance.name)
+        job_info.Name = "{} - {}".format(filename, instance.name)
         job_info.BatchName = filename
-
-        if is_in_tests():
-            job_info.BatchName += datetime.now().strftime("%d%m%Y%H%M%S")
-
         job_info.Plugin = "Houdini"
         job_info.UserName = context.data.get(
             "deadlineUser", getpass.getuser())
+
+        if is_in_tests():
+            job_info.BatchName += datetime.now().strftime("%d%m%Y%H%M%S")
 
         # Deadline requires integers in frame range
         frames = "{start}-{end}x{step}".format(
@@ -85,7 +87,8 @@ class HoudiniSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline):
             "AVALON_TASK",
             "AVALON_APP_NAME",
             "OPENPYPE_DEV",
-            "OPENPYPE_LOG_NO_COLORS"
+            "OPENPYPE_LOG_NO_COLORS",
+            "OPENPYPE_VERSION"
         ]
 
         # Add OpenPype version if we are running from build.
@@ -99,19 +102,18 @@ class HoudiniSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline):
         environment = dict({key: os.environ[key] for key in keys
                             if key in os.environ}, **legacy_io.Session)
         for key in keys:
-            val = environment.get(key)
-            if val:
-                job_info.EnvironmentKeyValue = "{key}={value}".format(
-                     key=key,
-                     value=val)
+            value = environment.get(key)
+            if value:
+                job_info.EnvironmentKeyValue[key] = value
+
         # to recognize job from PYPE for turning Event On/Off
-        job_info.EnvironmentKeyValue = "OPENPYPE_RENDER_JOB=1"
+        job_info.EnvironmentKeyValue["OPENPYPE_RENDER_JOB"] = "1"
 
         for i, filepath in enumerate(instance.data["files"]):
             dirname = os.path.dirname(filepath)
             fname = os.path.basename(filepath)
-            job_info.OutputDirectory = dirname.replace("\\", "/")
-            job_info.OutputFilename = fname
+            job_info.OutputDirectory += dirname.replace("\\", "/")
+            job_info.OutputFilename += fname
 
         return job_info
 
@@ -121,7 +123,7 @@ class HoudiniSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline):
         context = instance.context
 
         # Output driver to render
-        driver = instance[0]
+        driver = hou.node(instance.data["instance_node"])
         hou_major_minor = hou.applicationVersionString().rsplit(".", 1)[0]
 
         plugin_info = DeadlinePluginInfo(

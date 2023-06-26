@@ -500,6 +500,7 @@
             "upload_reviewable_with_origin_name": false
         },
         "IntegrateFtrackFarmStatus": {
+            "enabled": true,
             "farm_status_profiles": [
                 {
                     "hosts": [
@@ -522,7 +523,6 @@
             "status_profiles": []
         },
         "IntegrateFtrackTaskStatus": {
-            "enabled": true,
             "after_version_statuses": true
         }
     }

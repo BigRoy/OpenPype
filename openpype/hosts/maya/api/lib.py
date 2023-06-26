@@ -1288,25 +1288,25 @@ def get_id_required_nodes(referenced_nodes=False,
     if cmds.pluginInfo("pgYetiMaya", query=True, loaded=True):
         types.append("pgYetiMaya")
 
-    iterator_type = om.MIteratorType()
+    iterator_type = OpenMaya.MIteratorType()
     # This tries to be closest matching API equivalents of `types` variable
     iterator_type.filterList = [
-        om.MFn.kMesh,  # mesh
-        om.MFn.kNurbsSurface,  # nurbsSurface
-        om.MFn.kNurbsCurve,  # nurbsCurve
-        om.MFn.kFileTexture,  # file
-        om.MFn.kSet,  # objectSet
-        om.MFn.kPluginShape  # pgYetiMaya
+        OpenMaya.MFn.kMesh,  # mesh
+        OpenMaya.MFn.kNurbsSurface,  # nurbsSurface
+        OpenMaya.MFn.kNurbsCurve,  # nurbsCurve
+        OpenMaya.MFn.kFileTexture,  # file
+        OpenMaya.MFn.kSet,  # objectSet
+        OpenMaya.MFn.kPluginShape  # pgYetiMaya
     ]
-    it = om.MItDependencyNodes(iterator_type)
+    it = OpenMaya.MItDependencyNodes(iterator_type)
 
-    fn_dep = om.MFnDependencyNode()
-    fn_dag = om.MFnDagNode()
+    fn_dep = OpenMaya.MFnDependencyNode()
+    fn_dag = OpenMaya.MFnDagNode()
     result = []
 
     def _should_include_parents(obj):
         """Whether to include parents of obj in output"""
-        if not obj.hasFn(om.MFn.kShape):
+        if not obj.hasFn(OpenMaya.MFn.kShape):
             return False
 
         fn_dag.setObject(obj)
@@ -1315,7 +1315,7 @@ def get_id_required_nodes(referenced_nodes=False,
 
         # Skip default cameras
         if (
-            obj.hasFn(om.MFn.kCamera) and
+            obj.hasFn(OpenMaya.MFn.kCamera) and
             fn_dag.name() in default_camera_shapes
         ):
             return False
@@ -1339,12 +1339,12 @@ def get_id_required_nodes(referenced_nodes=False,
 
         # Skip default cameras
         if (
-            obj.hasFn(om.MFn.kCamera) and
+            obj.hasFn(OpenMaya.MFn.kCamera) and
             fn_dep.name() in default_camera_shapes
         ):
             return
 
-        if obj.hasFn(om.MFn.kDagNode):
+        if obj.hasFn(OpenMaya.MFn.kDagNode):
             # DAG nodes
             fn_dag.setObject(obj)
 
@@ -1354,7 +1354,7 @@ def get_id_required_nodes(referenced_nodes=False,
 
             # DAG nodes can be instanced and thus may have multiple paths.
             # We need to identify each path
-            paths = om.MDagPath.getAllPathsTo(obj)
+            paths = OpenMaya.MDagPath.getAllPathsTo(obj)
             for dag in paths:
                 path = dag.fullPathName()
                 result.append(path)

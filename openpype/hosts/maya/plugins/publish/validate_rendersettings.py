@@ -337,6 +337,8 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                 "values": [required_value]
             })
 
+        return result
+
     @classmethod
     def repair(cls, instance):
         renderer = instance.data['renderer']

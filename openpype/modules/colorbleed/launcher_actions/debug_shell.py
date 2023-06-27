@@ -17,7 +17,7 @@ class DebugShell(LauncherAction):
         return required.issubset(session)
 
     def process(self, session, **kwargs):
-        from openpype.api import get_app_environments_for_context
+        from openpype.lib.applications import get_app_environments_for_context
 
         # Get the environment
         project = session["AVALON_PROJECT"]

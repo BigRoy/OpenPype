@@ -513,6 +513,11 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
             #   trailing underscore would be published after a non-AOV layer
             #   We allow a project to enable that legacy behavior
             if self.legacy_beauty_trailing_underscore and not aov:
+                self.log.debug(
+                    "Backwards compatibility: Legacy beauty trailing "
+                    "underscore is enabled. Adding trailing underscore "
+                    "for non-aov layer: {0} -> {0}_".format(subset_name)
+                )
                 subset_name += "_"
 
             if isinstance(col, (list, tuple)):

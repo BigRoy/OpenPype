@@ -4,8 +4,11 @@ Global = {
   Paths = {
     Map = {
       ["OpenPype:"] = "$(OPENPYPE_FUSION)/deploy",
+      ["Reactor:"] = "$(REACTOR)",
+
       ["Config:"] = "UserPaths:Config;OpenPype:Config",
       ["Scripts:"] = "UserPaths:Scripts;Reactor:System/Scripts;OpenPype:Scripts",
+      ["UserPaths:"] = "UserData:;AllData:;Fusion:;Reactor:Deploy"
     },
   },
   Script = {
@@ -13,6 +16,7 @@ Global = {
     Python3Forced = true
     },
   UserInterface = {
+    Skin = "Neutral",
     Language = "en_US"
     },
   },

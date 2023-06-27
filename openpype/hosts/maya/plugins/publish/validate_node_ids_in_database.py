@@ -39,7 +39,7 @@ class ValidateNodeIdsInDatabase(pyblish.api.InstancePlugin):
         invalid = []
 
         # Get all id required nodes
-        id_required_nodes = lib.get_id_required_nodes(referenced_nodes=True,
+        id_required_nodes = lib.get_id_required_nodes(referenced_nodes=False,
                                                       nodes=instance[:])
         if not id_required_nodes:
             return

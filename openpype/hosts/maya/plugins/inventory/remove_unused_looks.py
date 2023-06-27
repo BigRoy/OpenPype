@@ -1,5 +1,7 @@
 from openpype.pipeline import InventoryAction
-from openpype.tools.mayalookassigner.commands import remove_unused_looks
+from openpype.hosts.maya.tools.mayalookassigner.commands import (
+    remove_unused_looks
+)
 
 
 class RemoveUnusedLooks(InventoryAction):

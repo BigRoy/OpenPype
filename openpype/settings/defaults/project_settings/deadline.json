@@ -127,7 +127,8 @@
                 "fusion": [
                     ".*"
                 ]
-            }
+            },
+            "legacy_beauty_trailing_underscore": false
         }
     }
 }

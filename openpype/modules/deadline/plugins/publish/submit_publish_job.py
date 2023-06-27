@@ -184,6 +184,9 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
     # poor man exclusion
     skip_integration_repre_list = []
 
+    # Backwards compatibility for legacy projects
+    legacy_beauty_trailing_underscore = False
+
     def _create_metadata_path(self, instance):
         ins_data = instance.data
         # Ensure output dir exists
@@ -505,6 +508,12 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
                     subset_name = '{}_{}'.format(group_name, aov)
                 else:
                     subset_name = '{}'.format(group_name)
+
+            # Backwards compatibility: In earlier versions of OpenPype a
+            #   trailing underscore would be published after a non-AOV layer
+            #   We allow a project to enable that legacy behavior
+            if self.legacy_beauty_trailing_underscore and not aov:
+                subset_name += "_"
 
             if isinstance(col, (list, tuple)):
                 staging = os.path.dirname(col[0])

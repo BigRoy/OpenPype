@@ -6,7 +6,7 @@ from openpype.client import get_subset_by_name
 
 class ValidateSubsetGroupChange(pyblish.api.InstancePlugin,
                                 OpenPypePyblishPluginMixin):
-    """Log a warning if subsetGroup changes from previous state"""
+    """Log a warning if `subsetGroup` changes from current subset's group"""
 
     order = pyblish.api.ValidatorOrder
     label = "Validate Subset Group Change"

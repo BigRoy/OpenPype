@@ -12,7 +12,10 @@ from openpype.client import (
     get_representation_by_name
 )
 from openpype.pipeline import get_representation_path
-from openpype.pipeline.publish import RepairAction
+from openpype.pipeline.publish import (
+    RepairAction,
+    ValidateContentsOrder
+)
 
 import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api.lib import get_id, set_id
@@ -116,7 +119,7 @@ class ValidateModelIdsToExistingVersion(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ["maya"]
     families = ["model"]
     label = "Model ids match latest version"

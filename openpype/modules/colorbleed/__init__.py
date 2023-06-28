@@ -11,11 +11,10 @@ class ColorbleedModule(OpenPypeModule, IPluginPaths):
         self.enabled = True
 
     def get_plugin_paths(self):
-        """Implementaton of IPluginPaths to get plugin paths."""
-        actions_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "launcher_actions"
-        )
+        """Implementation of IPluginPaths to get plugin paths."""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+
         return {
-            "actions": [actions_path]
+            "actions": [os.path.join(current_dir, "launcher_actions")],
+            "publish": [os.path.join(current_dir, "plugins", "publish")]
         }

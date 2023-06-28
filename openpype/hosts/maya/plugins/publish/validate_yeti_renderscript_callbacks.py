@@ -4,9 +4,9 @@ import pyblish.api
 from openpype.pipeline.publish import (
     context_plugin_should_run,
     filter_instances_for_context_plugin,
-    ValidateContentsOrder
+    ValidateContentsOrder,
+    RepairContextAction
 )
-import openpype.action
 
 
 class ValidateYetiRenderScriptCallbacks(pyblish.api.ContextPlugin):
@@ -29,7 +29,7 @@ class ValidateYetiRenderScriptCallbacks(pyblish.api.ContextPlugin):
     label = "Yeti Render Script Callbacks"
     hosts = ["maya"]
     families = ["renderlayer"]
-    actions = [openpype.action.RepairContextAction]
+    actions = [RepairContextAction]
 
     # Settings per renderer
     callbacks = {

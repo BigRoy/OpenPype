@@ -251,6 +251,7 @@ class RepairContextAction(pyblish.api.Action):
 
     label = "Repair"
     on = "failed"  # This action is only available on a failed plug-in
+    icon = "wrench"  # Icon from Awesome Icon
 
     def process(self, context, plugin):
         if not hasattr(plugin, "repair"):

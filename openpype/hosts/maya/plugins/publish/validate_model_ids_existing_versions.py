@@ -7,13 +7,12 @@ import six
 import alembic.Abc
 
 import pyblish.api
-import openpype.api
-import openpype.action
 from openpype.client import (
     get_last_version_by_subset_name,
     get_representation_by_name
 )
 from openpype.pipeline import get_representation_path
+from openpype.pipeline.publish import RepairAction
 
 import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api.lib import get_id, set_id
@@ -122,7 +121,7 @@ class ValidateModelIdsToExistingVersion(pyblish.api.InstancePlugin):
     families = ["model"]
     label = "Model ids match latest version"
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction,
-               openpype.action.RepairAction]
+               RepairAction]
 
     optional = True
     log_changed_hierarchies = True

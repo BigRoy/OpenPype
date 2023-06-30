@@ -240,6 +240,7 @@ class CreateSaver(NewCreator):
         return EnumDef(
             "frame_range_source",
             items=frame_range_options,
+            default="render_range",
             label="Frame range source"
         )
 

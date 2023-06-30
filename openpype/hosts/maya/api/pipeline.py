@@ -486,12 +486,11 @@ def on_init():
     # Force load objExport plug-in (requested by artists)
     cmds.loadPlugin("objExport", quiet=True)
 
-    launch_workfiles = os.environ.get("WORKFILES_STARTUP")
-
-    if launch_workfiles:
-        safe_deferred(host_tools.show_workfiles)
-
     if not lib.IS_HEADLESS:
+        launch_workfiles = os.environ.get("WORKFILES_STARTUP")
+        if launch_workfiles:
+            safe_deferred(host_tools.show_workfiles)
+
         from .customize import (
             override_component_mask_commands,
             override_toolbox_ui
@@ -554,13 +553,9 @@ def on_save():
     Any transform of a mesh, without an existing ID, is given one
     automatically on file save.
     """
-
     log.info("Running callback on save..")
     # remove lockfile if users jumps over from one scene to another
     _remove_workfile_lock()
-
-    # # Update current task for the current scene
-    # update_task_from_path(cmds.file(query=True, sceneName=True))
 
     # Generate ids of the current context on nodes in the scene
     nodes = lib.get_id_required_nodes(referenced_nodes=False,
@@ -573,23 +568,19 @@ def on_save():
     ABOUT_TO_SAVE = False
 
 
+def _update_render_layer_observers():
+    # Helper to trigger update for all renderlayer observer logic
+    lib.remove_render_layer_observer()
+    lib.add_render_layer_observer()
+    lib.add_render_layer_change_observer()
+
+
 def on_open():
     """On scene open let's assume the containers have changed."""
 
-    from qtpy import QtWidgets
     from openpype.widgets import popup
 
-    cmds.evalDeferred(
-        "from openpype.hosts.maya.api import lib;"
-        "lib.remove_render_layer_observer()")
-    cmds.evalDeferred(
-        "from openpype.hosts.maya.api import lib;"
-        "lib.add_render_layer_observer()")
-    cmds.evalDeferred(
-        "from openpype.hosts.maya.api import lib;"
-        "lib.add_render_layer_change_observer()")
-    # # Update current task for the current scene
-    # update_task_from_path(cmds.file(query=True, sceneName=True))
+    utils.executeDeferred(_update_render_layer_observers)
 
     # Validate FPS after update_task_from_path to
     # ensure it is using correct FPS for the asset
@@ -600,10 +591,7 @@ def on_open():
         log.warning("Scene has outdated content.")
 
         # Find maya main window
-        top_level_widgets = {w.objectName(): w for w in
-                             QtWidgets.QApplication.topLevelWidgets()}
-        parent = top_level_widgets.get("MayaWindow", None)
-
+        parent = lib.get_main_window()
         if parent is None:
             log.info("Skipping outdated content pop-up "
                      "because Maya window can't be found.")
@@ -628,16 +616,9 @@ def on_new():
     """Set project resolution and fps when create a new file"""
     log.info("Running callback on new..")
     with lib.suspended_refresh():
-        cmds.evalDeferred(
-            "from openpype.hosts.maya.api import lib;"
-            "lib.remove_render_layer_observer()")
-        cmds.evalDeferred(
-            "from openpype.hosts.maya.api import lib;"
-            "lib.add_render_layer_observer()")
-        cmds.evalDeferred(
-            "from openpype.hosts.maya.api import lib;"
-            "lib.add_render_layer_change_observer()")
         lib.set_context_settings()
+
+    utils.executeDeferred(_update_render_layer_observers)
     _remove_workfile_lock()
 
 

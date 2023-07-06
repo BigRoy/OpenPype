@@ -383,6 +383,9 @@ class CollectLook(pyblish.api.InstancePlugin):
                     or []
                 )
 
+            # Ensure unique entries only
+            history = list(set(history))
+
             files = cmds.ls(history,
                             # It's important only node types are passed that
                             # exist (e.g. for loaded plugins) because otherwise
@@ -390,10 +393,13 @@ class CollectLook(pyblish.api.InstancePlugin):
                             type=list(FILE_NODES.keys()),
                             long=True)
 
+            # Sort for log readability
+            files.sort()
+
         self.log.info("Collected file nodes: {}".format(files))
         # Collect textures if any file nodes are found
         resources = []
-        for node in files:
+        for node in files:  # sort for log readability
             resources.extend(self.collect_resources(node))
         instance.data["resources"] = resources
         self.log.debug("Collected resources: {}".format(resources))
@@ -534,7 +540,9 @@ class CollectLook(pyblish.api.InstancePlugin):
                 "Unsupported file node: {}".format(cmds.nodeType(node)))
             raise AssertionError("Unsupported file node")
 
-        self.log.debug("processing: {} ({})".format(node, cmds.nodeType(node)))
+        self.log.debug(
+            "Collecting resource: {} ({})".format(node, cmds.nodeType(node))
+        )
 
         attributes = get_attributes(FILE_NODES, cmds.nodeType(node), node)
         for attribute in attributes:
@@ -542,27 +550,28 @@ class CollectLook(pyblish.api.InstancePlugin):
                 node,
                 attribute
             ))
-            computed_attribute = "{}.{}".format(node, attribute)
-            if attribute == "fileTextureName":
-                computed_attribute = node + ".computedFileTextureNamePattern"
 
-            self.log.info("  - file source: {}".format(source))
             color_space_attr = "{}.colorSpace".format(node)
             try:
                 color_space = cmds.getAttr(color_space_attr)
             except ValueError:
                 # node doesn't have colorspace attribute
                 color_space = "Raw"
+
             # Compare with the computed file path, e.g. the one with
             # the <UDIM> pattern in it, to generate some logging information
             # about this difference
-            computed_source = cmds.getAttr(computed_attribute)
-            if source != computed_source:
-                self.log.debug("Detected computed file pattern difference "
-                               "from original pattern: {0} "
-                               "({1} -> {2})".format(node,
-                                                     source,
-                                                     computed_source))
+            # Only for file nodes with `fileTextureName` attribute
+            if attribute == "fileTextureName":
+                computed_source = cmds.getAttr(
+                    "{}.computedFileTextureNamePattern".format(node)
+                )
+                if source != computed_source:
+                    self.log.debug("Detected computed file pattern difference "
+                                   "from original pattern: {0} "
+                                   "({1} -> {2})".format(node,
+                                                         source,
+                                                         computed_source))
 
             # renderman allows nodes to have filename attribute empty while
             # you can have another incoming connection from different node.

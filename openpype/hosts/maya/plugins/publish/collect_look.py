@@ -562,7 +562,10 @@ class CollectLook(pyblish.api.InstancePlugin):
             # the <UDIM> pattern in it, to generate some logging information
             # about this difference
             # Only for file nodes with `fileTextureName` attribute
-            if attribute == "fileTextureName":
+            if (
+                    os.environ.get("OPENPYPE_DEBUG") == "1"
+                    and attribute == "fileTextureName"
+            ):
                 computed_source = cmds.getAttr(
                     "{}.computedFileTextureNamePattern".format(node)
                 )
@@ -587,12 +590,13 @@ class CollectLook(pyblish.api.InstancePlugin):
             if len(files) == 0:
                 self.log.error("No valid files found from node `%s`" % node)
 
-            self.log.info("collection of resource done:")
-            self.log.info("  - node: {}".format(node))
-            self.log.info("  - attribute: {}".format(attribute))
-            self.log.info("  - source: {}".format(source))
-            self.log.info("  - file: {}".format(files))
-            self.log.info("  - color space: {}".format(color_space))
+            if os.environ.get("OPENPYPE_DEBUG") == "1":
+                self.log.info("collection of resource done:")
+                self.log.info("  - node: {}".format(node))
+                self.log.info("  - attribute: {}".format(attribute))
+                self.log.info("  - source: {}".format(source))
+                self.log.info("  - file: {}".format(files))
+                self.log.info("  - color space: {}".format(color_space))
 
             # Define the resource
             yield {

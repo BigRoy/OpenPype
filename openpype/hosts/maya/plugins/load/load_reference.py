@@ -152,25 +152,17 @@ class ReferenceLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
             self[:] = new_nodes
 
             if attach_to_root:
-                roots = cmds.listRelatives(group_name,
-                                           children=True,
-                                           fullPath=True) or []
 
                 if family not in {"layout", "setdress",
                                   "mayaAscii", "mayaScene"}:
+                    roots = cmds.listRelatives(group_name,
+                                               children=True,
+                                               fullPath=True) or []
                     # QUESTION Why do we need to exclude these families?
                     with parent_nodes(roots, parent=None):
                         cmds.xform(group_name, zeroTransformPivots=True)
 
                 settings = get_project_settings(os.environ['AVALON_PROJECT'])
-
-                display_handle = settings['maya']['load'].get(
-                    'reference_loader', {}
-                ).get('display_handle', True)
-                cmds.setAttr(
-                    "{}.displayHandle".format(group_name), display_handle
-                )
-
                 colors = settings['maya']['load']['colors']
                 c = colors.get(family)
                 if c is not None:
@@ -180,22 +172,30 @@ class ReferenceLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
                                  (float(c[1]) / 255),
                                  (float(c[2]) / 255))
 
-                # get bounding box
-                bbox = cmds.exactWorldBoundingBox(group_name)
-                # get pivot position on world space
-                pivot = cmds.xform(group_name, q=True, sp=True, ws=True)
-                # center of bounding box
-                cx = (bbox[0] + bbox[3]) / 2
-                cy = (bbox[1] + bbox[4]) / 2
-                cz = (bbox[2] + bbox[5]) / 2
-                # add pivot position to calculate offset
-                cx = cx + pivot[0]
-                cy = cy + pivot[1]
-                cz = cz + pivot[2]
-                # set selection handle offset to center of bounding box
-                cmds.setAttr("{}.selectHandleX".format(group_name), cx)
-                cmds.setAttr("{}.selectHandleY".format(group_name), cy)
-                cmds.setAttr("{}.selectHandleZ".format(group_name), cz)
+                display_handle = settings['maya']['load'].get(
+                    'reference_loader', {}
+                ).get('display_handle', True)
+                cmds.setAttr(
+                    "{}.displayHandle".format(group_name), display_handle
+                )
+                if display_handle:
+                    # Position the display handle
+                    # get bounding box
+                    bbox = cmds.exactWorldBoundingBox(group_name)
+                    # get pivot position on world space
+                    pivot = cmds.xform(group_name, q=True, sp=True, ws=True)
+                    # center of bounding box
+                    cx = (bbox[0] + bbox[3]) / 2
+                    cy = (bbox[1] + bbox[4]) / 2
+                    cz = (bbox[2] + bbox[5]) / 2
+                    # add pivot position to calculate offset
+                    cx = cx + pivot[0]
+                    cy = cy + pivot[1]
+                    cz = cz + pivot[2]
+                    # set selection handle offset to center of bounding box
+                    cmds.setAttr("{}.selectHandleX".format(group_name), cx)
+                    cmds.setAttr("{}.selectHandleY".format(group_name), cy)
+                    cmds.setAttr("{}.selectHandleZ".format(group_name), cz)
 
             if family == "rig":
                 self._post_process_rig(name, namespace, context, options)

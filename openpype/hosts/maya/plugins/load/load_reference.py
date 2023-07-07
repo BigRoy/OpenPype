@@ -209,6 +209,15 @@ class ReferenceLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
         self.update(container, representation)
 
     def update(self, container, representation):
+
+        # Avoid a maya crash due to Arnold Render View trying to still trying
+        # to track IPR changes (even when not rendering) during reference
+        # switch. By force closing the render view we resolve the crash
+        if cmds.pluginInfo("mtoa", query=True, loaded=True):
+            # This command also works fine if it isn't open so we always
+            # call it if Arnold is loaded - just in case
+            cmds.arnoldRenderView(mode="close")
+
         with preserve_modelpanel_cameras(container, log=self.log):
             super(ReferenceLoader, self).update(container, representation)
 

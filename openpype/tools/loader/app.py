@@ -406,6 +406,10 @@ class LoaderWindow(QtWidgets.QDialog):
         if refresh:
             self._refresh()
 
+        # Colorbleed edit:
+        # Ensure time is given to have the views refreshed to allow the
+        # expanding and selection to work fine even on first run.
+        QtWidgets.QApplication.instance().processEvents()
         self._assets_widget.select_asset_by_name(asset)
 
     def _on_message_timeout(self):

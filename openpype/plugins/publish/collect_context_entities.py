@@ -12,6 +12,7 @@ Provides:
         set in context.
 """
 
+import os
 import pyblish.api
 
 from openpype.client import get_project, get_asset_by_name
@@ -34,7 +35,10 @@ class CollectContextEntities(pyblish.api.ContextPlugin):
             raise KnownPublishError(
                 "Project '{0}' was not found.".format(project_name)
             )
-        self.log.debug("Collected Project \"{}\"".format(project_entity))
+
+        self.log.debug("Collected context project: {}".format(project_name))
+        if os.environ.get("OPENPYPE_DEBUG") == "1":
+            self.log.debug(project_entity)
 
         context.data["projectEntity"] = project_entity
 
@@ -47,7 +51,9 @@ class CollectContextEntities(pyblish.api.ContextPlugin):
             "No asset found by the name '{0}' in project '{1}'"
         ).format(asset_name, project_name)
 
-        self.log.debug("Collected Asset \"{}\"".format(asset_entity))
+        self.log.debug("Collected context asset: {}".format(asset_name))
+        if os.environ.get("OPENPYPE_DEBUG") == "1":
+            self.log.debug(asset_entity)
 
         context.data["assetEntity"] = asset_entity
 

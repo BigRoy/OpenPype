@@ -226,24 +226,8 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
         Returns:
             (str): deadline_publish_job_id
         """
-        data = instance.data.copy()
-        subset = data["subset"]
+        subset = instance.data["subset"]
         job_name = "Publish - {subset}".format(subset=subset)
-
-        # instance.data.get("subset") != instances[0]["subset"]
-        # 'Main' vs 'renderMain'
-        override_version = None
-        instance_version = instance.data.get("version")  # take this if exists
-        if instance_version != 1:
-            override_version = instance_version
-        output_dir = self._get_publish_folder(
-            instance.context.data['anatomy'],
-            deepcopy(instance.data["anatomyData"]),
-            instance.data.get("asset"),
-            instances[0]["subset"],
-            'render',
-            override_version
-        )
 
         # Transfer the environment from the original job to this dependent
         # job so they use the same environment
@@ -311,8 +295,6 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
                 "Group": self.deadline_group,
                 "Pool": self.deadline_pool or instance.data.get("primaryPool"),
                 "SecondaryPool": secondary_pool,
-                # ensure the outputdirectory with correct slashes
-                "OutputDirectory0": output_dir.replace("\\", "/"),
 
                 # Error out early on this job since it's unlikely
                 # a subsequent publish will suddenly succeed and
@@ -329,6 +311,49 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
             # Mandatory for Deadline, may be empty
             "AuxFiles": [],
         }
+
+        # Collect the output directories
+        # instance.data.get("subset") != instances[0]["subset"]
+        # 'Main' vs 'renderMain'
+        # We prioritize the reviewable and 'beauty' entries over others because
+        # it's most likely the folder the artist wants to open by default in
+        # Deadline Manager with CTRL+O on the publish job
+        def artist_sort(render_instance):
+            subset = render_instance["subset"]
+
+            # Shortest subset is likely best because it most likely doesn't
+            # include an AOV name and thus is the master/beauty layer
+            points = len(subset)
+
+            # If it includes 'beauty' we prioritize it
+            if "beauty" in subset:
+                points -= 1000
+
+            # If it's marked for review we also prioritize it over instances
+            # that are not marked for review
+            if render_instance.get("review", False):
+                points -= 2000
+
+            # If points match, then still sort by subset alphabetically
+            return (points, subset)
+
+        override_version = None
+        instance_version = instance.data.get("version")  # take this if exists
+        if instance_version != 1:
+            override_version = instance_version
+        for i, output_instance in enumerate(
+            sorted(instances, key=artist_sort)
+        ):
+            output_dir = self._get_publish_folder(
+                instance.context.data['anatomy'],
+                deepcopy(instance.data["anatomyData"]),
+                instance.data.get("asset"),
+                output_instance["subset"],
+                'render',
+                override_version
+            )
+            output_dir = output_dir.replace("\\", "/")
+            payload["JobInfo"]["OutputDirectory{}".format(i)] = output_dir
 
         # add assembly jobs as dependencies
         if instance.data.get("tileRendering"):
@@ -537,21 +562,25 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
 
             self.log.info("Creating data for: {}".format(subset_name))
 
-            app = os.environ.get("AVALON_APP", "")
-
             if isinstance(col, list):
                 render_file_name = os.path.basename(col[0])
             else:
                 render_file_name = os.path.basename(col)
-            aov_patterns = self.aov_filter
-
-            preview = match_aov_pattern(app, aov_patterns, render_file_name)
-            # toggle preview on if multipart is on
 
             if instance_data.get("multipartExr"):
+                # force preview on if multipart is on
                 self.log.debug("Adding preview tag because its multipartExr")
                 preview = True
-            self.log.debug("preview:{}".format(preview))
+            else:
+                preview = match_aov_pattern(
+                    host_name=os.environ.get("AVALON_APP", ""),
+                    aov_patterns=self.aov_filter,
+                    render_file_name=render_file_name
+                )
+
+            if os.environ.get("OPENPYPE_DEBUG") == "1":
+                self.log.debug("Preview: {}".format(preview))
+
             new_instance = deepcopy(instance_data)
             new_instance["subset"] = subset_name
             new_instance["subsetGroup"] = group_name
@@ -613,7 +642,10 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
             if new_instance.get("extendFrames", False):
                 self._copy_extend_frames(new_instance, rep)
             instances.append(new_instance)
-            self.log.debug("instances:{}".format(instances))
+
+            if os.environ.get("OPENPYPE_DEBUG") == "1":
+                self.log.debug("New instance: {}".format(new_instance))
+
         return instances
 
     def _get_representations(self, instance_data, exp_files,
@@ -762,18 +794,18 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
         return representations
 
     def _solve_families(self, instance, preview=False):
-        families = instance.get("families")
-
         # if we have one representation with preview tag
         # flag whole instance for review and for ftrack
         if preview:
-            if "ftrack" not in families:
+            families = instance.get("families", [])
+            lookup = set(families)
+            if "ftrack" not in lookup:
                 if os.environ.get("FTRACK_SERVER"):
                     self.log.debug(
                         "Adding \"ftrack\" to families because of preview tag."
                     )
                     families.append("ftrack")
-            if "review" not in families:
+            if "review" not in lookup:
                 self.log.debug(
                     "Adding \"review\" to families because of preview tag."
                 )
@@ -1227,12 +1259,13 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
                 be stored
                 based on 'publish' template
         """
-        if not version:
+        if version is None:
             project_name = legacy_io.active_project()
             version = get_last_version_by_subset_name(
                 project_name,
                 subset,
-                asset_name=asset
+                asset_name=asset,
+                fields=["name"]
             )
             if version:
                 version = int(version["name"]) + 1
@@ -1240,7 +1273,7 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
                 version = 1
 
         template_data["subset"] = subset
-        template_data["family"] = "render"
+        template_data["family"] = family
         template_data["version"] = version
 
         render_templates = anatomy.templates_obj["render"]

@@ -1,3 +1,4 @@
+import os
 import json
 
 from maya import cmds
@@ -13,16 +14,18 @@ class CollectFileDependencies(pyblish.api.ContextPlugin):
     hosts = ["maya"]
 
     def process(self, context):
-        dependencies = []
+        dependencies = set()
         for node in cmds.ls(type="file"):
             path = cmds.getAttr("{}.{}".format(node, "fileTextureName"))
             if path not in dependencies:
-                dependencies.append(path)
+                dependencies.add(path)
 
         for node in cmds.ls(type="AlembicNode"):
             path = cmds.getAttr("{}.{}".format(node, "abc_File"))
             if path not in dependencies:
-                dependencies.append(path)
+                dependencies.add(path)
 
-        context.data["fileDependencies"] = dependencies
-        self.log.debug(json.dumps(dependencies, indent=4))
+        context.data["fileDependencies"] = list(dependencies)
+
+        if os.environ.get("OPENPYPE_DEBUG") == "1":
+            self.log.debug(json.dumps(dependencies, indent=4))

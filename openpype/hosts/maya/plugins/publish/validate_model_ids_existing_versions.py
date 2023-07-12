@@ -166,7 +166,8 @@ class ValidateModelIdsToExistingVersion(pyblish.api.InstancePlugin):
         subset_name = instance.data["subset"]
         version = get_last_version_by_subset_name(project_name,
                                                   subset_name=subset_name,
-                                                  asset_id=asset_doc["_id"])
+                                                  asset_id=asset_doc["_id"],
+                                                  fields=["_id", "name"])
         if not version:
             cls.log.debug("Subset does not exist yet: {}".format(subset_name))
             return

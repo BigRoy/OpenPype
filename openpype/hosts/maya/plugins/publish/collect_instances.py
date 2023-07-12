@@ -31,14 +31,11 @@ class CollectInstances(pyblish.api.ContextPlugin):
 
     def process(self, context):
 
-        objectset = cmds.ls("*.id", long=True, type="objectSet",
+        objectset = cmds.ls("*.id", long=True, exactType="objectSet",
                             recursive=True, objectsOnly=True)
 
         context.data['objectsets'] = objectset
         for objset in objectset:
-
-            if not cmds.attributeQuery("id", node=objset, exists=True):
-                continue
 
             id_attr = "{}.id".format(objset)
             if cmds.getAttr(id_attr) != "pyblish.avalon.instance":
@@ -137,7 +134,6 @@ class CollectInstances(pyblish.api.ContextPlugin):
 
             instance.data["label"] = label
             instance.data.update(data)
-            self.log.debug("{}".format(instance.data))
 
             # Produce diagnostic message for any graphical
             # user interface interested in visualising it.

@@ -12,19 +12,29 @@ class ValidateDeadlineConnection(pyblish.api.InstancePlugin):
     hosts = ["maya", "nuke"]
     families = ["renderlayer"]
 
+    # Cache responses per URL to query only once per URL
+    responses = {}
+
     def process(self, instance):
         # get default deadline webservice url from deadline module
         deadline_url = instance.context.data["defaultDeadline"]
         # if custom one is set in instance, use that
         if instance.data.get("deadlineUrl"):
             deadline_url = instance.data.get("deadlineUrl")
-            self.log.info(
-                "We have deadline URL on instance {}".format(
-                    deadline_url))
         assert deadline_url, "Requires Deadline Webservice URL"
+        self.validate_url(deadline_url)
+
+    def validate_url(self, deadline_url):
+
+        if deadline_url not in self.responses:
+            self.log.debug(
+                "Validating deadline webservice URL: ".format(deadline_url))
+            response = self._requests_get(deadline_url)
+            response.encoding = "ascii"
+            self.responses[deadline_url] = response
 
         # Check response
-        response = self._requests_get(deadline_url)
+        response = self.responses[deadline_url]
         assert response.ok, "Response must be ok"
         assert response.text.startswith("Deadline Web Service "), (
             "Web service did not respond with 'Deadline Web Service'"

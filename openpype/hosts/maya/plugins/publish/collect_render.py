@@ -184,8 +184,10 @@ class CollectMayaRender(pyblish.api.ContextPlugin):
             assert exp_files, "no file names were generated, this is bug"
 
             if os.environ.get("OPENPYPE_DEBUG") == "1":
-                self.log.info("multipart: {}".format(multipart))
-                self.log.info(exp_files)
+                for render_product in render_products:
+                    self.log.debug(render_product)
+                self.log.debug("multipart: {}".format(multipart))
+                self.log.debug(exp_files)
 
             # if we want to attach render to subset, check if we have AOV's
             # in expectedFiles. If so, raise error as we cannot attach AOV

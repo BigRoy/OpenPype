@@ -56,7 +56,7 @@ class ExtractPointCloud(publish.Extractor):
             for job in job_args:
                 rt.Execute(job)
 
-        self.log.info("Performing Extraction ...")
+        self.log.debug("Performing Extraction ...")
         if "representations" not in instance.data:
             instance.data["representations"] = []
 

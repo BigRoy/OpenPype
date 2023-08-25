@@ -40,7 +40,7 @@ class ExtractModelObj(publish.Extractor, OptionalPyblishPluginMixin):
                 using=rt.ObjExp,
             )
 
-        self.log.info("Performing Extraction ...")
+        self.log.debug("Performing Extraction ...")
         if "representations" not in instance.data:
             instance.data["representations"] = []
 

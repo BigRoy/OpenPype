@@ -46,7 +46,7 @@ class ExtractImportReference(publish.Extractor,
             for family in self.families:
                 try:
                     self.scene_type = ext_mapping[family]
-                    self.log.info(
+                    self.log.debug(
                         "Using {} as scene type".format(self.scene_type))
                     break
 
@@ -69,7 +69,7 @@ class ExtractImportReference(publish.Extractor,
         reference_path = os.path.join(dir_path, ref_scene_name)
         tmp_path = os.path.dirname(current_name) + "/" + ref_scene_name
 
-        self.log.info("Performing extraction..")
+        self.log.debug("Performing Extraction..")
 
         # This generates script for mayapy to take care of reference
         # importing outside current session. It is passing current scene
@@ -153,5 +153,5 @@ print("*** Done")
 
         instance.data["representations"].append(ref_representation)
 
-        self.log.info("Extracted instance '%s' to : '%s'" % (ref_scene_name,
-                                                             reference_path))
+        self.log.debug("Extracted instance '%s' to : '%s'" % (ref_scene_name,
+                                                              reference_path))

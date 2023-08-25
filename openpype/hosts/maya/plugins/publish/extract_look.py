@@ -421,7 +421,7 @@ class ExtractLook(publish.Extractor):
             for family in self.families:
                 try:
                     self.scene_type = ext_mapping[family]
-                    self.log.info(
+                    self.log.debug(
                         "Using {} as scene type".format(self.scene_type))
                     break
                 except KeyError:
@@ -453,7 +453,7 @@ class ExtractLook(publish.Extractor):
         relationships = lookdata["relationships"]
         sets = list(relationships.keys())
         if not sets:
-            self.log.info("No sets found for the look")
+            self.log.debug("No sets found for the look")
             return
 
         # Specify texture processing executables to activate

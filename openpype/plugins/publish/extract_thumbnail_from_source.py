@@ -98,7 +98,7 @@ class ExtractThumbnailFromSource(pyblish.api.InstancePlugin):
         thumbnail_created = False
         oiio_supported = is_oiio_supported()
 
-        self.log.info("Thumbnail source: {}".format(thumbnail_source))
+        self.log.debug("Thumbnail source: {}".format(thumbnail_source))
         src_basename = os.path.basename(thumbnail_source)
         dst_filename = os.path.splitext(src_basename)[0] + "_thumb.jpg"
         full_output_path = os.path.join(dst_staging, dst_filename)
@@ -143,13 +143,13 @@ class ExtractThumbnailFromSource(pyblish.api.InstancePlugin):
         return False
 
     def create_thumbnail_oiio(self, src_path, dst_path):
-        self.log.info("outputting {}".format(dst_path))
+        self.log.debug("outputting {}".format(dst_path))
         oiio_cmd = get_oiio_tool_args(
             "oiiotool",
             "-a", src_path,
             "-o", dst_path
         )
-        self.log.info("Running: {}".format(" ".join(oiio_cmd)))
+        self.log.debug("Running: {}".format(" ".join(oiio_cmd)))
         try:
             run_subprocess(oiio_cmd, logger=self.log)
             return True
@@ -172,7 +172,7 @@ class ExtractThumbnailFromSource(pyblish.api.InstancePlugin):
             dst_path
         )
 
-        self.log.info("Running: {}".format(" ".join(ffmpeg_cmd)))
+        self.log.debug("Running: {}".format(" ".join(ffmpeg_cmd)))
         try:
             run_subprocess(ffmpeg_cmd, logger=self.log)
             return True

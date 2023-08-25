@@ -50,7 +50,7 @@ class ExtractCameraAlembic(publish.Extractor, OptionalPyblishPluginMixin):
                 using=rt.AlembicExport,
             )
 
-        self.log.info("Performing Extraction ...")
+        self.log.debug("Performing Extraction ...")
         if "representations" not in instance.data:
             instance.data["representations"] = []
 

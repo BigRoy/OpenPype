@@ -25,7 +25,8 @@ class CollectFileDependencies(pyblish.api.ContextPlugin):
             if path not in dependencies:
                 dependencies.add(path)
 
-        context.data["fileDependencies"] = list(dependencies)
+        dependencies = list(dependencies)
+        context.data["fileDependencies"] = dependencies
 
         if os.environ.get("OPENPYPE_DEBUG") == "1":
             self.log.debug(json.dumps(dependencies, indent=4))

@@ -49,7 +49,7 @@ class ExtractModelFbx(publish.Extractor, OptionalPyblishPluginMixin):
                 using=rt.FBXEXP,
             )
 
-        self.log.info("Performing Extraction ...")
+        self.log.debug("Performing Extraction ...")
         if "representations" not in instance.data:
             instance.data["representations"] = []
 

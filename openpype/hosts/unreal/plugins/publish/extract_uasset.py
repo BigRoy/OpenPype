@@ -19,7 +19,7 @@ class ExtractUAsset(publish.Extractor):
             "umap" if "umap" in instance.data.get("families") else "uasset")
         ar = unreal.AssetRegistryHelpers.get_asset_registry()
 
-        self.log.info("Performing extraction..")
+        self.log.debug("Performing Extraction..")
         staging_dir = self.staging_dir(instance)
         filename = f"{instance.name}.{extension}"
 

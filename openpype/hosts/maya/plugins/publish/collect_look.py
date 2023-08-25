@@ -396,7 +396,7 @@ class CollectLook(pyblish.api.InstancePlugin):
             # Sort for log readability
             files.sort()
 
-        self.log.info("Collected file nodes: {}".format(files))
+        self.log.debug("Collected file nodes: {}".format(files))
         # Collect textures if any file nodes are found
         resources = []
         for node in files:  # sort for log readability

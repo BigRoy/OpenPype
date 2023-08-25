@@ -32,7 +32,7 @@ class ExtractProxyAlembic(publish.Extractor):
         attr_prefixes = instance.data.get("attrPrefix", "").split(";")
         attr_prefixes = [value for value in attr_prefixes if value.strip()]
 
-        self.log.info("Extracting Proxy Alembic..")
+        self.log.debug("Extracting Proxy Alembic..")
         dirname = self.staging_dir(instance)
 
         filename = "{name}.abc".format(**instance.data)

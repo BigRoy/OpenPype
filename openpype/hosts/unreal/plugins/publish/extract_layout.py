@@ -24,7 +24,7 @@ class ExtractLayout(publish.Extractor):
         staging_dir = self.staging_dir(instance)
 
         # Perform extraction
-        self.log.info("Performing extraction..")
+        self.log.debug("Performing Extraction..")
 
         # Check if the loaded level is the same of the instance
         current_level = ell.get_editor_world().get_path_name()

@@ -68,5 +68,6 @@ class ExtractVRayProxy(publish.Extractor):
         }
         instance.data["representations"].append(representation)
 
-        self.log.info("Extracted instance '%s' to: %s"
-                      % (instance.name, staging_dir))
+        self.log.debug(
+            "Extracted instance '%s' to: %s" % (instance.name, staging_dir)
+        )

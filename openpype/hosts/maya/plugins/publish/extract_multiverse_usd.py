@@ -176,7 +176,7 @@ class ExtractMultiverseUsd(publish.Extractor):
         self.log.info("Export options: {0}".format(options))
 
         # Perform extraction
-        self.log.info("Performing extraction ...")
+        self.log.debug("Performing Extraction ...")
 
         with maintained_selection():
             members = instance.data("setMembers")
@@ -243,8 +243,9 @@ class ExtractMultiverseUsd(publish.Extractor):
         }
         instance.data["representations"].append(representation)
 
-        self.log.info("Extracted instance {} to {}".format(
-            instance.name, file_path))
+        self.log.debug(
+            "Extracted instance {} to {}".format(instance.name, file_path)
+        )
 
 
 class ExtractMultiverseUsdAnim(ExtractMultiverseUsd):

@@ -178,10 +178,8 @@ class ValidateModelIdsToExistingVersion(pyblish.api.InstancePlugin):
         if not representation:
             return
 
-        cls.log.info("Validating using '{}' version v{:03d}".format(
-            subset_name,
-            version["name"]
-        ))
+        cls.log.info("Comparing model changes since '{}' "
+                     "version v{:03d}".format(subset_name, version["name"]))
 
         path = get_representation_path(representation)
         if not path or not os.path.exists(path):

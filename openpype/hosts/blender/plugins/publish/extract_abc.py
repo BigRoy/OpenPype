@@ -24,7 +24,7 @@ class ExtractABC(publish.Extractor):
         context = bpy.context
 
         # Perform extraction
-        self.log.info("Performing extraction..")
+        self.log.debug("Performing Extraction..")
 
         plugin.deselect_all()
 

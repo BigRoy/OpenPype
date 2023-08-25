@@ -37,7 +37,7 @@ class ExtractRedshiftProxy(publish.Extractor):
             # camera warnExisting transformPivotToOrigin
             rt.rsProxy(rs_filepath, 1, 0, 0, start, end, 0, 1, 1)
 
-        self.log.info("Performing Extraction ...")
+        self.log.debug("Performing Extraction ...")
 
         if "representations" not in instance.data:
             instance.data["representations"] = []

@@ -306,9 +306,12 @@ class IntegrateAsset(pyblish.api.InstancePlugin):
         # increase if the file transaction takes a long time.
         op_session.commit()
 
-        self.log.info("Subset {subset[name]} and Version {version[name]} "
-                      "written to database..".format(subset=subset,
-                                                     version=version))
+        self.log.info(
+            "Subset {subset[name]} version {version[name]} written to database"
+            .format(
+                subset=subset, version=version
+            )
+        )
 
         # Process all file transfers of all integrations now
         self.log.debug("Integrating source files to destination ...")
@@ -392,8 +395,13 @@ class IntegrateAsset(pyblish.api.InstancePlugin):
             p["representation"]["_id"]: p for p in prepared_representations
         }
 
-        self.log.info("Registered {} representations"
-                      "".format(len(prepared_representations)))
+        self.log.info(
+            "Registered {} representations: {}".format(
+                len(prepared_representations),
+                ", ".join(p["representation"]["name"]
+                          for p in prepared_representations)
+            )
+        )
 
     def prepare_subset(self, instance, op_session, project_name):
         asset_doc = instance.data["assetEntity"]

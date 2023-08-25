@@ -98,7 +98,7 @@ class CleanUp(pyblish.api.InstancePlugin):
             self.log.info("Staging dir: %s should be persistent" % staging_dir)
             return
 
-        self.log.info("Removing staging directory {}".format(staging_dir))
+        self.log.debug("Removing staging directory {}".format(staging_dir))
         shutil.rmtree(staging_dir)
 
     def clean_renders(self, instance, skip_cleanup_filepaths):

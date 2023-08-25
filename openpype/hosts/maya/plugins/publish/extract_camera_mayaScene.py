@@ -157,7 +157,7 @@ class ExtractCameraMayaScene(publish.Extractor):
                             )
                         )
                         baked = lib.bake_to_world_space(
-                            transform,
+                            nodes=[transform],
                             frame_range=[start, end],
                             step=step
                         )

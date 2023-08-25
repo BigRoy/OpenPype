@@ -13,6 +13,8 @@ from openpype.client import (
 )
 from openpype.pipeline import get_representation_path
 from openpype.pipeline.publish import (
+    PublishValidationError,
+    OptionalPyblishPluginMixin,
     RepairAction,
     ValidateContentsOrder
 )
@@ -109,7 +111,8 @@ def get_alembic_ids_cache(path):
     return dict(six.iteritems(id_nodes))
 
 
-class ValidateModelIdsToExistingVersion(pyblish.api.InstancePlugin):
+class ValidateModelIdsToExistingVersion(pyblish.api.InstancePlugin,
+                                        OptionalPyblishPluginMixin):
     """Validate node ids haven't changed since latest published version.
 
     The node ids of the current workfile are compared to the latest published
@@ -131,10 +134,28 @@ class ValidateModelIdsToExistingVersion(pyblish.api.InstancePlugin):
 
     def process(self, instance):
 
+        if not self.is_active(instance.data):
+            return
+
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Detected changed ids "
-                               "on {} nodes".format(len(invalid)))
+            message = "Detected changed ids on {} nodes".format(len(invalid))
+            description = (
+                "## Model node ids changed since last version\n"
+                "When comparing the node ids of the current workfile to the "
+                "latest published Alembic of the subset nodes names are found "
+                "in the previous publish where `cbId` attribute had a "
+                "different value. It's usually recommended to preserve the "
+                "`cbId` attribute values as much as possible over time.\n\n"
+                "Repairing this validator will set the `cbId` value to match"
+                "the previous publish."
+            )
+
+            raise PublishValidationError(
+                title="Model ids have changed",
+                message=message,
+                description=description
+            )
 
     @classmethod
     def get_invalid(cls, instance):
@@ -145,8 +166,8 @@ class ValidateModelIdsToExistingVersion(pyblish.api.InstancePlugin):
             # in our scene. We can now assume our workfiles id has
             # changed since a previous publish.
             cls.log.error("Id changed for: {}\n"
-                          "\t{} (old)\n"
-                          "\t{} (new)".format(node, previous_id, current_id))
+                          "{} (old)\n"
+                          "{} (new)".format(node, previous_id, current_id))
             invalid.append(node)
 
         return invalid

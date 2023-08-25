@@ -7,10 +7,15 @@ from openpype.client import (
     get_subsets,
     get_last_versions
 )
-from openpype.pipeline.publish import filter_instances_for_context_plugin
+from openpype.pipeline.publish import (
+    PublishValidationError,
+    OptionalPyblishPluginMixin,
+    filter_instances_for_context_plugin
+)
 
 
-class ValidateSubsetsLastVersionTask(pyblish.api.InstancePlugin):
+class ValidateSubsetsLastVersionTask(pyblish.api.InstancePlugin,
+                                     OptionalPyblishPluginMixin):
     """Validate if current publish matches last version's task.
 
     If a particular subset (e.g. "pointcacheEnv") for an asset previously came
@@ -35,21 +40,32 @@ class ValidateSubsetsLastVersionTask(pyblish.api.InstancePlugin):
 
     def process(self, instance):
 
+        if not self.is_active(instance.data):
+            return
+
         task = instance.data.get("task") or instance.context.data.get("task")
         last_task = self.get_last_task_for_instance(instance)
         if not last_task:
             return
 
-        if task != last_task:
-            subset_name = instance.data["subset"]
-            asset_name = instance.data["asset"]
-            raise RuntimeError(
-                "Last version of {} > {} was published "
-                "from another task: {}. (current task: {})\n"
-                "If you are sure this is what you want then you can disable "
-                "the validator."
-                "".format(asset_name, subset_name, last_task, task)
-            )
+        if task == last_task:
+            return
+
+        subset_name = instance.data["subset"]
+        asset_name = instance.data["asset"]
+
+        message = (
+            "Last version of {} > {} was published "
+            "from another task: {}. (current task: {})\n"
+            "If you are sure this is what you want then you can disable "
+            "the validator."
+            "".format(asset_name, subset_name, last_task, task)
+        )
+        raise PublishValidationError(
+            title="Publish from different task",
+            message=message,
+            description=message
+        )
 
     def populate_cache(self, context):
         """Populate cache to optimize the query for many instances

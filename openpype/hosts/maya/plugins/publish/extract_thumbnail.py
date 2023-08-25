@@ -159,7 +159,7 @@ class ExtractThumbnail(publish.Extractor):
 
         _, thumbnail = os.path.split(playblast)
 
-        self.log.info("file list  {}".format(thumbnail))
+        self.log.debug("filename: {}".format(thumbnail))
 
         if "representations" not in instance.data:
             instance.data["representations"] = []

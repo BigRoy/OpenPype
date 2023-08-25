@@ -135,7 +135,7 @@ class StoreThumbnailsToAvalon(BaseAction):
 
         example_template_data = {
             "_id": "ID",
-            "thumbnail_root": "THUBMNAIL_ROOT",
+            "thumbnail_root": "THUMBNAIL_ROOT",
             "thumbnail_type": "THUMBNAIL_TYPE",
             "ext": ".EXT",
             "project": {
@@ -262,8 +262,8 @@ class StoreThumbnailsToAvalon(BaseAction):
                 if not res_id:
                     continue
 
-                thubmnail_url = self.get_thumbnail_url(res_id)
-                if self.download_file(thubmnail_url, thumbnail_path):
+                thumbnail_url = self.get_thumbnail_url(res_id)
+                if self.download_file(thumbnail_url, thumbnail_path):
                     downloaded = True
                     break
 

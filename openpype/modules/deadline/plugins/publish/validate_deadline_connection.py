@@ -10,7 +10,7 @@ class ValidateDeadlineConnection(pyblish.api.InstancePlugin):
     label = "Validate Deadline Web Service"
     order = pyblish.api.ValidatorOrder
     hosts = ["maya", "nuke"]
-    families = ["renderlayer"]
+    families = ["renderlayer", "render"]
 
     # Cache responses per URL to query only once per URL
     responses = {}

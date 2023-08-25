@@ -1,3 +1,5 @@
+import json
+import base64
 import os
 import errno
 import logging
@@ -14,6 +16,7 @@ from openpype.host import (
     HostBase,
     IWorkfileHost,
     ILoadHost,
+    IPublishHost,
     HostDirmap,
 )
 from openpype.tools.utils import host_tools
@@ -24,6 +27,9 @@ from openpype.lib import (
 )
 from openpype.pipeline import (
     legacy_io,
+    get_current_project_name,
+    get_current_asset_name,
+    get_current_task_name,
     register_loader_plugin_path,
     register_inventory_action_path,
     register_creator_plugin_path,
@@ -67,7 +73,7 @@ AVALON_CONTAINERS = ":AVALON_CONTAINERS"
 ABOUT_TO_SAVE = False
 
 
-class MayaHost(HostBase, IWorkfileHost, ILoadHost):
+class MayaHost(HostBase, IWorkfileHost, ILoadHost, IPublishHost):
     name = "maya"
 
     def __init__(self):
@@ -75,7 +81,7 @@ class MayaHost(HostBase, IWorkfileHost, ILoadHost):
         self._op_events = {}
 
     def install(self):
-        project_name = legacy_io.active_project()
+        project_name = get_current_project_name()
         project_settings = get_project_settings(project_name)
         # process path mapping
         dirmap_processor = MayaDirmap("maya", project_name, project_settings)
@@ -152,6 +158,20 @@ class MayaHost(HostBase, IWorkfileHost, ILoadHost):
     def maintained_selection(self):
         with lib.maintained_selection():
             yield
+
+    def get_context_data(self):
+        data = cmds.fileInfo("OpenPypeContext", query=True)
+        if not data:
+            return {}
+
+        data = data[0]  # Maya seems to return a list
+        decoded = base64.b64decode(data).decode("utf-8")
+        return json.loads(decoded)
+
+    def update_context_data(self, data, changes):
+        json_str = json.dumps(data)
+        encoded = base64.b64encode(json_str.encode("utf-8"))
+        return cmds.fileInfo("OpenPypeContext", encoded)
 
     def _register_callbacks(self):
         for handler, event in self._op_events.copy().items():
@@ -309,7 +329,7 @@ def handle_workfile_locks():
 
     if lib.IS_HEADLESS:
         return False
-    project_name = legacy_io.active_project()
+    project_name = get_current_project_name()
     return is_workfile_lock_enabled(MayaHost.name, project_name)
 
 
@@ -658,7 +678,7 @@ def before_workfile_open():
 
 
 def before_workfile_save(event):
-    project_name = legacy_io.active_project()
+    project_name = get_current_project_name()
     if handle_workfile_locks():
         _remove_workfile_lock()
     workdir_path = event["workdir_path"]

@@ -27,12 +27,9 @@
                         },
                         {
                             "type": "list",
-                            "key": "statuses_name_change",
-                            "label": "Statuses",
-                            "object_type": {
-                                "type": "text",
-                                "multiline": false
-                            }
+                            "key": "role_list",
+                            "label": "Roles",
+                            "object_type": "text"
                         }
                     ]
                 },

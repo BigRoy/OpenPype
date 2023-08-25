@@ -6,9 +6,7 @@ import six
 import sys
 
 from openpype.lib import Logger
-from openpype.settings import (
-    get_current_project_settings
-)
+from openpype.settings import get_current_project_settings
 
 from openpype.pipeline import CreatorError
 from openpype.pipeline.context_tools import get_current_project_asset
@@ -40,14 +38,6 @@ class RenderSettings(object):
         'renderman': 'rmanGlobals.imageFileFormat',
         'redshift': 'defaultRenderGlobals.imageFilePrefix',
         'mayahardware2': 'defaultRenderGlobals.imageFilePrefix'
-    }
-
-    # Renderman only
-    _image_dir = {
-        'renderman': get_current_project_settings()["maya"]["RenderSettings"]["renderman_renderer"]["image_dir"], # noqa
-        'cryptomatte': get_current_project_settings()["maya"]["RenderSettings"]["renderman_renderer"]["cryptomatte_dir"], # noqa
-        'imageDisplay': get_current_project_settings()["maya"]["RenderSettings"]["renderman_renderer"]["imageDisplay_dir"], # noqa
-        "watermark": get_current_project_settings()["maya"]["RenderSettings"]["renderman_renderer"]["watermark_dir"] # noqa
     }
 
     _aov_chars = {
@@ -142,11 +132,7 @@ class RenderSettings(object):
         elif renderer == "redshift":
             self._set_redshift_settings(width, height)
             mel.eval("redshiftUpdateActiveAovList")
-
-        if renderer == "renderman":
-            image_dir = self._image_dir["renderman"]
-            cmds.setAttr("rmanGlobals.imageOutputDir",
-                         image_dir, type="string")
+        elif renderer == "renderman":
             self._set_renderman_settings(width, height)
 
         # Set global output settings
@@ -288,6 +274,17 @@ class RenderSettings(object):
             ["RenderSettings"]
             ["renderman_renderer"]
         )
+
+        image_dirs = {
+            "renderman": rman_render_presets["image_dir"],
+            "cryptomatte": rman_render_presets["cryptomatte_dir"],
+            "imageDisplay": rman_render_presets["imageDisplay_dir"],
+            "watermark": rman_render_presets["watermark_dir"]
+        }
+
+        cmds.setAttr("rmanGlobals.imageOutputDir",
+                     image_dirs["renderman"], type="string")
+
         display_filters = rman_render_presets["display_filters"]
         d_filters_number = len(display_filters)
         aov_separator = self.get_aov_separator()
@@ -302,7 +299,7 @@ class RenderSettings(object):
                              "rmanGlobals.displayFilters[%i]" % i,
                              force=True)
             if filter_nodes.startswith("PxrImageDisplayFilter"):
-                imageDisplay_dir = self._image_dir["imageDisplay"]
+                imageDisplay_dir = image_dirs["imageDisplay"]
                 imageDisplay_dir = imageDisplay_dir.replace("{aov_separator}",
                                                             aov_separator)
                 cmds.setAttr(filter_nodes + ".filename",
@@ -322,13 +319,13 @@ class RenderSettings(object):
                              force=True)
 
             if filter_nodes.startswith("PxrCryptomatte"):
-                matte_dir = self._image_dir["cryptomatte"]
+                matte_dir = image_dirs["cryptomatte"]
                 matte_dir = matte_dir.replace("{aov_separator}",
                                               aov_separator)
                 cmds.setAttr(filter_nodes + ".filename",
                              matte_dir, type="string")
             elif filter_nodes.startswith("PxrWatermarkFilter"):
-                watermark_dir = self._image_dir["watermark"]
+                watermark_dir = image_dirs["watermark"]
                 watermark_dir = watermark_dir.replace("{aov_separator}",
                                                       aov_separator)
                 cmds.setAttr(filter_nodes + ".filename",

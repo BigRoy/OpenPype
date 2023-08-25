@@ -2,6 +2,7 @@ import pyblish.api
 
 from openpype.client import get_subset_by_name
 from openpype.pipeline import legacy_io
+from openpype.pipeline.publish import PublishValidationError
 
 
 class ValidateRenderLayerAOVs(pyblish.api.InstancePlugin):
@@ -28,7 +29,8 @@ class ValidateRenderLayerAOVs(pyblish.api.InstancePlugin):
     def process(self, instance):
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Found unregistered subsets: {}".format(invalid))
+            raise PublishValidationError(
+                "Found unregistered subsets: {}".format(invalid))
 
     def get_invalid(self, instance):
         invalid = []

@@ -19,7 +19,7 @@ class CollectRenderableCamera(pyblish.api.InstancePlugin):
         if "vrayscene_layer" in instance.data.get("families", []):
             layer = instance.data.get("layer")
         else:
-            layer = instance.data["setMembers"]
+            layer = instance.data["renderlayer"]
 
         cameras = cmds.ls(type="camera", long=True)
         renderable = [c for c in cameras if

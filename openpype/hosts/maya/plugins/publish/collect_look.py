@@ -295,7 +295,7 @@ class CollectLook(pyblish.api.InstancePlugin):
 
         """
         self.log.debug("Looking for look associations "
-                       "for %s" % instance.data['name'])
+                      "for %s" % instance.data['name'])
 
         # Lookup set (optimization)
         instance_lookup = set(cmds.ls(instance, long=True))
@@ -306,7 +306,7 @@ class CollectLook(pyblish.api.InstancePlugin):
 
         # Ensure iteration happen in a list to allow removing keys from the
         # dict within the loop
-        self.log.info("Gathering set relations ...")
+        self.log.debug("Gathering set relations ...")
         for obj_set in list(sets):
             self.log.debug("From {}".format(obj_set))
             # Get all nodes of the current objectSet (shadingEngine)
@@ -324,7 +324,7 @@ class CollectLook(pyblish.api.InstancePlugin):
                     "Removing redundant set information: {}".format(obj_set))
                 sets.pop(obj_set, None)
 
-        self.log.info("Gathering attribute changes to instance members..")
+        self.log.debug("Gathering attribute changes to instance members..")
         attributes = self.collect_attributes_changed(instance)
 
         # Store data on the instance

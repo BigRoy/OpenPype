@@ -49,6 +49,7 @@ class ExtractAlembic(publish.Extractor):
         attr_prefixes = instance.data.get("attrPrefix", "").split(";")
         attr_prefixes = [value for value in attr_prefixes if value.strip()]
 
+        self.log.debug("Extracting pointcache..")
         # Allow a project to force certain attributes for alembic exports
         attrs += self.bake_attributes
         attr_prefixes += self.bake_attribute_prefixes
@@ -94,7 +95,6 @@ class ExtractAlembic(publish.Extractor):
                                                      end=end))
 
         suspend = not instance.data.get("refresh", False)
-        self.log.info(nodes)
         with suspended_refresh(suspend=suspend):
             with maintained_selection():
                 cmds.select(nodes, noExpand=True)

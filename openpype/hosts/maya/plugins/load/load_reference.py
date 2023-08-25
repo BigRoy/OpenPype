@@ -118,15 +118,20 @@ class ReferenceLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
         except ValueError:
             family = "model"
 
+        project_name = context["project"]["name"]
         # True by default to keep legacy behaviours
         attach_to_root = options.get("attach_to_root", True)
         group_name = options["group_name"]
 
+        # no group shall be created
+        if not attach_to_root:
+            group_name = namespace
+
+        path = self.filepath_from_context(context)
         with maintained_selection():
             cmds.loadPlugin("AbcImport.mll", quiet=True)
-            file_url = self.prepare_root_value(self.fname,
-                                               context["project"]["name"])
 
+            file_url = self.prepare_root_value(path, project_name)
             nodes = cmds.file(file_url,
                               namespace=namespace,
                               sharedReferenceFile=False,
@@ -147,8 +152,6 @@ class ReferenceLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
             if current_namespace != ":":
                 group_name = current_namespace + ":" + group_name
 
-            group_name = "|" + group_name
-
             self[:] = new_nodes
 
             if attach_to_root:
@@ -162,7 +165,7 @@ class ReferenceLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
                     with parent_nodes(roots, parent=None):
                         cmds.xform(group_name, zeroTransformPivots=True)
 
-                settings = get_project_settings(os.environ['AVALON_PROJECT'])
+                settings = get_project_settings(project_name)
                 colors = settings['maya']['load']['colors']
                 c = colors.get(family)
                 if c is not None:
@@ -201,6 +204,11 @@ class ReferenceLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
                 self._post_process_rig(name, namespace, context, options)
             else:
                 if "translate" in options:
+                    if not attach_to_root and new_nodes:
+                        root_nodes = cmds.ls(new_nodes, assemblies=True,
+                                             long=True)
+                        # we assume only a single root is ever loaded
+                        group_name = root_nodes[0]
                     cmds.setAttr("{}.translate".format(group_name),
                                  *options["translate"])
             return new_nodes
@@ -227,6 +235,7 @@ class ReferenceLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
         self._lock_camera_transforms(members)
 
     def _post_process_rig(self, name, namespace, context, options):
+
         nodes = self[:]
         create_rig_animation_instance(
             nodes, context, namespace, options=options, log=self.log

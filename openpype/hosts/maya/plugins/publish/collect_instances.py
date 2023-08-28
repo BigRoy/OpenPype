@@ -58,7 +58,7 @@ class CollectNewInstances(pyblish.api.InstancePlugin):
 
             instance[:] = members_hierarchy
 
-        elif instance.data["family"] != "workfile":
+        elif instance.data["family"] not in {"workfile", "renderlayer"}:
             self.log.warning("Empty instance: \"%s\" " % objset)
         # Store the exact members of the object set
         instance.data["setMembers"] = members

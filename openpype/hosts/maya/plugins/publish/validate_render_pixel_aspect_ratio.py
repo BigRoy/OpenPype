@@ -1,17 +1,20 @@
 from maya import cmds
 
 import pyblish.api
-import openpype.api
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    RepairAction
+)
 
 
 class ValidateRenderResolution(pyblish.api.InstancePlugin):
     """Validates Render Resolution and Pixel Aspect Ratio matches with asset"""
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     label = "Resolution & Pixel Aspect Ratio"
     hosts = ["maya"]
     families = ["renderlayer"]
-    actions = [openpype.api.RepairAction]
+    actions = [RepairAction]
 
     def process(self, instance):
 
@@ -75,5 +78,3 @@ class ValidateRenderResolution(pyblish.api.InstancePlugin):
                     continue
 
                 cmds.setAttr(attr, value)
-
-

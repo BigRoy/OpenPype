@@ -205,3 +205,8 @@ class IntegrateThumbnailsAYON(pyblish.api.ContextPlugin):
             or instance.data.get("name")
             or "N/A"
         )
+
+
+# Do not even run the plug-in if ayon server is not enabled
+if not AYON_SERVER_ENABLED:
+    del IntegrateThumbnailsAYON

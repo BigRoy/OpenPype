@@ -49,7 +49,8 @@ def get_selected_nodes():
     """Get information from current selection"""
 
     selection = cmds.ls(selection=True, long=True)
-    hierarchy = lib.get_all_children(selection)
+    hierarchy = lib.get_all_children(selection,
+                                     ignore_intermediate_objects=True)
     return list(set(selection + hierarchy))
 
 

@@ -72,7 +72,6 @@ class CollectNewInstances(pyblish.api.InstancePlugin):
             if value is not None:
                 instance.data[attr_name] = int(value)
 
-        # Append start frame and end frame to label if present
         if "frameStart" in instance.data and "frameEnd" in instance.data:
             # Take handles from context if not set locally on the instance
             for key in ["handleStart", "handleEnd"]:
@@ -82,6 +81,7 @@ class CollectNewInstances(pyblish.api.InstancePlugin):
                         value = int(value)
                     instance.data[key] = value
 
+            # Compute frameStartHandle and frameEndHandle
             instance.data["frameStartHandle"] = int(
                 instance.data["frameStart"] - instance.data["handleStart"]
             )

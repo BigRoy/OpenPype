@@ -327,22 +327,6 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
         # Update the instace
         instance.data.update(data)
 
-        maya_render_plugin = "MayaBatch"
-
-        options["mayaRenderPlugin"] = maya_render_plugin
-
-        return options
-
-    def _discover_pools(self, attributes):
-        primary_pool = attributes.get("primaryPool")
-        secondary_pool = attributes.get("secondaryPool")
-
-        # Ensure empty entry token is caught
-        if secondary_pool == "-":
-            secondary_pool = None
-
-        return primary_pool, secondary_pool
-
     @staticmethod
     def get_render_attribute(attr, layer):
         """Get attribute from render options.

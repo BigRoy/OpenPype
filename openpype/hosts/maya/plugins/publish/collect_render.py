@@ -176,7 +176,6 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
                 publish_meta_path = os.path.dirname(full_path)
             aov_dict[aov_first_key] = full_paths
         full_exp_files = [aov_dict]
-        self.log.info(full_exp_files)
 
         if publish_meta_path is None:
             raise KnownPublishError("Unable to detect any expected output "
@@ -229,7 +228,7 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
             common_publish_meta_path = "/" + common_publish_meta_path
 
         if os.environ.get("OPENPYPE_DEBUG") == "1":
-            self.log.info(
+            self.log.debug(
                 "Publish meta path: {}".format(common_publish_meta_path)
             )
 

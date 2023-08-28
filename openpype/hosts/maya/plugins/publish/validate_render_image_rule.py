@@ -27,10 +27,10 @@ class ValidateRenderImageRule(pyblish.api.InstancePlugin):
 
         if current_images_rule != required_images_rule:
             raise PublishValidationError(
-                (
-                    "Invalid workspace `images` file rule value: '{}'. "
-                    "Must be set to: '{}'"
-                ).format(current_images_rule, required_images_rule))
+                "Invalid workspace `images` file rule value: '{}'. "
+                "Must be set to: '{}'".format(current_images_rule,
+                                              required_images_rule)
+            )
 
     @classmethod
     def repair(cls, instance):

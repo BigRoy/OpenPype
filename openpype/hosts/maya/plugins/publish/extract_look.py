@@ -307,8 +307,8 @@ class MakeTX(TextureProcessor):
 
             render_colorspace = color_management["rendering_space"]
 
-            self.log.info("tx: converting colorspace {0} "
-                          "-> {1}".format(colorspace,
+            self.log.debug("tx: converting colorspace {0} "
+                           "-> {1}".format(colorspace,
                                           render_colorspace))
             args.extend(["--colorconvert", colorspace, render_colorspace])
             args.extend(["--colorconfig", config_path])
@@ -331,7 +331,7 @@ class MakeTX(TextureProcessor):
         if not os.path.exists(resources_dir):
             os.makedirs(resources_dir)
 
-        self.log.info("Generating .tx file for %s .." % source)
+        self.log.debug("Generating .tx file for %s .." % source)
 
         subprocess_args = maketx_args + [
             "-v",  # verbose
@@ -815,8 +815,8 @@ class ExtractLook(publish.Extractor):
             if not processed_result:
                 raise RuntimeError("Texture Processor {} returned "
                                    "no result.".format(processor))
-            self.log.info("Generated processed "
-                          "texture: {}".format(processed_result.path))
+            self.log.debug("Generated processed "
+                           "texture: {}".format(processed_result.path))
 
             # TODO: Currently all processors force copy instead of allowing
             #       hardlinks using source hashes. This should be refactored
@@ -827,7 +827,7 @@ class ExtractLook(publish.Extractor):
         if not force_copy:
             existing = self._get_existing_hashed_texture(filepath)
             if existing:
-                self.log.info("Found hash in database, preparing hardlink..")
+                self.log.debug("Found hash in database, preparing hardlink..")
                 return TextureResult(
                     path=filepath,
                     file_hash=texture_hash,

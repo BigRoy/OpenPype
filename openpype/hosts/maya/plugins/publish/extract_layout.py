@@ -159,5 +159,5 @@ class ExtractLayout(publish.Extractor):
         }
         instance.data["representations"].append(json_representation)
 
-        self.log.info("Extracted instance '%s' to: %s",
-                      instance.name, json_representation)
+        self.log..debug("Extracted instance '%s' to: %s",
+                        instance.name, json_representation)

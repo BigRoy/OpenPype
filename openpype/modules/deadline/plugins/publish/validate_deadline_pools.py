@@ -50,7 +50,7 @@ class ValidateDeadlinePools(OptionalPyblishPluginMixin,
 
     def raise_error(self, msg, pools):
         formatting_data = {
-            "pools_str": ",".join(sorted(pools)),
+            "pools_str": ", ".join(sorted(pools)),
             "invalid_value_str": msg
         }
         raise PublishXmlValidationError(self, msg,

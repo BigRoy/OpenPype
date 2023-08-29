@@ -24,7 +24,6 @@ class ValidateDeadlinePools(OptionalPyblishPluginMixin,
                 "renderlayer",
                 "maxrender"]
     optional = True
-    
 
     # cache
     pools_per_url = {}

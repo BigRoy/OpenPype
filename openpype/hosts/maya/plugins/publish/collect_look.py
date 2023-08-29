@@ -345,6 +345,7 @@ class CollectLook(pyblish.api.InstancePlugin):
             "rman__surface",
             "rman__displacement"
         ]
+        materials = []
         if look_sets:
             self.log.debug("Found look sets: {}".format(look_sets))
 
@@ -418,6 +419,9 @@ class CollectLook(pyblish.api.InstancePlugin):
                         not in instance_lookup)
 
         self.log.debug("Collected look for %s" % instance)
+        self.log.info("Collected {} materials with {} "
+                      "textures.".format(len(materials), len(resources)))
+
 
     def collect_sets(self, instance):
         """Collect all objectSets which are of importance for publishing
@@ -591,12 +595,12 @@ class CollectLook(pyblish.api.InstancePlugin):
                 self.log.error("No valid files found from node `%s`" % node)
 
             if os.environ.get("OPENPYPE_DEBUG") == "1":
-                self.log.info("collection of resource done:")
-                self.log.info("  - node: {}".format(node))
-                self.log.info("  - attribute: {}".format(attribute))
-                self.log.info("  - source: {}".format(source))
-                self.log.info("  - file: {}".format(files))
-                self.log.info("  - color space: {}".format(color_space))
+                self.log.debug("collection of resource done:")
+                self.log.debug("  - node: {}".format(node))
+                self.log.debug("  - attribute: {}".format(attribute))
+                self.log.debug("  - source: {}".format(source))
+                self.log.debug("  - file: {}".format(files))
+                self.log.debug("  - color space: {}".format(color_space))
 
             # Define the resource
             yield {

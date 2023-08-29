@@ -380,12 +380,12 @@ class CollectMultiverseLookData(pyblish.api.InstancePlugin):
             if len(files) == 0:
                 self.log.error("No valid files found from node `%s`" % node)
 
-            self.log.info("collection of resource done:")
-            self.log.info("  - node: {}".format(node))
-            self.log.info("  - attribute: {}".format(fname_attrib))
-            self.log.info("  - source: {}".format(source))
-            self.log.info("  - file: {}".format(files))
-            self.log.info("  - color space: {}".format(color_space))
+            self.log.debug("collection of resource done:")
+            self.log.debug("  - node: {}".format(node))
+            self.log.debug("  - attribute: {}".format(fname_attrib))
+            self.log.debug("  - source: {}".format(source))
+            self.log.debug("  - file: {}".format(files))
+            self.log.debug("  - color space: {}".format(color_space))
 
             # Define the resource
             resource = {"node": node,

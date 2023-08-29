@@ -55,6 +55,7 @@ class ValidateDeadlinePools(OptionalPyblishPluginMixin,
         }
         raise PublishXmlValidationError(self, msg,
                                         formatting_data=formatting_data)
+
     def get_pools(self, deadline_url):
         if deadline_url not in self.pools_for_deadline_url:
             self.log.debug(

@@ -182,16 +182,6 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
         if instance_version != 1:
             override_version = instance_version
 
-        output_dir = self._get_publish_folder(
-            anatomy,
-            deepcopy(instance.data["anatomyData"]),
-            instance.data.get("asset"),
-            instances[0]["subset"],
-            instance.context,
-            instances[0]["family"],
-            override_version
-        )
-
         # Transfer the environment from the original job to this dependent
         # job so they use the same environment
         metadata_path, rootless_metadata_path = \
@@ -327,12 +317,13 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
             sorted(instances, key=artist_sort)
         ):
             output_dir = self._get_publish_folder(
-                instance.context.data['anatomy'],
-                deepcopy(instance.data["anatomyData"]),
-                instance.data.get("asset"),
-                output_instance["subset"],
-                'render',
-                override_version
+                anatomy=instance.context.data['anatomy'],
+                template_data=deepcopy(instance.data["anatomyData"]),
+                asset=instance.data.get("asset"),
+                subset=output_instance["subset"],
+                context=instance.context,
+                family=output_instance["family"],
+                version=override_version
             )
             output_dir = output_dir.replace("\\", "/")
             payload["JobInfo"]["OutputDirectory{}".format(i)] = output_dir

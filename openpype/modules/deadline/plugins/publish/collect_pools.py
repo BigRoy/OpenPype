@@ -31,22 +31,12 @@ class CollectDeadlinePools(pyblish.api.InstancePlugin,
         cls.primary_pool = settings.get("primary_pool", None)
         cls.secondary_pool = settings.get("secondary_pool", None)
 
-        if not hasattr(DeadlineModule, "_cache_available_pools"):
-            # Secretly cache the pools on the DeadlineModule that way
-            # we don't need to query deadline web service every time reset
-            # This is fine since our Deadline pools are mostly static anyway
-            # and otherwise we can request an artist to restart their DCCs
-            deadline_url = (
-                system_settings["modules"]
-                               ["deadline"]
-                               ["deadline_urls"]
-                               ["default"]
-            )
-            available_pools = DeadlineModule.get_deadline_pools(deadline_url,
-                                                                log=cls.log)
-            DeadlineModule._cache_available_pools = available_pools
-
-        cls.available_pools = DeadlineModule._cache_available_pools
+        deadline_url = (
+            system_settings["modules"]["deadline"]["deadline_urls"]["default"]
+        )
+        cls.available_pools = DeadlineModule.get_deadline_pools_cached(
+            deadline_url, log=cls.log
+        )
 
     def process(self, instance):
 

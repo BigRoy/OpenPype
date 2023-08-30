@@ -45,6 +45,7 @@ from openpype.hosts.maya.api.lib_rendersettings import RenderSettings
 from openpype.hosts.maya.api.lib import get_attr_in_layer
 
 from openpype_modules.deadline import abstract_submit_deadline
+from openpype.modules.deadline.deadline_module import DeadlineModule
 from openpype_modules.deadline.abstract_submit_deadline import DeadlineJobInfo
 from openpype.tests.lib import is_in_tests
 from openpype.lib import is_running_from_build
@@ -141,6 +142,8 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
     group = "none"
     strict_error_checking = True
 
+    slaves = []
+
     @classmethod
     def apply_settings(cls, project_settings, system_settings):
         settings = project_settings["deadline"]["publish"]["MayaSubmitDeadline"]  # noqa
@@ -157,6 +160,16 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
         cls.group = settings.get("group", cls.group)
         cls.strict_error_checking = settings.get("strict_error_checking",
                                                  cls.strict_error_checking)
+
+        # Colorbleed edit: Because we have only one Deadline URL we can
+        #   always use the default and thus cache it to make the attribute def
+        #   and enum
+        deadline_url = (
+            system_settings["modules"]["deadline"]["deadline_urls"]["default"]
+        )
+        cls.slaves = DeadlineModule.get_deadline_slaves_cached(
+            deadline_url, log=cls.log
+        )
 
     def get_job_info(self):
         job_info = DeadlineJobInfo(Plugin="MayaBatch")
@@ -204,8 +217,9 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
 
         attr_values = self.get_attr_values_from_data(instance.data)
         render_globals = instance.data.setdefault("renderGlobals", dict())
-        machine_list = attr_values.get("machineList", "")
+        machine_list = attr_values.get("machineList", [])
         if machine_list:
+            machine_list = ",".join(machine_list)
             if attr_values.get("whitelist", True):
                 machine_list_key = "Whitelist"
             else:
@@ -867,16 +881,19 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
                       decimals=0,
                       minimum=1,
                       maximum=1000),
-            TextDef("machineList",
+            EnumDef("machineList",
                     label="Machine List",
-                    default="",
-                    placeholder="machine1,machine2"),
+                    default=None,
+                    items=cls.slaves or [""],
+                    hidden=not cls.slaves,
+                    multiselection=True),
             EnumDef("whitelist",
                     label="Machine List (Allow/Deny)",
                     items={
                         True: "Allow List",
                         False: "Deny List",
                     },
+                    hidden=not cls.slaves,
                     default=False),
             NumberDef("tile_priority",
                       label="Tile Assembler Priority",

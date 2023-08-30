@@ -26,11 +26,7 @@ class ValidateDeadlineConnection(pyblish.api.InstancePlugin):
         assert deadline_url, "Requires Deadline Webservice URL"
 
         if deadline_url not in self.responses:
-            self.log.debug(
-                "Validating deadline webservice URL: ".format(deadline_url))
-            response = requests_get(deadline_url)
-            response.encoding = "ascii"
-            self.responses[deadline_url] = response
+            self.responses[deadline_url] = requests_get(deadline_url)
 
         response = self.responses[deadline_url]
         assert response.ok, "Response must be ok"

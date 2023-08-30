@@ -68,7 +68,7 @@ class ExtractRedshiftProxy(publish.Extractor):
         # vertex_colors = instance.data.get("vertexColors", False)
 
         # Write out rs file
-        self.log.info("Writing: '%s'" % file_path)
+        self.log.debug("Writing: '%s'" % file_path)
 
         # Allow overriding what renderlayer to export from. By default force
         # it to the default render layer
@@ -99,4 +99,4 @@ class ExtractRedshiftProxy(publish.Extractor):
         instance.data["representations"].append(representation)
 
         self.log.debug("Extracted instance '%s' to: %s"
-                      % (instance.name, staging_dir))
+                       % (instance.name, staging_dir))

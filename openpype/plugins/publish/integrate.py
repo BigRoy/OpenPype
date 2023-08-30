@@ -155,13 +155,13 @@ class IntegrateAsset(pyblish.api.InstancePlugin):
 
         # Instance should be integrated on a farm
         if instance.data.get("farm"):
-            self.log.info(
+            self.log.debug(
                 "Instance is marked to be processed on farm. Skipping")
             return
 
         # Instance is marked to not get integrated
         if not instance.data.get("integrate", True):
-            self.log.info("Instance is marked to skip integrating. Skipping")
+            self.log.debug("Instance is marked to skip integrating. Skipping")
             return
 
         filtered_repres = self.filter_representations(instance)
@@ -306,12 +306,9 @@ class IntegrateAsset(pyblish.api.InstancePlugin):
         # increase if the file transaction takes a long time.
         op_session.commit()
 
-        self.log.info(
-            "Subset {subset[name]} version {version[name]} written to database"
-            .format(
-                subset=subset, version=version
-            )
-        )
+        self.log.info("Subset '{subset[name]}' version {version[name]} "
+                      "written to database..".format(subset=subset,
+                                                     version=version))
 
         # Process all file transfers of all integrations now
         self.log.debug("Integrating source files to destination ...")

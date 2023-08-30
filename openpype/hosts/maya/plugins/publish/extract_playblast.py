@@ -239,8 +239,7 @@ class ExtractPlayblast(publish.Extractor):
                 frame_collection = collection
                 self.log.debug(
                     "Found collection of interest {}".format(
-                        str(frame_collection))
-                )
+                        str(frame_collection)))
 
         if "representations" not in instance.data:
             instance.data["representations"] = []

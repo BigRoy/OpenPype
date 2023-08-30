@@ -87,7 +87,7 @@ class ValidateYetiRenderScriptCallbacks(pyblish.api.ContextPlugin):
 
         if renderer == "redshift":
             cls.log.debug("Redshift ignores any pre and post render callbacks")
-            return []
+            return False
 
         callback_lookup = cls.callbacks.get(renderer, {})
         if not callback_lookup:

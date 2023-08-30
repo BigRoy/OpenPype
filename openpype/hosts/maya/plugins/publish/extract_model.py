@@ -56,7 +56,7 @@ class ExtractModel(publish.Extractor,
         path = os.path.join(stagingdir, filename)
 
         # Perform extraction
-        self.log.debug("Performing Extraction ...")
+        self.log.debug("Performing extraction ...")
 
         # Get only the shape contents we need in such a way that we avoid
         # taking along intermediateObjects
@@ -102,6 +102,5 @@ class ExtractModel(publish.Extractor,
         }
         instance.data["representations"].append(representation)
 
-        self.log.debug(
-            "Extracted instance '%s' to: %s" % (instance.name, path)
-        )
+        self.log.debug("Extracted instance '%s' to: %s" % (instance.name,
+                                                           path))

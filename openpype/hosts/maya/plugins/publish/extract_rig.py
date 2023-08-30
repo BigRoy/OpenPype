@@ -39,7 +39,7 @@ class ExtractRig(publish.Extractor):
         path = os.path.join(dir_path, filename)
 
         # Perform extraction
-        self.log.debug("Performing Extraction ...")
+        self.log.debug("Performing extraction ...")
         with maintained_selection():
             cmds.select(instance, noExpand=True)
             cmds.file(path,
@@ -63,6 +63,4 @@ class ExtractRig(publish.Extractor):
         }
         instance.data["representations"].append(representation)
 
-        self.log.debug(
-            "Extracted instance '%s' to: %s" % (instance.name, path)
-        )
+        self.log.debug("Extracted instance '%s' to: %s", instance.name, path)

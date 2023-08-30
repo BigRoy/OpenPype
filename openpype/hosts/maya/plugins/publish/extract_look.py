@@ -511,12 +511,12 @@ class ExtractLook(publish.Extractor):
                             )
 
         # Write the JSON data
-        self.log.debug("Extracting json file: {}".format(json_path))
         data = {
             "attributes": lookdata["attributes"],
             "relationships": relationships
         }
 
+        self.log.debug("Extracting json file: {}".format(json_path))
         with open(json_path, "w") as f:
             json.dump(data, f)
 
@@ -589,14 +589,13 @@ class ExtractLook(publish.Extractor):
         resources = instance.data["resources"]
         color_management = lib.get_color_management_preferences()
 
-        # Temporary fix to NOT create hardlinks on windows machines
-        if platform.system().lower() == "windows":
-            self.log.debug(
+        force_copy = instance.data.get("forceCopy", False)
+        if not force_copy and platform.system().lower() == "windows":
+            # Temporary fix to NOT create hardlinks on windows machines
+            self.log.warning(
                 "Forcing copy instead of hardlink due to issues on Windows..."
             )
             force_copy = True
-        else:
-            force_copy = instance.data.get("forceCopy", False)
 
         destinations_cache = {}
 

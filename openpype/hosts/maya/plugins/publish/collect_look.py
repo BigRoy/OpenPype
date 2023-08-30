@@ -320,8 +320,9 @@ class CollectLook(pyblish.api.InstancePlugin):
             # Remove sets that didn't have any members assigned in the end
             # Thus the data will be limited to only what we need.
             if not sets[obj_set]["members"]:
-                self.log.info(
-                    "Removing redundant set information: {}".format(obj_set))
+                self.log.debug(
+                    "Removing redundant set information: {}".format(obj_set)
+                )
                 sets.pop(obj_set, None)
 
         self.log.debug("Gathering attribute changes to instance members..")
@@ -592,7 +593,7 @@ class CollectLook(pyblish.api.InstancePlugin):
 
             files = get_file_node_files(node)
             if len(files) == 0:
-                self.log.error("No valid files found from node `%s`" % node)
+                self.log.debug("No valid files found from node `%s`" % node)
 
             if os.environ.get("OPENPYPE_DEBUG") == "1":
                 self.log.debug("collection of resource done:")

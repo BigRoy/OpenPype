@@ -268,7 +268,7 @@ class CollectMultiverseLookData(pyblish.api.InstancePlugin):
         cmds.loadPlugin("MultiverseForMaya", quiet=True)
         import multiverse
 
-        self.log.info("Processing mvLook for '{}'".format(instance))
+        self.log.debug("Processing mvLook for '{}'".format(instance))
 
         nodes = set()
         for node in instance:
@@ -287,7 +287,7 @@ class CollectMultiverseLookData(pyblish.api.InstancePlugin):
         publishMipMap = instance.data["publishMipMap"]
 
         for node in nodes:
-            self.log.info("Getting resources for '{}'".format(node))
+            self.log.debug("Getting resources for '{}'".format(node))
 
             # We know what nodes need to be collected, now we need to
             # extract the materials overrides.
@@ -406,14 +406,14 @@ class CollectMultiverseLookData(pyblish.api.InstancePlugin):
         extra_files = []
         self.log.debug("Expecting MipMaps, going to look for them.")
         for fname in files:
-            self.log.info("Checking '{}' for mipmaps".format(fname))
+            self.log.debug("Checking '{}' for mipmaps".format(fname))
             if is_mipmap(fname):
                 self.log.debug(" - file is already MipMap, skipping.")
                 continue
 
             mipmap = get_mipmap(fname)
             if mipmap:
-                self.log.info(" mipmap found for '{}'".format(fname))
+                self.log.debug(" mipmap found for '{}'".format(fname))
                 extra_files.append(mipmap)
             else:
                 self.log.warning(" no mipmap found for '{}'".format(fname))

@@ -105,7 +105,7 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
                     "family": cmds.getAttr("{}.family".format(s)),
                 }
             )
-            self.log.info(" -> attach render to: {}".format(s))
+            self.log.debug(" -> attach render to: {}".format(s))
 
         layer_name = layer.name()
 
@@ -302,7 +302,7 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
         )
         if rr_settings["enabled"]:
             data["rrPathName"] = instance.data.get("rrPathName")
-            self.log.info(data["rrPathName"])
+            self.log.debug(data["rrPathName"])
 
         if self.sync_workfile_version:
             data["version"] = context.data["version"]

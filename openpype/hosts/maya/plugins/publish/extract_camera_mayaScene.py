@@ -189,7 +189,7 @@ class ExtractCameraMayaScene(publish.Extractor):
                         unlock(plug)
                         cmds.setAttr(plug, value)
 
-                    self.log.debug("Performing Extraction..")
+                    self.log.debug("Performing extraction..")
                     cmds.select(cmds.ls(members, dag=True,
                                         shapes=True, long=True), noExpand=True)
                     cmds.file(path,

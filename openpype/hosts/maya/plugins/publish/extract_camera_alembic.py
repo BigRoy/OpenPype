@@ -94,7 +94,7 @@ class ExtractCameraAlembic(publish.Extractor):
                 "Attributes to bake must be specified as a list"
             )
             for attr in self.bake_attributes:
-                self.log.info("Adding {} attribute".format(attr))
+                self.log.debug("Adding {} attribute".format(attr))
                 job_str += " -attr {0}".format(attr)
 
             with lib.evaluation("off"):

@@ -48,11 +48,10 @@ class CreateLook(plugin.MayaCreator):
             get_legacy_layer_name(layer): layer.name()
             for layer in renderlayers
         }
-        current_renderlayer = get_legacy_layer_name(rs.getVisibleRenderLayer())
 
         return [
             EnumDef("renderLayer",
-                    default=current_renderlayer,
+                    default="defaultRenderLayer",
                     items=renderlayers,
                     label="Renderlayer",
                     tooltip="Renderlayer to extract the look from"),

@@ -133,6 +133,11 @@
                 },
                 {
                     "type": "boolean",
+                    "key": "use_legacy_subset_names",
+                    "label": "Use Legacy Subset Naming (from before new publisher)"
+                },
+                {
+                    "type": "boolean",
                     "key": "write_color_sets",
                     "label": "Write Color Sets"
                 },

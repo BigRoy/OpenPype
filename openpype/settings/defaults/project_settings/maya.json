@@ -557,6 +557,7 @@
             "publish_mip_map": true
         },
         "CreateAnimation": {
+            "use_legacy_subset_names": false,
             "write_color_sets": false,
             "write_face_sets": false,
             "include_parent_hierarchy": false,

@@ -26,6 +26,8 @@ class CreateAnimation(plugin.MayaHiddenCreator):
     include_parent_hierarchy = False
     include_user_defined_attributes = False
 
+    use_legacy_subset_names = True
+
     def get_instance_attr_defs(self):
 
         defs = lib.collect_animation_defs()
@@ -89,3 +91,26 @@ class CreateAnimation(plugin.MayaHiddenCreator):
         # disable the creator causing the creator plugin to not be
         # discoverable.
         self.enabled = True
+
+    def get_subset_name(
+        self,
+        variant,
+        task_name,
+        asset_doc,
+        project_name,
+        host_name=None,
+        instance=None
+    ):
+        if self.use_legacy_subset_names:
+            # Before the introduction of thew new publisher the names for
+            # animation publishes were just the namespace of the loaded rigs
+            # directly passed as subset name. To preserve that behavior for
+            # legacy projects this results in the same behavior.
+            return variant
+
+        return super(CreateAnimation, self).get_subset_name(variant,
+                                                            task_name,
+                                                            asset_doc,
+                                                            project_name,
+                                                            host_name,
+                                                            instance)

@@ -1,11 +1,29 @@
 from openpype.hosts.maya.api import (
-    plugin,
-    lib
+    plugin
 )
 from openpype.lib import (
     BoolDef,
-    TextDef
+    EnumDef
 )
+from maya.app.renderSetup.model import renderSetup
+
+
+def get_legacy_layer_name(layer):
+    from maya import cmds
+
+    if hasattr(layer, "legacyRenderLayer"):
+        connections = cmds.listConnections(
+            "{}.legacyRenderLayer".format(layer.name()),
+            type="renderLayer",
+            exactType=True,
+            source=True,
+            destination=False,
+            plugs=False
+        ) or []
+        return next(iter(connections), None)
+    else:
+        # e.g. for DefaultRenderLayer
+        return layer.name()
 
 
 class CreateLook(plugin.MayaCreator):
@@ -21,12 +39,21 @@ class CreateLook(plugin.MayaCreator):
 
     def get_instance_attr_defs(self):
 
+        # Get render setup layers and their legacy names since we use the
+        # legacy names to toggle to those layers in the codebase.
+        rs = renderSetup.instance()
+        renderlayers = [rs.getDefaultRenderLayer()]
+        renderlayers.extend(rs.getRenderLayers())
+        renderlayers = {
+            get_legacy_layer_name(layer): layer.name()
+            for layer in renderlayers
+        }
+        current_renderlayer = get_legacy_layer_name(rs.getVisibleRenderLayer())
+
         return [
-            # TODO: This value should actually get set on create!
-            TextDef("renderLayer",
-                    # TODO: Bug: Hidden attribute's label is still shown in UI?
-                    hidden=True,
-                    default=lib.get_current_renderlayer(),
+            EnumDef("renderLayer",
+                    default=current_renderlayer,
+                    items=renderlayers,
                     label="Renderlayer",
                     tooltip="Renderlayer to extract the look from"),
             BoolDef("maketx",

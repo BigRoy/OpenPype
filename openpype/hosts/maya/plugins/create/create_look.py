@@ -37,22 +37,30 @@ class CreateLook(plugin.MayaCreator):
     make_tx = True
     rs_tex = False
 
-    def get_instance_attr_defs(self):
+    # Cache in `apply_settings`
+    renderlayers = {}
+
+    def apply_settings(self, project_settings, system_settings):
+        super(CreateLook, self).apply_settings(
+            project_settings, system_settings
+        )
 
         # Get render setup layers and their legacy names since we use the
         # legacy names to toggle to those layers in the codebase.
         rs = renderSetup.instance()
         renderlayers = [rs.getDefaultRenderLayer()]
         renderlayers.extend(rs.getRenderLayers())
-        renderlayers = {
+        self.renderlayers = {
             get_legacy_layer_name(layer): layer.name()
             for layer in renderlayers
         }
 
+    def get_instance_attr_defs(self):
+
         return [
             EnumDef("renderLayer",
                     default="defaultRenderLayer",
-                    items=renderlayers,
+                    items=self.renderlayers,
                     label="Renderlayer",
                     tooltip="Renderlayer to extract the look from"),
             BoolDef("maketx",

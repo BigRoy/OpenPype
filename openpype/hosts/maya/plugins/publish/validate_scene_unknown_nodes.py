@@ -4,7 +4,9 @@ import pyblish.api
 from openpype.hosts.maya.api.action import SelectInvalidAction
 from openpype.pipeline.publish import (
     ValidateContentsOrder,
-    RepairContextAction
+    RepairContextAction,
+    PublishValidationError,
+    OptionalPyblishPluginMixin
 )
 
 
@@ -14,7 +16,8 @@ def force_delete(node):
         cmds.delete(node)
 
 
-class ValidateSceneUnknownNodes(pyblish.api.ContextPlugin):
+class ValidateSceneUnknownNodes(pyblish.api.ContextPlugin,
+                                OptionalPyblishPluginMixin):
     """Checks to see if there are any unknown nodes in the scene.
 
     This often happens if nodes from plug-ins are used but are not available
@@ -38,10 +41,12 @@ class ValidateSceneUnknownNodes(pyblish.api.ContextPlugin):
 
     def process(self, context):
         """Process all the nodes in the instance"""
+        if not self.is_active(context.data):
+            return
 
         invalid = self.get_invalid(context)
         if invalid:
-            raise ValueError("Unknown nodes found: {0}".format(invalid))
+            raise PublishValidationError("Unknown nodes found: {0}".format(invalid))
 
     @classmethod
     def repair(cls, context):

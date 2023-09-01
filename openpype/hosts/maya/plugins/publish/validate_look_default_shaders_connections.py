@@ -39,7 +39,10 @@ class ValidateLookDefaultShadersConnections(pyblish.api.ContextPlugin):
     def process(self, context):
 
         if self.get_invalid():
-            raise PublishValidationError("Invalid connections.")
+            raise PublishValidationError(
+                "Default shaders in your scene do not have their "
+                "default shader connections. Please repair them to continue."
+            )
 
     @classmethod
     def get_invalid(cls):

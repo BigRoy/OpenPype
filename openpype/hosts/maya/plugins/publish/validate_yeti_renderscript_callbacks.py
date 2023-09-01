@@ -5,7 +5,8 @@ from openpype.pipeline.publish import (
     context_plugin_should_run,
     filter_instances_for_context_plugin,
     ValidateContentsOrder,
-    RepairContextAction
+    RepairContextAction,
+    PublishValidationError
 )
 
 
@@ -49,7 +50,7 @@ class ValidateYetiRenderScriptCallbacks(pyblish.api.ContextPlugin):
 
         invalid = self.get_invalid(context)
         if invalid:
-            raise RuntimeError(
+            raise PublishValidationError(
                 "Invalid Yeti render callbacks found."
             )
 

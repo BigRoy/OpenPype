@@ -3,7 +3,8 @@ from maya import cmds
 import pyblish.api
 from openpype.pipeline.publish import (
     ValidateContentsOrder,
-    RepairAction
+    RepairAction,
+    PublishValidationError
 )
 
 
@@ -40,7 +41,9 @@ class ValidateRenderResolution(pyblish.api.InstancePlugin):
                 invalid = True
 
         if invalid:
-            raise RuntimeError("Invalid resolution or pixel aspect ratio.")
+            raise PublishValidationError(
+                "Invalid resolution or pixel aspect ratio."
+            )
 
     @staticmethod
     def _valid_key(instance, asset, key):

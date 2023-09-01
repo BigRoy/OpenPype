@@ -50,5 +50,6 @@ class ValidateAssemblyName(pyblish.api.InstancePlugin):
 
         invalid = self.get_invalid(instance)
         if invalid:
-            raise PublishValidationError("Found {} invalid named assembly "
-                               "items".format(len(invalid)))
+            raise PublishValidationError(
+                "Found {} invalid named assembly items".format(len(invalid))
+            )

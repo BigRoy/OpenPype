@@ -3,7 +3,9 @@ from maya import cmds
 import pyblish.api
 from openpype.pipeline.publish import (
     ValidateContentsOrder,
-    RepairContextAction
+    RepairContextAction,
+    PublishValidationError,
+    OptionalPyblishPluginMixin
 )
 
 
@@ -13,7 +15,8 @@ def force_delete(node):
         cmds.delete(node)
 
 
-class ValidateSceneUnknownPlugins(pyblish.api.ContextPlugin):
+class ValidateSceneUnknownPlugins(pyblish.api.ContextPlugin,
+                                  OptionalPyblishPluginMixin):
     """Checks to see if there are any unknown plugins in the scene.
 
     This often happens if plug-in requirements were stored with the scene
@@ -49,10 +52,12 @@ class ValidateSceneUnknownPlugins(pyblish.api.ContextPlugin):
 
     def process(self, context):
         """Process all the nodes in the instance"""
+        if not self.is_active(context.data):
+            return
 
         invalid = self.get_invalid()
         if invalid:
-            raise ValueError(
+            raise PublishValidationError(
                 "{} unknown plug-ins found: {}".format(len(invalid), invalid))
 
     @classmethod

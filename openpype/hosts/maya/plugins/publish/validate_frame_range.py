@@ -68,8 +68,8 @@ class ValidateFrameRange(pyblish.api.InstancePlugin,
         inst_handle_end = int(instance.data.get("handleEnd"))
 
         # basic sanity checks
-        assert frame_start_handle <= frame_end_handle, (
-            "start frame is lower then end frame")
+        if frame_start_handle > frame_end_handle:
+            raise PublishValidationError("End frame is lower then start frame")
 
         # compare with data on instance
         errors = []

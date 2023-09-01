@@ -427,6 +427,8 @@ class CollectLook(pyblish.api.InstancePlugin):
         # Sort for log readability
         files.sort()
 
+        return files
+
     def collect_sets(self, instance):
         """Collect all objectSets which are of importance for publishing
 

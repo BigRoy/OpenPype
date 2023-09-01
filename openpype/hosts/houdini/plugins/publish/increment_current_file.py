@@ -40,9 +40,10 @@ class IncrementCurrentFile(pyblish.api.ContextPlugin):
         # Filename must not have changed since collecting
         host = registered_host()  # type: HoudiniHost
         current_file = host.current_file()
-        assert (
-            context.data["currentFile"] == current_file
-        ), "Collected filename mismatches from current scene name."
+        if context.data["currentFile"] != current_file:
+            raise KnownPublishError(
+                "Collected filename mismatches from current scene name."
+            )
 
         new_filepath = version_up(current_file)
         host.save_workfile(new_filepath)

@@ -50,8 +50,7 @@ class ValidateOutRelatedNodeIds(pyblish.api.InstancePlugin):
 
         # get asset id
         nodes = instance.data.get("out_hierarchy", instance[:])
-        for node in cmds.ls(nodes, type=types, shapes=True,
-                            noIntermediate=True, long=True):
+        for node in cmds.ls(nodes, type=types, long=True):
 
             # We only check when the node is *not* referenced
             if cmds.referenceQuery(node, isNodeReferenced=True):

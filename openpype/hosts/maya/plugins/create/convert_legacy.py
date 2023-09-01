@@ -1,6 +1,8 @@
+import copy
+
 from openpype.pipeline.create.creator_plugins import SubsetConvertorPlugin
 from openpype.hosts.maya.api import plugin
-from openpype.hosts.maya.api.lib import read
+from openpype.hosts.maya.api.lib import read, undo_chunk
 
 from openpype.client import get_asset_by_name
 
@@ -72,30 +74,57 @@ class MayaLegacyConvertor(SubsetConvertorPlugin,
         # logic was thus to be live to the current task to begin with.
         data = dict()
         data["task"] = self.create_context.get_current_task_name()
-        for family, instance_nodes in legacy.items():
-            if family not in family_to_id:
-                self.log.warning(
-                    "Unable to convert legacy instance with family '{}'"
-                    " because there is no matching new creator's family"
-                    "".format(family)
-                )
-                continue
+        with undo_chunk():
+            for family, instance_nodes in legacy.items():
+                if family not in family_to_id:
+                    self.log.warning(
+                        "Unable to convert legacy instance with family '{}'"
+                        " because there is no matching new creator's family"
+                        "".format(family)
+                    )
+                    continue
 
-            creator_id = family_to_id[family]
-            creator = self.create_context.creators[creator_id]
-            data["creator_identifier"] = creator_id
+                creator_id = family_to_id[family]
+                creator = self.create_context.creators[creator_id]
+                data["creator_identifier"] = creator_id
 
-            if isinstance(creator, plugin.RenderlayerCreator):
-                self._convert_per_renderlayer(instance_nodes, data, creator)
-            else:
-                self._convert_regular(instance_nodes, data)
+                if isinstance(creator, plugin.RenderlayerCreator):
+                    self._convert_per_renderlayer(instance_nodes,
+                                                  data,
+                                                  creator)
+                else:
+                    self._convert_regular(instance_nodes,
+                                          data)
 
     def _convert_regular(self, instance_nodes, data):
         # We only imprint the creator identifier for it to identify
         # as the new style creator
         for instance_node in instance_nodes:
+
+            # Define variant for the converted instances
+            original_data = read(instance_node)
+            original_family = original_data["family"]
+            original_subset = original_data["subset"]
+            if original_family == "animation":
+                variant = original_subset
+            elif original_subset.startswith(original_family):
+                # Strip off family prefix
+                variant = original_subset[len(original_family):]
+            else:
+                self.log.warning(
+                    "Unknown original variant detected in subset '{}'. "
+                    "Using subset as variant.".format(original_subset)
+                )
+                variant = original_subset
+            data["variant"] = variant
+
+            # Take the converted original data and apply our required
+            # new-style data on top of it
+            full_data = self._convert_original_data(original_data)
+            full_data.update(data)
+
             self.imprint_instance_node(instance_node,
-                                       data=data.copy())
+                                       data=full_data.copy())
 
     def _convert_per_renderlayer(self, instance_nodes, data, creator):
         # Split the instance into an instance per layer
@@ -127,11 +156,12 @@ class MayaLegacyConvertor(SubsetConvertorPlugin,
                 )
                 continue
 
-            creator.create_singleton_node()
+            singleton_node = creator.create_singleton_node()
 
             # We are creating new nodes to replace the original instance
             # Copy the attributes of the original instance to the new node
             original_data = read(instance_node)
+            original_data = self._convert_original_data(original_data)
 
             # The family gets converted to the new family (this is due to
             # "rendering" family being converted to "renderlayer" family)
@@ -142,12 +172,6 @@ class MayaLegacyConvertor(SubsetConvertorPlugin,
             project_name = self.create_context.get_current_project_name()
             asset_doc = get_asset_by_name(project_name,
                                           original_data["asset"])
-            subset_name = creator.get_subset_name(
-                original_data["variant"],
-                data["task"],
-                asset_doc,
-                project_name)
-            original_data["subset"] = subset_name
 
             # Convert to creator attributes when relevant
             creator_attributes = {}
@@ -167,6 +191,17 @@ class MayaLegacyConvertor(SubsetConvertorPlugin,
                         layer
                     )
 
+                # Base variant and subset name on the layer since the original
+                # instance node was just a placeholder singleton representing
+                # data for all layers
+                data["variant"] = layer.name()
+                data["subset"] = creator.get_subset_name(
+                    data["variant"],
+                    data["task"],
+                    asset_doc,
+                    project_name
+                )
+
                 # Transfer the main attributes of the original instance
                 layer_data = original_data.copy()
                 layer_data.update(data)
@@ -176,3 +211,61 @@ class MayaLegacyConvertor(SubsetConvertorPlugin,
 
             # Delete the legacy instance node
             cmds.delete(instance_node)
+
+            # Match original name
+            cmds.rename(singleton_node, instance_node)
+
+    def _convert_original_data(self, original_data):
+        """Convert any legacy attributes to new data.
+
+        This can be used to conform to new attribute names that might have
+        changed since the legacy nodes, like primaryPool, secondaryPool,
+        machineList, etc.
+        """
+
+        data = copy.deepcopy(original_data)
+
+        family = original_data["family"]
+        if family == "rendering":
+
+            # Convert to specific publish plugin attribute definitions
+            machine_list = [
+                value.strip() for value
+                in data.pop("machineList", "").split(",")
+            ]
+            publish_job_state = (
+                "Suspended" if data.pop("suspendPublishJob", "") else "Active"
+            )
+            primary_pool = data.pop("primaryPool", "")
+            if primary_pool == "none":
+                primary_pool = ""
+            secondary_pool = data.pop("secondaryPool", "")
+            if secondary_pool in {"-", "none"}:
+                secondary_pool = ""
+
+            data["publish_attributes"] = {
+                "CollectDeadlinePools": {
+                    "primaryPool": primary_pool,
+                    "secondaryPool": secondary_pool
+                },
+                "MayaSubmitDeadline": {
+                    "priority": data.pop("priority", 50),
+                    "whitelist": data.pop("whitelist", False),
+                    "machineList": machine_list,
+                    "chunkSize": data.pop("framesPerTask", 1),
+                    "tile_priority": data.pop("tile_priority", 1),
+
+                },
+                "ProcessSubmittedJobOnFarm": {
+                    "publishJobState": publish_job_state
+                }
+            }
+        else:
+            # For other families than rendering we currently have no conversion
+            # and also don't really care about all data because we are secretly
+            # re-using the same instance node as before, but just 'updating'
+            # some imprinted attributes which don't need updating if they
+            # haven't been changed in the codebase.
+            return {}
+
+        return data

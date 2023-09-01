@@ -337,66 +337,10 @@ class CollectLook(pyblish.api.InstancePlugin):
         # Collect file nodes used by shading engines (if we have any)
         files = []
         look_sets = list(sets.keys())
-        shader_attrs = [
-            "surfaceShader",
-            "volumeShader",
-            "displacementShader",
-            "aiSurfaceShader",
-            "aiVolumeShader",
-            "rman__surface",
-            "rman__displacement"
-        ]
         materials = []
         if look_sets:
             self.log.debug("Found look sets: {}".format(look_sets))
-
-            # Get all material attrs for all look sets to retrieve their inputs
-            existing_attrs = []
-            for look in look_sets:
-                for attr in shader_attrs:
-                    if cmds.attributeQuery(attr, node=look, exists=True):
-                        existing_attrs.append("{}.{}".format(look, attr))
-            materials = cmds.listConnections(existing_attrs,
-                                             source=True,
-                                             destination=False) or []
-            self.log.debug("Found materials: {}".format(materials))
-
-            # Get the entire node chain of the look sets
-            # history = cmds.listHistory(look_sets, allConnections=True)
-            history = cmds.listHistory(materials, allConnections=True)
-
-            # Since we retrieved history only of the connected materials
-            # connected to the look sets above we now add direct history
-            # for some of the look sets directly
-            # handling render attribute sets
-            render_set_types = [
-                "VRayDisplacement",
-                "VRayLightMesh",
-                "VRayObjectProperties",
-                "RedshiftObjectId",
-                "RedshiftMeshParameters",
-            ]
-            render_sets = cmds.ls(look_sets, type=render_set_types)
-            if render_sets:
-                history.extend(
-                    cmds.listHistory(render_sets,
-                                     future=False,
-                                     pruneDagObjects=True)
-                    or []
-                )
-
-            # Ensure unique entries only
-            history = list(set(history))
-
-            files = cmds.ls(history,
-                            # It's important only node types are passed that
-                            # exist (e.g. for loaded plugins) because otherwise
-                            # the result will turn back empty
-                            type=list(FILE_NODES.keys()),
-                            long=True)
-
-            # Sort for log readability
-            files.sort()
+            files = self.collect_file_nodes(look_sets)
 
         self.log.debug("Collected file nodes: {}".format(files))
         # Collect textures if any file nodes are found
@@ -423,6 +367,65 @@ class CollectLook(pyblish.api.InstancePlugin):
         self.log.info("Collected {} materials with {} "
                       "textures.".format(len(materials), len(resources)))
 
+    def collect_file_nodes(self, look_sets):
+        """Get the entire node chain of the look sets and return file nodes"""
+
+        shader_attrs = [
+            "surfaceShader",
+            "volumeShader",
+            "displacementShader",
+            "aiSurfaceShader",
+            "aiVolumeShader",
+            "rman__surface",
+            "rman__displacement"
+        ]
+
+        # Get all material attrs for all look sets to retrieve their inputs
+        existing_attrs = []
+        for look in look_sets:
+            for attr in shader_attrs:
+                if cmds.attributeQuery(attr, node=look, exists=True):
+                    existing_attrs.append("{}.{}".format(look, attr))
+        materials = cmds.listConnections(existing_attrs,
+                                         source=True,
+                                         destination=False) or []
+        self.log.debug("Found materials: {}".format(materials))
+        if materials:
+            history = set(cmds.listHistory(materials, allConnections=True))
+        else:
+            history = set()
+
+        # Since we retrieved history only of the connected materials
+        # connected to the look sets above we now add direct history
+        # for some of the look sets directly
+        # handling render attribute sets
+        render_set_types = [
+            "VRayDisplacement",
+            "VRayLightMesh",
+            "VRayObjectProperties",
+            "RedshiftObjectId",
+            "RedshiftMeshParameters",
+        ]
+        render_sets = cmds.ls(look_sets, type=render_set_types)
+        if render_sets:
+            history.update(
+                cmds.listHistory(render_sets,
+                                 future=False,
+                                 pruneDagObjects=True)
+                or []
+            )
+
+        history = list(history)
+        files = cmds.ls(history,
+                        # It's important only node types are passed that
+                        # exist (e.g. for loaded plugins) because otherwise
+                        # the result will turn back empty. That's why we have
+                        # pre-filtered the `FILE_NODES` at the top level
+                        type=list(FILE_NODES.keys()),
+                        long=True)
+
+        # Sort for log readability
+        files.sort()
 
     def collect_sets(self, instance):
         """Collect all objectSets which are of importance for publishing

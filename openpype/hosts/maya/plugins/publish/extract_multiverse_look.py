@@ -104,7 +104,7 @@ class ExtractMultiverseLook(publish.Extractor):
         self.log.debug("Export options: {0}".format(options))
 
         # Perform extraction
-        self.log.debug("Performing extraction ...")
+        self.log.debug("Performing extraction..")
 
         with maintained_selection():
             members = instance.data("setMembers")

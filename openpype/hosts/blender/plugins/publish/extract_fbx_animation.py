@@ -23,7 +23,7 @@ class ExtractAnimationFBX(publish.Extractor):
         stagingdir = self.staging_dir(instance)
 
         # Perform extraction
-        self.log.debug("Performing Extraction..")
+        self.log.debug("Performing extraction..")
 
         # The first collection object in the instance is taken, as there
         # should be only one that contains the asset group.

@@ -56,7 +56,7 @@ class ExtractModel(publish.Extractor,
         path = os.path.join(stagingdir, filename)
 
         # Perform extraction
-        self.log.debug("Performing extraction ...")
+        self.log.debug("Performing extraction..")
 
         # Get only the shape contents we need in such a way that we avoid
         # taking along intermediateObjects

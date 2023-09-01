@@ -117,7 +117,7 @@ class ExtractLayout(publish.Extractor):
         stagingdir = self.staging_dir(instance)
 
         # Perform extraction
-        self.log.debug("Performing Extraction..")
+        self.log.debug("Performing extraction..")
 
         if "representations" not in instance.data:
             instance.data["representations"] = []

@@ -45,7 +45,7 @@ class ExtractModelUSD(publish.Extractor,
                                       contentSource=rt.Name("selected"),
                                       nodeList=node_list)
 
-        self.log.debug("Performing Extraction ...")
+        self.log.debug("Performing extraction..")
         if "representations" not in instance.data:
             instance.data["representations"] = []
 

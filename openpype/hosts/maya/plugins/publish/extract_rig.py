@@ -39,7 +39,7 @@ class ExtractRig(publish.Extractor):
         path = os.path.join(dir_path, filename)
 
         # Perform extraction
-        self.log.debug("Performing extraction ...")
+        self.log.debug("Performing extraction..")
         with maintained_selection():
             cmds.select(instance, noExpand=True)
             cmds.file(path,

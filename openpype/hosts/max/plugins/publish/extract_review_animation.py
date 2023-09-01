@@ -41,7 +41,7 @@ class ExtractReviewAnimation(publish.Extractor):
         if not instance.data.get("keepImages"):
             tags.append("delete")
 
-        self.log.debug("Performing Extraction ...")
+        self.log.debug("Performing extraction..")
 
         representation = {
             "name": instance.data["imageFormat"],

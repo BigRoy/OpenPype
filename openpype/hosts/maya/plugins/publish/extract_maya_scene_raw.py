@@ -63,7 +63,7 @@ class ExtractMayaSceneRaw(publish.Extractor):
             selection += self._get_loaded_containers(members)
 
         # Perform extraction
-        self.log.debug("Performing extraction ...")
+        self.log.debug("Performing extraction..")
         with maintained_selection():
             cmds.select(selection, noExpand=True)
             cmds.file(path,

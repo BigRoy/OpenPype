@@ -24,7 +24,7 @@ class ExtractCamera(publish.Extractor):
         fbx_filename = "{}.fbx".format(instance.name)
 
         # Perform extraction
-        self.log.debug("Performing Extraction..")
+        self.log.debug("Performing extraction..")
 
         # Check if the loaded level is the same of the instance
         if UNREAL_VERSION.major == 5:

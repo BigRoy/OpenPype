@@ -49,7 +49,7 @@ class ExtractModel(publish.Extractor, OptionalPyblishPluginMixin):
                 using=rt.AlembicExport,
             )
 
-        self.log.debug("Performing Extraction ...")
+        self.log.debug("Performing extraction..")
         if "representations" not in instance.data:
             instance.data["representations"] = []
 

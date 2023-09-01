@@ -24,7 +24,7 @@ class ExtractCameraABC(publish.Extractor):
         context = bpy.context
 
         # Perform extraction
-        self.log.debug("Performing Extraction..")
+        self.log.debug("Performing extraction..")
 
         plugin.deselect_all()
 

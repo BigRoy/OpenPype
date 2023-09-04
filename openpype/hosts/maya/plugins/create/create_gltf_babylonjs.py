@@ -2,39 +2,69 @@ from openpype.hosts.maya.api import (
     lib,
     plugin
 )
+from openpype.lib import NumberDef, BoolDef
 
 
-class CreateGltf(plugin.Creator):
+class CreateGltf(plugin.MayaCreator):
     """Create glTF files using BabylonJS"""
 
-    name = "gltf"
-    label = "GLTF"
+    identifier = "io.openpype.creators.maya.gltf_babylonjs"
+    label = "GLTF (BabylonJS)"
     family = "gltf"
     icon = "cubes"
+    description = "Create glTF files using BabylonJS"
 
-    def __init__(self, *args, **kwargs):
-        super(CreateGltf, self).__init__(*args, **kwargs)
-
-        # get basic animation data : start / end / handles / steps
-        for key, value in lib.collect_animation_data().items():
-            self.data[key] = value
-
-        # Write vertex colors with the geometry.
-        self.data["scaleFactor"] = 1.0
-
-        self.data["writeTextures"] = False
-        self.data["exportHiddenObjects"] = False
-        self.data["exportMaterials"] = True
-        self.data["exportTangents"] = True
-        self.data["exportSkins"] = True
-        self.data["exportMorphTangents"] = True
-        self.data["exportMorphNormals"] = True
-        self.data["exportAnimations"] = True
-        self.data["exportAnimationsOnly"] = False
-        self.data["exportTextures"] = True
-        self.data["bakeAnimationFrames"] = False
-        self.data["optimizeAnimations"] = True
-        self.data["optimizeVertices"] = True
-        self.data["dracoCompression"] = False
-
+    def get_instance_attr_defs(self):
         # TODO: Support animation clips
+
+        defs = lib.collect_animation_defs()
+        defs.extend([
+            NumberDef("scaleFactor",
+                      label="Scale Factor",
+                      default=1.0,
+                      decimals=3),
+            BoolDef("writeTextures",
+                    label="Write Textures",
+                    default=False),
+            BoolDef("exportHiddenObjects",
+                    label="Export Hidden Objects",
+                    default=False),
+            BoolDef("exportMaterials",
+                    label="Export Materials",
+                    default=True),
+            BoolDef("exportTangents",
+                    label="Export Tangents",
+                    default=True),
+            BoolDef("exportSkins",
+                    label="Export Skins",
+                    default=True),
+            BoolDef("exportMorphTangents",
+                    label="Export Morph Tangents",
+                    default=True),
+            BoolDef("exportMorphNormals",
+                    label="Export Morph Normals",
+                    default=True),
+            BoolDef("exportAnimations",
+                    label="Export Animations",
+                    default=True),
+            BoolDef("exportAnimationsOnly",
+                    label="Export Animations Only",
+                    default=False),
+            BoolDef("exportTextures",
+                    label="Export Textures",
+                    default=True),
+            BoolDef("bakeAnimationFrames",
+                    label="Bake Animation Frames",
+                    default=False),
+            BoolDef("optimizeAnimations",
+                    label="Optimize Animations",
+                    default=True),
+            BoolDef("optimizeVertices",
+                    label="Optimize Vertices",
+                    default=True),
+            BoolDef("dracoCompression",
+                    label="Draco Compression",
+                    default=False)
+        ])
+
+        return defs

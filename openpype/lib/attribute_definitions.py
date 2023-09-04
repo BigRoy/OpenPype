@@ -424,12 +424,18 @@ class TextDef(AbstractAttrDef):
 
 
 class EnumDef(AbstractAttrDef):
-    """Enumeration of single item from items.
+    """Enumeration of items.
+
+    Enumeration of single item from items. Or list of items if multiselection
+    is enabled.
 
     Args:
-        items: Items definition that can be converted using
-            'prepare_enum_items'.
-        default: Default value. Must be one key(value) from passed items.
+        items (Union[list[str], list[dict[str, Any]]): Items definition that
+            can be converted using 'prepare_enum_items'.
+        default (Optional[Any]): Default value. Must be one key(value) from
+            passed items or list of values for multiselection.
+        multiselection (Optional[bool]): If True, multiselection is allowed.
+            Output is list of selected items.
     """
 
     type = "enum"
@@ -478,7 +484,6 @@ class EnumDef(AbstractAttrDef):
         if value is None:
             return copy.deepcopy(self.default)
         return list(self._item_values.intersection(value))
-
 
     def serialize(self):
         data = super(EnumDef, self).serialize()

@@ -140,6 +140,12 @@ class ReferenceLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
                               groupReference=attach_to_root,
                               groupName=group_name)
 
+            # Make sure we get the top level group, otherwise there may be
+            # conflicts if the reference itself within the namespaces contains
+            # an object with the same name as the group name
+            if not group_name.startswith("|"):
+                group_name = "|{}".format(group_name)
+
             shapes = cmds.ls(nodes, shapes=True, long=True)
 
             new_nodes = (list(set(nodes) - set(shapes)))

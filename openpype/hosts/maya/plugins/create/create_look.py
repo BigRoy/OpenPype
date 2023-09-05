@@ -40,10 +40,8 @@ class CreateLook(plugin.MayaCreator):
     # Cache in `apply_settings`
     renderlayers = {}
 
-    def apply_settings(self, project_settings, system_settings):
-        super(CreateLook, self).apply_settings(
-            project_settings, system_settings
-        )
+    def apply_settings(self, project_settings):
+        super(CreateLook, self).apply_settings(project_settings)
 
         # Get render setup layers and their legacy names since we use the
         # legacy names to toggle to those layers in the codebase.

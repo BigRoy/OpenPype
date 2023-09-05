@@ -146,18 +146,17 @@ class ReferenceLoader(openpype.hosts.maya.api.plugin.ReferenceLoader):
             if not group_name.startswith("|"):
                 group_name = "|{}".format(group_name)
 
-            shapes = cmds.ls(nodes, shapes=True, long=True)
-
-            new_nodes = (list(set(nodes) - set(shapes)))
-
             # if there are cameras, try to lock their transforms
-            self._lock_camera_transforms(new_nodes)
+            self._lock_camera_transforms(nodes)
 
             current_namespace = cmds.namespaceInfo(currentNamespace=True)
 
             if current_namespace != ":":
                 group_name = current_namespace + ":" + group_name
 
+            # Exclude shapes in the containerizing
+            shapes = cmds.ls(nodes, shapes=True, long=True)
+            new_nodes = (list(set(nodes) - set(shapes)))
             self[:] = new_nodes
 
             if attach_to_root:

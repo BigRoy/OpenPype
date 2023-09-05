@@ -51,6 +51,7 @@ class CollectArnoldSceneSource(pyblish.api.InstancePlugin):
         if not nodes:
             return []
         children = get_all_children(nodes)
+
         # Make sure nodes merged with children only
         # contains unique entries
-        return list(set(nodes + children))
+        return list(children.union(nodes))

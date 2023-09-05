@@ -7,7 +7,7 @@ Global = {
       ["Reactor:"] = "$(REACTOR)",
 
       ["Config:"] = "UserPaths:Config;OpenPype:Config",
-      ["Scripts:"] = "UserPaths:Scripts;Reactor:System/Scripts;OpenPype:Scripts",
+      ["Scripts:"] = "UserPaths:Scripts;Reactor:System/Scripts",
       ["UserPaths:"] = "UserData:;AllData:;Fusion:;Reactor:Deploy"
     },
   },

@@ -157,9 +157,6 @@ class ProcessSubmittedJobOnFarm(pyblish.api.InstancePlugin,
     # poor man exclusion
     skip_integration_repre_list = []
 
-    # Backwards compatibility for legacy projects
-    legacy_beauty_trailing_underscore = False
-
     def _submit_deadline_post_job(self, instance, job, instances):
         """Submit publish job to Deadline.
 

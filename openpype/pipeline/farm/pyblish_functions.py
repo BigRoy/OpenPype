@@ -545,6 +545,17 @@ def _create_instances_for_aov(instance, skeleton, aov_filter, additional_data,
     exp_files = instance.data["expectedFiles"]
     log = Logger.get_logger("farm_publishing")
 
+    # Backward compatibility: Use legacy subset name with trailing underscore
+    #   for the main beauty layer
+    legacy_beauty_trailing_underscore = (
+        instance.context.data["project_settings"]
+                             ["deadline"]
+                             ["publish"]
+                             ["ProcessSubmittedJobOnFarm"].get(
+            "legacy_beauty_trailing_underscore", False
+        )
+    )
+
     instances = []
     # go through AOVs in expected files
     for aov, files in exp_files[0].items():
@@ -593,6 +604,14 @@ def _create_instances_for_aov(instance, skeleton, aov_filter, additional_data,
                 subset_name = '{}_{}'.format(group_name, aov)
             else:
                 subset_name = '{}'.format(group_name)
+
+        # Backwards compatibility: In earlier versions of OpenPype a
+        #   trailing underscore would be published after a non-AOV layer
+        #   We allow a project to enable that legacy behavior
+        if legacy_beauty_trailing_underscore and not aov:
+            log.debug("Applying legacy beauty trailing "
+                      "underscore for {}".format(subset_name))
+            subset_name += "_"
 
         if isinstance(col, (list, tuple)):
             staging = os.path.dirname(col[0])

@@ -34,7 +34,7 @@ class CollectYetiCache(pyblish.api.InstancePlugin):
     - "increaseRenderBounds"
     - "imageSearchPath"
 
-    Other information is the name of the transform and it's Colorbleed ID
+    Other information is the name of the transform and its `cbId`
     """
 
     order = pyblish.api.CollectorOrder + 0.45
@@ -54,6 +54,16 @@ class CollectYetiCache(pyblish.api.InstancePlugin):
             # Get specific node attributes
             attr_data = {}
             for attr in SETTINGS:
+                # Ignore non-existing attributes with a warning, e.g. cbId
+                # if they have not been generated yet
+                if not cmds.attributeQuery(attr, node=shape, exists=True):
+                    self.log.warning(
+                        "Attribute '{}' not found on Yeti node: {}".format(
+                            attr, shape
+                        )
+                    )
+                    continue
+
                 current = cmds.getAttr("%s.%s" % (shape, attr))
                 # change None to empty string as Maya doesn't support
                 # NoneType in attributes

@@ -2,7 +2,9 @@ import pyblish.api
 from maya import cmds
 
 from openpype.pipeline.publish import (
-    PublishValidationError, ValidateContentsOrder)
+    PublishValidationError,
+    ValidateContentsOrder
+)
 
 
 class ValidateRigContents(pyblish.api.InstancePlugin):
@@ -24,12 +26,18 @@ class ValidateRigContents(pyblish.api.InstancePlugin):
 
     def process(self, instance):
 
-        objectsets = ("controls_SET", "out_SET")
-        missing = [obj for obj in objectsets if obj not in instance]
+        # Find required sets by suffix
+        required = ["controls_SET", "out_SET"]
+        missing = [
+            key for key in required if key not in instance.data["rig_sets"]
+        ]
         if missing:
             raise PublishValidationError(
-                "%s is missing sets: %s" % (instance, missing)
+                "%s is missing sets: %s" % (instance, ", ".join(missing))
             )
+
+        controls_set = instance.data["rig_sets"]["controls_SET"]
+        out_set = instance.data["rig_sets"]["out_SET"]
 
         # Ensure there are at least some transforms or dag nodes
         # in the rig instance
@@ -41,12 +49,12 @@ class ValidateRigContents(pyblish.api.InstancePlugin):
             )
 
         # Ensure contents in sets and retrieve long path for all objects
-        output_content = cmds.sets("out_SET", query=True) or []
+        output_content = cmds.sets(out_set, query=True) or []
         if not output_content:
             raise PublishValidationError("Must have members in rig out_SET")
         output_content = cmds.ls(output_content, long=True)
 
-        controls_content = cmds.sets("controls_SET", query=True) or []
+        controls_content = cmds.sets(controls_set, query=True) or []
         if not controls_content:
             raise PublishValidationError(
                 "Must have members in rig controls_SET"

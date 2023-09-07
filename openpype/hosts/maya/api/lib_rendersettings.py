@@ -226,12 +226,7 @@ class RenderSettings(object):
         # list all the aovs
         all_rs_aovs = cmds.ls(type='RedshiftAOV')
         for rs_aov in redshift_aovs:
-            rs_layername = rs_aov
-            if " " in rs_aov:
-                rs_renderlayer = rs_aov.replace(" ", "")
-                rs_layername = "rsAov_{}".format(rs_renderlayer)
-            else:
-                rs_layername = "rsAov_{}".format(rs_aov)
+            rs_layername = "rsAov_{}".format(rs_aov.replace(" ", ""))
             if rs_layername in all_rs_aovs:
                 continue
             cmds.rsCreateAov(type=rs_aov)

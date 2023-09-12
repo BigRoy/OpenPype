@@ -1277,6 +1277,11 @@ def get_id_required_nodes(referenced_nodes=False,
         nodes (set): list of filtered nodes
     """
 
+    if nodes is not None and not nodes:
+        # User supplied an empty `nodes` list to check so all we can
+        # do is return the empty result
+        return []
+
     def _node_type_exists(node_type):
         try:
             cmds.nodeType(node_type, isTypeName=True)
@@ -1408,7 +1413,7 @@ def get_id_required_nodes(referenced_nodes=False,
             result = [node for node in nodes if node not in exclude_nodes]
 
     # Filter to explicit input nodes if provided
-    if nodes:
+    if nodes is not None:
         # The amount of input nodes to filter to can be large and querying
         # many nodes can be slow in Maya. As such we want to try and reduce
         # it as much as possible, so we include the type filter to try and

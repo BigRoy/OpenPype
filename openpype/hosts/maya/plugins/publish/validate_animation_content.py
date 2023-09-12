@@ -28,7 +28,7 @@ class ValidateAnimationContent(pyblish.api.InstancePlugin):
 
         if not out_set:
             raise PublishValidationError(
-                "Instance '%s' has no objectSet named: `OUT_set`. "
+                "Instance '%s' has no objectSet named: `out_SET`. "
                 "If this instance is an unloaded reference, please load the "
                 "reference of the rig or disable this instance for publishing."
                 "" % instance.name

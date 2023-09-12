@@ -3,9 +3,10 @@ import pyblish.api
 import openpype.hosts.maya.api.action
 from openpype.client import get_assets
 from openpype.hosts.maya.api import lib
-from openpype.pipeline import legacy_io
 from openpype.pipeline.publish import (
-    PublishValidationError, ValidatePipelineOrder)
+    PublishValidationError,
+    ValidatePipelineOrder
+)
 
 
 class ValidateNodeIdsInDatabase(pyblish.api.InstancePlugin):
@@ -37,11 +38,15 @@ class ValidateNodeIdsInDatabase(pyblish.api.InstancePlugin):
     @classmethod
     def get_invalid(cls, instance):
 
+        nodes = instance[:]
+        if not nodes:
+            return
+
         invalid = []
 
         # Get all id required nodes
         id_required_nodes = lib.get_id_required_nodes(referenced_nodes=False,
-                                                      nodes=instance[:])
+                                                      nodes=nodes)
         if not id_required_nodes:
             return
 
@@ -63,20 +68,21 @@ class ValidateNodeIdsInDatabase(pyblish.api.InstancePlugin):
         return invalid
 
     @classmethod
-    def _get_project_asset_ids(self, instance):
+    def _get_project_asset_ids(cls, instance):
         # We query the database only for the first instance instead of
         # per instance by storing a cache in the context
+        context = instance.context
         key = "__cache_project_asset_ids_str"
-        if key in instance.context.data:
-            return instance.context.data[key]
+        if key in context.data:
+            return context.data[key]
 
         # check ids against database
-        project_name = legacy_io.active_project()
+        project_name = context.data["projectName"]
         asset_docs = get_assets(project_name, fields=["_id"])
         db_asset_ids = {
             str(asset_doc["_id"])
             for asset_doc in asset_docs
         }
 
-        instance.context.data[key] = db_asset_ids
+        context.data[key] = db_asset_ids
         return db_asset_ids

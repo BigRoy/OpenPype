@@ -148,20 +148,13 @@ class CollectUpstreamInputs(pyblish.api.InstancePlugin):
                              type=("mesh", "nurbsSurface", "nurbsCurve"),
                              noIntermediate=True)
             if shapes:
-                history = list(iter_history(shapes, filter=om.MFn.kShape))
-                history = cmds.ls(history, long=True)
+                nodes = set(nodes)
+                for shape in iter_history(shapes, filter=om.MFn.kShape):
+                    nodes.add(shape)
 
-                # Include the transforms in the collected history as shapes
-                # are excluded from containers
-                transforms = cmds.listRelatives(cmds.ls(history, shapes=True),
-                                                parent=True,
-                                                fullPath=True,
-                                                type="transform")
-                if transforms:
-                    history.extend(transforms)
-
-                if history:
-                    nodes = list(set(nodes + history))
+                    # Include the parent transforms in the collected history
+                    # as shapes are excluded from containers
+                    nodes.add(shape.rsplit("|", 1)[0])
 
             # Collect containers for the given set of nodes
             containers = collect_input_containers(scene_containers,

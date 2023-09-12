@@ -6,7 +6,7 @@ from openpype.hosts.maya.api import lib
 from openpype.pipeline.publish import (
     RepairAction,
     ValidateContentsOrder,
-    PublishValidationError
+    PublishXmlValidationError
 )
 
 
@@ -36,10 +36,21 @@ class ValidateOutRelatedNodeIds(pyblish.api.InstancePlugin):
         # if a deformer has been created on the shape
         invalid = self.get_invalid(instance)
         if invalid:
-            # TODO: Message formatting can be improved
-            raise PublishValidationError("Nodes found with mismatching "
-                                         "IDs: {0}".format(invalid),
-                                         title="Invalid node ids")
+
+            # Use the short names
+            invalid = cmds.ls(invalid)
+            invalid.sort()
+
+            # Construct a human-readable list
+            invalid = "\n".join("- {}".format(node) for node in invalid)
+
+            raise PublishXmlValidationError(
+                plugin=self,
+                message=(
+                    "Nodes have different IDs than their input "
+                    "history: \n{0}".format(invalid)
+                )
+            )
 
     @classmethod
     def get_invalid(cls, instance):

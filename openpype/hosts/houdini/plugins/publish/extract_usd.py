@@ -7,6 +7,7 @@ from openpype.hosts.houdini.api.lib import render_rop
 
 import hou
 
+
 class ExtractUSD(publish.Extractor):
 
     order = pyblish.api.ExtractorOrder

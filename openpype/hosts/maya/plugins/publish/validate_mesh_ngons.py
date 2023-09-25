@@ -5,11 +5,13 @@ import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api import lib
 from openpype.pipeline.publish import (
     ValidateMeshOrder,
-    PublishValidationError
+    PublishValidationError,
+    OptionalPyblishPluginMixin
 )
 
 
-class ValidateMeshNgons(pyblish.api.Validator):
+class ValidateMeshNgons(pyblish.api.Validator,
+                        OptionalPyblishPluginMixin):
     """Ensure that meshes don't have ngons
 
     Ngon are faces with more than 4 sides.
@@ -29,7 +31,7 @@ class ValidateMeshNgons(pyblish.api.Validator):
         "## Meshes with NGONs Faces\n"
         "Detected meshes with NGON faces. <b>NGONS<b> are faces that "
         "with more than four sides.\n\n"
-            "### How to repair?\n"
+        "### How to repair?\n"
         "You can repair them by usings Maya's modeling tool Mesh > Cleanup.. "
         "and select to cleanup matching polygons for lamina faces."
     )

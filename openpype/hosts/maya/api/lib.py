@@ -1674,7 +1674,21 @@ def get_container_members(container):
         if ref.rsplit(":", 1)[-1].startswith("_UNKNOWN_REF_NODE_"):
             continue
 
-        reference_members = cmds.referenceQuery(ref, nodes=True, dagPath=True)
+        try:
+            reference_members = cmds.referenceQuery(ref,
+                                                    nodes=True,
+                                                    dagPath=True)
+        except RuntimeError as exc:
+            # Ignore reference nodes that are not associated with a
+            # referenced file on which `referenceQuery` command fails
+            # TODO: Find a better way to detect whether this is the case
+            #       instead of parsing the string result of the error
+            #       because this will only work with Maya set to English
+            if str(exc).strip().endswith(
+                    " is not associated with a reference file."
+            ):
+                continue
+            raise
         reference_members = cmds.ls(reference_members,
                                     long=True,
                                     objectsOnly=True)

@@ -53,6 +53,8 @@ class ValidateMeshNgons(pyblish.api.Validator,
 
     def process(self, instance):
         """Process all the nodes in the instance "objectSet"""
+        if not self.is_active(instance.data):
+            return
 
         invalid = self.get_invalid(instance)
         if invalid:

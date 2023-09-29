@@ -16,5 +16,6 @@ class ColorbleedModule(OpenPypeModule, IPluginPaths):
 
         return {
             "actions": [os.path.join(current_dir, "launcher_actions")],
+            "load": [os.path.join(current_dir, "plugins", "load")],
             "publish": [os.path.join(current_dir, "plugins", "publish")]
         }

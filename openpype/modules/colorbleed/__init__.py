@@ -1,14 +1,11 @@
 import os
 
-from openpype.modules import OpenPypeModule
+from openpype.modules import OpenPypeAddOn
 from openpype.modules.interfaces import IPluginPaths
 
 
-class ColorbleedModule(OpenPypeModule, IPluginPaths):
+class ColorbleedModule(OpenPypeAddOn, IPluginPaths):
     name = "colorbleed"
-
-    def initialize(self, modules_settings):
-        self.enabled = True
 
     def get_plugin_paths(self):
         """Implementation of IPluginPaths to get plugin paths."""

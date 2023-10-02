@@ -69,9 +69,6 @@ class ValidateOutRelatedNodeIds(pyblish.api.InstancePlugin):
 
             # Get the current id of the node
             node_id = lib.get_id(node)
-            if not node_id:
-                invalid.append(node)
-                continue
 
             history_id = lib.get_id_from_sibling(node)
             if history_id is not None and node_id != history_id:

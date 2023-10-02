@@ -4,25 +4,16 @@ from openpype.pipeline import (
 )
 from openpype.hosts.houdini.api import pipeline
 
+from openpype.hosts.houdini.api.lib import (
+    set_camera_resolution,
+    get_camera_from_container
+)
+
+import hou
+
 
 ARCHIVE_EXPRESSION = ('__import__("_alembic_hom_extensions")'
                       '.alembicGetCameraDict')
-
-
-def get_resolution_from_document(doc):
-    if not doc or "data" not in doc:
-        print("Entered document is not valid. \"{}\"".format(str(doc)))
-        return None
-
-    resolution_width = doc["data"].get("resolutionWidth")
-    resolution_height = doc["data"].get("resolutionHeight")
-
-    # Make sure both width and height are set
-    if resolution_width is None or resolution_height is None:
-        print("No resolution information found for \"{}\"".format(doc["name"]))
-        return None
-
-    return int(resolution_width), int(resolution_height)
 
 
 def transfer_non_default_values(src, dest, ignore=None):
@@ -41,7 +32,6 @@ def transfer_non_default_values(src, dest, ignore=None):
     channel expression and ignore certain Parm types.
 
     """
-    import hou
 
     ignore_types = {
         hou.parmTemplateType.Toggle,
@@ -107,13 +97,8 @@ class CameraLoader(load.LoaderPlugin):
 
     def load(self, context, name=None, namespace=None, data=None):
 
-        import os
-        import hou
-
         # Format file name, Houdini only wants forward slashes
-        file_path = self.filepath_from_context(context)
-        file_path = os.path.normpath(file_path)
-        file_path = file_path.replace("\\", "/")
+        file_path = self.filepath_from_context(context).replace("\\", "/")
 
         # Get the root node
         obj = hou.node("/obj")
@@ -135,10 +120,9 @@ class CameraLoader(load.LoaderPlugin):
         # Create an alembic xform node
         nodes = [node]
 
-        camera = self._get_camera(node)
+        camera = get_camera_from_container(node)
         self._match_maya_render_mask(camera)
-        self._set_asset_resolution(camera, asset=context["asset"])
-
+        set_camera_resolution(camera, asset_doc=context["asset"])
         self[:] = nodes
 
         return pipeline.containerise(node_name,
@@ -163,14 +147,14 @@ class CameraLoader(load.LoaderPlugin):
         # Store the cam temporarily next to the Alembic Archive
         # so that we can preserve parm values the user set on it
         # after build hierarchy was triggered.
-        old_camera = self._get_camera(node)
+        old_camera = get_camera_from_container(node)
         temp_camera = old_camera.copyTo(node.parent())
 
         # Rebuild
         node.parm("buildHierarchy").pressButton()
 
         # Apply values to the new camera
-        new_camera = self._get_camera(node)
+        new_camera = get_camera_from_container(node)
         transfer_non_default_values(temp_camera,
                                     new_camera,
                                     # The hidden uniform scale attribute
@@ -179,6 +163,7 @@ class CameraLoader(load.LoaderPlugin):
                                     ignore={"scale"})
 
         self._match_maya_render_mask(new_camera)
+        set_camera_resolution(new_camera)
 
         temp_camera.destroy()
 
@@ -186,15 +171,6 @@ class CameraLoader(load.LoaderPlugin):
 
         node = container["node"]
         node.destroy()
-
-    def _get_camera(self, node):
-        import hou
-        cameras = node.recursiveGlob("*",
-                                     filter=hou.nodeTypeFilter.ObjCamera,
-                                     include_subnets=False)
-
-        assert len(cameras) == 1, "Camera instance must have only one camera"
-        return cameras[0]
 
     def create_and_connect(self, node, node_type, name=None):
         """Create a node within a node which and connect it to the input
@@ -236,14 +212,3 @@ aperture *= min(1, (resx / resy * aspect) / 1.5)
 return aperture
 """
         parm.setExpression(expression, language=hou.exprLanguage.Python)
-
-    def _set_asset_resolution(self, camera, asset):
-        """Apply resolution to camera from asset document of the publish"""
-
-        resolution = get_resolution_from_document(asset)
-        if resolution:
-            print("Setting camera resolution: {} -> {}x{}".format(
-                camera.name(), resolution[0], resolution[1]
-            ))
-            camera.parm("resx").set(resolution[0])
-            camera.parm("resy").set(resolution[1])

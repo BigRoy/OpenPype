@@ -295,7 +295,7 @@ class CollectLook(pyblish.api.InstancePlugin):
 
         """
         self.log.debug("Looking for look associations "
-                      "for %s" % instance.data['name'])
+                       "for %s" % instance.data['name'])
 
         # Lookup set (optimization)
         instance_lookup = set(cmds.ls(instance, long=True))
@@ -304,9 +304,12 @@ class CollectLook(pyblish.api.InstancePlugin):
         self.log.debug("Gathering sets ...")
         sets = self.collect_sets(instance)
 
+        # Lookup set (optimization)
+        instance_lookup = set(cmds.ls(instance, long=True))
+
+        self.log.debug("Gathering set relations ...")
         # Ensure iteration happen in a list to allow removing keys from the
         # dict within the loop
-        self.log.debug("Gathering set relations ...")
         for obj_set in list(sets):
             self.log.debug("From {}".format(obj_set))
             # Get all nodes of the current objectSet (shadingEngine)
@@ -589,7 +592,7 @@ class CollectLook(pyblish.api.InstancePlugin):
             # renderman allows nodes to have filename attribute empty while
             # you can have another incoming connection from different node.
             if not source and cmds.nodeType(node) in PXR_NODES:
-                self.log.info("Renderman: source is empty, skipping...")
+                self.log.debug("Renderman: source is empty, skipping...")
                 continue
             # We replace backslashes with forward slashes because V-Ray
             # can't handle the UDIM files with the backslashes in the

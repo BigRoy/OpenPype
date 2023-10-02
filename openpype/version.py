@@ -1,3 +1,3 @@
 # -*- coding: utf-8 -*-
 """Package declaring Pype version."""
-__version__ = "3.16.7-colorbleed.8"
+__version__ = "3.17.2-colorbleed.1"

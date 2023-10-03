@@ -30,18 +30,18 @@ class ValidatePluginPathAttributes(pyblish.api.InstancePlugin):
     def get_invalid(cls, instance):
         invalid = list()
 
-        attributes = cls.attribute
-        if not attributes:
+        file_attrs = cls.attribute
+        if not file_attrs:
             return invalid
 
         # Consider only valid node types to avoid "Unknown object type" warning
         all_node_types = set(cmds.allNodeTypes())
-        node_types = [key for key in attributes if key in all_node_types]
+        node_types = [key for key in file_attrs if key in all_node_types]
 
         for node, node_type in pairwise(cmds.ls(type=node_types,
                                                 showType=True)):
             # get the filepath
-            file_attr = "{}.{}".format(node, attributes[node_type])
+            file_attr = "{}.{}".format(node, file_attrs[node_type])
             filepath = cmds.getAttr(file_attr)
 
             if filepath and not os.path.exists(filepath):

@@ -95,9 +95,6 @@ class ExtractReview(pyblish.api.InstancePlugin):
         host_name = instance.context.data["hostName"]
         family = self.main_family_from_instance(instance)
 
-        self.log.debug("Host: \"{}\"".format(host_name))
-        self.log.debug("Family: \"{}\"".format(family))
-
         profile = filter_profiles(
             self.profiles,
             {

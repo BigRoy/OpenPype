@@ -1,10 +1,12 @@
+import os
 import copy
 import platform
+import re
 from collections import defaultdict
 
 from qtpy import QtWidgets, QtCore, QtGui
 
-from openpype.client import get_representations
+from openpype.client import get_representations, get_versions
 from openpype.pipeline import load, Anatomy
 from openpype import resources, style
 
@@ -78,6 +80,7 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         self.log = log
         self.currently_uploaded = 0
 
+        self._project_name = project_name
         self._set_representations(project_name, contexts)
 
         dropdown = QtWidgets.QComboBox()
@@ -96,12 +99,25 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         template_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
 
         renumber_frame = QtWidgets.QCheckBox()
+        renumber_frame.setToolTip(
+            "Renumber sequences instead of keeping their original frame start "
+            "and end"
+        )
+        write_changelog = QtWidgets.QCheckBox()
+        write_changelog.setChecked(True)
+        write_changelog.setToolTip(
+            "Write a CHANGELOG.html in delivery root folder. If the file "
+            "already exists it will be prepended into the file."
+        )
 
         first_frame_start = QtWidgets.QSpinBox()
         max_int = (1 << 32) // 2
         first_frame_start.setRange(0, max_int - 1)
 
         root_line_edit = QtWidgets.QLineEdit()
+        root_line_edit.setToolTip(
+            "Directory path where to place the delivered files."
+        )
 
         repre_checkboxes_layout = QtWidgets.QFormLayout()
         repre_checkboxes_layout.setContentsMargins(10, 5, 5, 10)
@@ -127,6 +143,7 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         input_layout.addRow("Renumber Frame", renumber_frame)
         input_layout.addRow("Renumber start frame", first_frame_start)
         input_layout.addRow("Root", root_line_edit)
+        input_layout.addRow("Write changelog", write_changelog)
         input_layout.addRow("Representations", repre_checkboxes_layout)
 
         btn_delivery = QtWidgets.QPushButton("Deliver")
@@ -155,6 +172,7 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         self.dropdown = dropdown
         self.first_frame_start = first_frame_start
         self.renumber_frame = renumber_frame
+        self.write_changelog = write_changelog
         self.root_line_edit = root_line_edit
         self.progress_bar = progress_bar
         self.text_area = text_area
@@ -186,16 +204,19 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
 
         report_items = defaultdict(list)
 
-        selected_repres = self._get_selected_repres()
+        selected_representation_names = self._get_selected_repres()
+        representations = [
+            repre for repre in self._representations
+            if repre["name"] in selected_representation_names
+        ]
 
+        delivery_root = self.root_line_edit.text()
         datetime_data = get_datetime_data()
         template_name = self.dropdown.currentText()
-        format_dict = get_format_dict(self.anatomy, self.root_line_edit.text())
+        format_dict = get_format_dict(self.anatomy, delivery_root)
         renumber_frame = self.renumber_frame.isChecked()
         frame_offset = self.first_frame_start.value()
-        for repre in self._representations:
-            if repre["name"] not in selected_repres:
-                continue
+        for repre in representations:
 
             repre_path = get_representation_path_with_anatomy(
                 repre, self.anatomy
@@ -271,7 +292,17 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
                 report_items.update(new_report_items)
                 self._update_progress(uploaded)
 
-        self.text_area.setText(self._format_report(report_items))
+        report_text = self._format_report(report_items)
+        if self.write_changelog.isChecked() and not report_items:
+            # success - let's report what happened
+            delivery_report = self._format_delivery_report(representations,
+                                                           datetime_data)
+            # Write delivery report file
+            changelog_path = os.path.join(delivery_root, "CHANGELOG.html")
+            SimpleHTML.prepend_body(changelog_path, delivery_report)
+            report_text += f"Written to changelog: {changelog_path}"
+
+        self.text_area.setText(report_text)
         self.text_area.setVisible(True)
 
     def _get_representation_names(self):
@@ -370,3 +401,128 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
                 txt += "{}<br>".format(item)
 
         return txt
+
+    def _format_delivery_report(self, representations, datetime_data):
+        """Generate a simple HTML report.
+
+        Roughly the report is:
+            Delivered {datetime}
+              path/to/version1   comment1
+              path/to/version2   comment2
+
+        Args:
+            representations (list): The representations that got delivered
+            datetime_data (dict): The datetime data of current delivery
+
+        Returns:
+            str: The HTML report
+
+        """
+
+        def sort_by_asset_and_subset(repre):
+            context = repre["context"]
+            return context["asset"], context["subset"]
+
+        # Add an overview of the published versions with their
+        # comments
+        repre_by_version_id = defaultdict(list)
+        for repre in sorted(representations, key=sort_by_asset_and_subset):
+            repre_by_version_id[repre["parent"]].append(repre)
+
+        versions_by_id = {
+            version["_id"]: version for version in
+            get_versions(
+                project_name=self._project_name,
+                version_ids=repre_by_version_id.keys(),
+                fields=["_id", "data.comment"]
+            )
+        }
+
+        header = (
+            "<h3>Delivered {dd}-{mm}-{yyyy} {HH}:{MM}</h3>\n".format(
+                **datetime_data
+            )
+        )
+
+        context_label_template = (
+            "{context[asset]}/{context[subset]}/v{context[version]:03d}"
+        )
+        report = []
+        for version_id, version_repres in repre_by_version_id.items():
+            version = versions_by_id[version_id]
+            comment = version.get("data", {}).get("comment") or ""
+            context = version_repres[0]["context"]
+            context_label = context_label_template.format(context=context)
+            message = (
+                f"<a href=\"file:./{context_label}\">"
+                f"<b>{context_label}</b></a>"
+            )
+            if comment:
+                message += f"  <i>{comment}</i>"
+            report.append(message)
+
+        return header + "<br>\n".join(report)
+
+
+class SimpleHTML:
+    """Write a very simple HTML report.
+
+     Using `prepend_body` you can  prepend logs into the body of a html file
+     if it already exists, otherwise it will create the new html file.
+
+     Even if the file already exists the file will be written using the html
+     structure defined on this class - it will only preserve whatever is
+     between <body> and </body> tags of the original file.
+
+     """
+    html_start = """<!DOCTYPE html>
+<html>
+<head>
+    <title>CHANGELOG</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+html{box-sizing:border-box}*,*:before,*:after{box-sizing:inherit}
+html{-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%}
+a{background-color:transparent}a:active,a:hover{outline-width:0}
+b,strong{font-weight:bolder}
+html,body{font-family:Verdana,sans-serif;font-size:15px;line-height:1.5}
+html{overflow-x:hidden}
+h1{font-size:36px}
+h2{font-size:30px}
+h3{font-size:24px}
+h4{font-size:20px}
+h5{font-size:18px}
+h6{font-size:16px}
+h1,h2,h3,h4,h5,h6{font-family:"SegoeUI",Arial,sans-serif;font-weight:400;margin:10px0}
+body{margin:16px;}
+h3{font-size:1.4em;margin-bottom:0px;margin-top:25px;color:#eb9b23;}
+a{padding-left:10px;padding-right:20px;color:inherit}
+    </style>
+</head>
+<body>
+"""
+    html_end = "</body>\n</html>"
+
+    @classmethod
+    def prepend_body(cls, filepath, content):
+
+        # Get existing file content if it exists
+        try:
+            with open(filepath, "r") as f:
+                existing_content = f.read()
+        except FileNotFoundError as exc:
+            existing_content = ""
+
+        # Get body of existing content if there is any
+        match = re.search("<body>(.*)</body>",
+                          existing_content,
+                          flags=re.DOTALL)
+        existing_body = match.group(1) if match else ""
+
+        # Define new body
+        new_body = content + existing_body
+        new_content = "\n".join([cls.html_start, new_body, cls.html_end])
+
+        # Write new file
+        with open(filepath, "w") as f:
+            f.write(new_content)

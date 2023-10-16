@@ -7,7 +7,7 @@ from maya import cmds
 
 import pyblish.api
 from openpype.pipeline import publish
-from openpype.hosts.maya.api.lib import maintained_selection
+from openpype.hosts.maya.api.lib import maintained_selection, maintained_time
 
 
 @contextlib.contextmanager
@@ -229,8 +229,18 @@ class ExtractMayaUsd(publish.Extractor):
             self.log.error('No members!')
             return
 
-        start = instance.data["frameStartHandle"]
-        end = instance.data["frameEndHandle"]
+        export_anim_data = instance.data.get("exportAnimationData", True)
+        start = instance.data.get("frameStartHandle", 0)
+
+        if export_anim_data:
+            end = instance.data["frameEndHandle"]
+            options["frameRange"] = (start, end)
+            options["frameStride"] = instance.data.get("step", 1.0)
+
+        if instance.data.get("exportRoots", True):
+            options["exportRoots"] = members
+        else:
+            options["selection"] = True
 
         def parse_attr_str(attr_str):
             result = list()
@@ -247,15 +257,18 @@ class ExtractMayaUsd(publish.Extractor):
         attr_prefixes = parse_attr_str(instance.data.get("attrPrefix", ""))
 
         self.log.debug('Exporting USD: {} / {}'.format(file_path, members))
-        with maintained_selection():
-            with usd_export_attributes(instance[:],
-                                       attrs=attrs,
-                                       attr_prefixes=attr_prefixes):
-                cmds.mayaUSDExport(file=file_path,
-                                   frameRange=(start, end),
-                                   frameStride=instance.data.get("step", 1.0),
-                                   exportRoots=members,
-                                   **options)
+        with maintained_time():
+            with maintained_selection():
+                if not export_anim_data:
+                    # Use start frame as current time
+                    cmds.currentTime(start)
+
+                with usd_export_attributes(instance[:],
+                                           attrs=attrs,
+                                           attr_prefixes=attr_prefixes):
+                    cmds.select(members, replace=True, noExpand=True)
+                    cmds.mayaUSDExport(file=file_path,
+                                       **options)
 
         representation = {
             'name': "usd",

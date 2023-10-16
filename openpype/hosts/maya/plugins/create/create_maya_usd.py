@@ -44,7 +44,15 @@ class CreateMayaUsd(plugin.MayaCreator):
 
             self.cache["jobContextItems"] = job_context_items
 
-        defs = lib.collect_animation_defs()
+        defs = [
+            BoolDef("exportAnimationData",
+                    label="Export Animation Data",
+                    tooltip="When disabled no frame range is exported and "
+                            "only the start frame is used to define the "
+                            "static export frame.",
+                    default=True)
+        ]
+        defs.extend(lib.collect_animation_defs())
         defs.extend([
             EnumDef("defaultUSDFormat",
                     label="File format",
@@ -53,6 +61,17 @@ class CreateMayaUsd(plugin.MayaCreator):
                         "usda": "ASCII"
                     },
                     default="usdc"),
+            # TODO: Remove note from tooltip when issue is resolved, see:
+            #  https://github.com/Autodesk/maya-usd/issues/3389
+            BoolDef("exportRoots",
+                    label="Export as roots",
+                    tooltip=(
+                        "Export the members of the object sets without "
+                        "their parents.\n"
+                        "Note: There's an export bug that when this is "
+                        "enabled MayaUsd fails to export instance meshes"
+                    ),
+                    default=True),
             BoolDef("stripNamespaces",
                     label="Strip Namespaces",
                     tooltip=(

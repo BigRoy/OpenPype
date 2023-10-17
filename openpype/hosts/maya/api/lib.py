@@ -2257,11 +2257,13 @@ def set_scene_fps(fps, update=True):
     if unit is None:
         unit = "{}fps".format(converted_unit)
 
+    if cmds.currentUnit(query=True, time=True) == unit:
+        # No changes, do nothing
+        return
+
     # Get time slider current state
     start_frame = cmds.playbackOptions(query=True, minTime=True)
     end_frame = cmds.playbackOptions(query=True, maxTime=True)
-
-    # Get animation data
     animation_start = cmds.playbackOptions(query=True, animationStartTime=True)
     animation_end = cmds.playbackOptions(query=True, animationEndTime=True)
 

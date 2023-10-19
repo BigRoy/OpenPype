@@ -3,13 +3,15 @@ from collections import defaultdict
 import pyblish.api
 from openpype.pipeline.publish import (
     ValidatePipelineOrder,
-    PublishValidationError
+    PublishValidationError,
+    OptionalPyblishPluginMixin
 )
 import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api import lib
 
 
-class ValidateNodeIdsUnique(pyblish.api.InstancePlugin):
+class ValidateNodeIdsUnique(pyblish.api.InstancePlugin,
+                            OptionalPyblishPluginMixin):
     """Validate the nodes in the instance have a unique Colorbleed Id
 
     Here we ensure that what has been added to the instance is unique
@@ -20,7 +22,6 @@ class ValidateNodeIdsUnique(pyblish.api.InstancePlugin):
     hosts = ['maya']
     families = ["model",
                 "look",
-                "rig",
                 "yetiRig"]
 
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction,
@@ -28,6 +29,8 @@ class ValidateNodeIdsUnique(pyblish.api.InstancePlugin):
 
     def process(self, instance):
         """Process all meshes"""
+        if not self.is_active(instance.data):
+            return
 
         # Ensure all nodes have a cbId
         invalid = self.get_invalid(instance)
@@ -67,3 +70,9 @@ class ValidateNodeIdsUnique(pyblish.api.InstancePlugin):
                 invalid.extend(members)
 
         return invalid
+
+
+class ValidateNodeIdsUniqueRig(ValidateNodeIdsUnique):
+    """Allow to be optional only for rig family"""
+    families = ["rig"]
+    optional = True

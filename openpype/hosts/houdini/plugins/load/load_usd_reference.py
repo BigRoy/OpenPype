@@ -9,10 +9,7 @@ from openpype.hosts.houdini.api import lib
 class USDReferenceLoader(load.LoaderPlugin):
     """Reference USD file in Solaris"""
 
-    families = [
-        "usd",
-        "usdCamera",
-    ]
+    families = ["*"]
     label = "Reference USD"
     representations = ["usd", "usda", "usdlc", "usdnc", "abc"]
     order = -8

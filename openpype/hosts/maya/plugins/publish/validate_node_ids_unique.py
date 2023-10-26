@@ -3,13 +3,15 @@ from collections import defaultdict
 import pyblish.api
 from openpype.pipeline.publish import (
     ValidatePipelineOrder,
-    PublishValidationError
+    PublishValidationError,
+    OptionalPyblishPluginMixin
 )
 import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api import lib
 
 
-class ValidateNodeIdsUnique(pyblish.api.InstancePlugin):
+class ValidateNodeIdsUnique(pyblish.api.InstancePlugin,
+                            OptionalPyblishPluginMixin):
     """Validate the nodes in the instance have a unique Colorbleed Id
 
     Here we ensure that what has been added to the instance is unique
@@ -20,7 +22,6 @@ class ValidateNodeIdsUnique(pyblish.api.InstancePlugin):
     hosts = ['maya']
     families = ["model",
                 "look",
-                "rig",
                 "yetiRig"]
 
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction,
@@ -28,13 +29,15 @@ class ValidateNodeIdsUnique(pyblish.api.InstancePlugin):
 
     def process(self, instance):
         """Process all meshes"""
+        if not self.is_active(instance.data):
+            return
 
         # Ensure all nodes have a cbId
         invalid = self.get_invalid(instance)
         if invalid:
             label = "Nodes found with non-unique asset IDs"
             raise PublishValidationError(
-                message="{}: {}".format(label, invalid),
+                message="{}, see log".format(label),
                 title="Non-unique asset ids on nodes",
                 description="{}\n- {}".format(label,
                                               "\n- ".join(sorted(invalid)))
@@ -63,7 +66,18 @@ class ValidateNodeIdsUnique(pyblish.api.InstancePlugin):
         _iteritems = getattr(ids, "iteritems", ids.items)
         for _ids, members in _iteritems():
             if len(members) > 1:
-                cls.log.error("ID found on multiple nodes: '%s'" % members)
+                members_text = "\n".join(
+                    "- {}".format(member) for member in sorted(members)
+                )
+                cls.log.error(
+                    "ID found on multiple nodes:\n{}".format(members_text)
+                )
                 invalid.extend(members)
 
         return invalid
+
+
+class ValidateNodeIdsUniqueRig(ValidateNodeIdsUnique):
+    """Allow to be optional only for rig family"""
+    families = ["rig"]
+    optional = True

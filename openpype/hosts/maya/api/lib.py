@@ -2299,19 +2299,20 @@ def set_scene_fps(fps, update=True):
         '29.97002997002997': '29.97fps',
         '47.952047952047955': '47.952fps',
         '59.94005994005994': '59.94fps',
-        '44100': '44100fps',
-        '48000': '48000fps'
     }
 
-    unit = fps_mapping.get(str(convert_to_maya_fps(fps)), None)
+    converted_unit = convert_to_maya_fps(fps)
+    unit = fps_mapping.get(str(converted_unit))
     if unit is None:
-        raise ValueError("Unsupported FPS value: `%s`" % fps)
+        unit = "{}fps".format(converted_unit)
+
+    if cmds.currentUnit(query=True, time=True) == unit:
+        # No changes, do nothing
+        return
 
     # Get time slider current state
     start_frame = cmds.playbackOptions(query=True, minTime=True)
     end_frame = cmds.playbackOptions(query=True, maxTime=True)
-
-    # Get animation data
     animation_start = cmds.playbackOptions(query=True, animationStartTime=True)
     animation_end = cmds.playbackOptions(query=True, animationEndTime=True)
 
@@ -2321,13 +2322,10 @@ def set_scene_fps(fps, update=True):
     cmds.currentUnit(time=unit, updateAnimation=update)
 
     # Set time slider data back to previous state
-    cmds.playbackOptions(edit=True, minTime=start_frame)
-    cmds.playbackOptions(edit=True, maxTime=end_frame)
-
-    # Set animation data
-    cmds.playbackOptions(edit=True, animationStartTime=animation_start)
-    cmds.playbackOptions(edit=True, animationEndTime=animation_end)
-
+    cmds.playbackOptions(minTime=start_frame,
+                         maxTime=end_frame,
+                         animationStartTime=animation_start,
+                         animationEndTime=animation_end)
     cmds.currentTime(current_frame, edit=True, update=True)
 
     # Force file stated to 'modified'

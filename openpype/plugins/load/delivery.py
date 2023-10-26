@@ -178,6 +178,13 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         self.text_area = text_area
         self.btn_delivery = btn_delivery
 
+        # Reset delivery root to last used value
+        settings = QtCore.QSettings("ayon", "Delivery")
+        root = settings.value("lastRoot", "")
+        if root:
+            self.root_line_edit.setText(root)
+        self._settings = settings
+
         self.files_selected, self.size_selected = \
             self._get_counts(self._get_selected_repres())
 
@@ -211,6 +218,10 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         ]
 
         delivery_root = self.root_line_edit.text()
+
+        # Save delivery root setting for future runs
+        self._settings.setValue("lastRoot", delivery_root)
+
         datetime_data = get_datetime_data()
         template_name = self.dropdown.currentText()
         format_dict = get_format_dict(self.anatomy, delivery_root)

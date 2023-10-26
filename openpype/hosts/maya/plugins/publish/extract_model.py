@@ -24,7 +24,7 @@ class ExtractModel(publish.Extractor,
 
     """
 
-    label = "Model (Maya Scene)"
+    label = "Extract Maya Scene"
     hosts = ["maya"]
     families = ["model"]
     scene_type = "ma"

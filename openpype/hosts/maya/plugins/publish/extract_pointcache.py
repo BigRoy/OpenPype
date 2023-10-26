@@ -2,6 +2,7 @@ import os
 
 from maya import cmds
 
+from openpype.lib import BoolDef
 from openpype.pipeline import publish
 from openpype.hosts.maya.api.lib import (
     extract_alembic,
@@ -11,7 +12,8 @@ from openpype.hosts.maya.api.lib import (
 )
 
 
-class ExtractAlembic(publish.Extractor):
+class ExtractAlembic(publish.Extractor,
+                     publish.OpenPypePyblishPluginMixin):
     """Produce an alembic of just point positions and normals.
 
     Positions and normals, uvs, creases are preserved, but nothing more,
@@ -58,6 +60,7 @@ class ExtractAlembic(publish.Extractor):
         filename = "{name}.abc".format(**instance.data)
         path = os.path.join(dirname, filename)
 
+        attr_values = self.get_attr_values_from_data(instance.data)
         options = {
             "step": instance.data.get("step", 1.0),
             "attr": attrs,
@@ -68,7 +71,8 @@ class ExtractAlembic(publish.Extractor):
             "writeFaceSets": instance.data.get("writeFaceSets", False),
             "uvWrite": True,
             "selection": True,
-            "worldSpace": instance.data.get("worldSpace", True)
+            "worldSpace": instance.data.get("worldSpace", True),
+            "stripNamespaces": attr_values.get("stripNamespaces", False)
         }
 
         if not instance.data.get("includeParentHierarchy", True):
@@ -151,6 +155,15 @@ class ExtractAlembic(publish.Extractor):
 
     def get_members_and_roots(self, instance):
         return instance[:], instance.data.get("setMembers")
+
+    @classmethod
+    def get_attribute_defs(cls):
+        return [
+            BoolDef("stripNamespaces",
+                    label="Strip Namespaces",
+                    tooltip="Strip Namespaces in the Alembic export",
+                    default=False),
+        ]
 
 
 class ExtractAnimation(ExtractAlembic):

@@ -1,5 +1,6 @@
 {
     "general": {
+        "add_self_publish_button": false,
         "update_houdini_var_context": {
             "enabled": true,
             "houdini_vars":[
@@ -106,6 +107,9 @@
         }
     },
     "publish": {
+        "CollectRopFrameRange": {
+            "use_asset_handles": true
+        },
         "ValidateWorkfilePaths": {
             "enabled": true,
             "optional": true,

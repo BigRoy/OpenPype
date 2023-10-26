@@ -112,7 +112,8 @@ def usd_export_attributes(nodes, attrs=None, attr_prefixes=None, mapping=None):
         dg_mod.undoIt()
 
 
-class ExtractMayaUsd(publish.Extractor):
+class ExtractMayaUsd(publish.Extractor,
+                     publish.OptionalPyblishPluginMixin):
     """Extractor for Maya USD Asset data.
 
     Upon publish a .usd (or .usdz) asset file will typically be written.
@@ -204,6 +205,8 @@ class ExtractMayaUsd(publish.Extractor):
         return members
 
     def process(self, instance):
+        if not self.is_active(instance.data):
+            return
 
         # Load plugin first
         cmds.loadPlugin("mayaUsdPlugin", quiet=True)
@@ -304,3 +307,22 @@ class ExtractMayaUsdAnim(ExtractMayaUsd):
 
         members = cmds.ls(cmds.sets(out_set, query=True), long=True)
         return members
+
+
+class ExtractMayaUsdModel(ExtractMayaUsd):
+    """Extractor for Maya USD Asset data for model family
+
+    Upon publish a .usd (or .usdz) asset file will typically be written.
+    """
+
+    label = "Extract USD"
+    hosts = ["maya"]
+    families = ["model"]
+
+    # TODO: Expose in settings
+    optional = True
+
+    def process(self, instance):
+        # TODO: Fix this without changing instance data
+        instance.data["exportAnimationData"] = False
+        super(ExtractMayaUsdModel, self).process(instance)

@@ -161,7 +161,7 @@ class ExtractMayaUsd(publish.Extractor,
         return {
             "defaultUSDFormat": "usdc",
             "stripNamespaces": False,
-            "mergeTransformAndShape": False,
+            "mergeTransformAndShape": True,
             "exportDisplayColor": False,
             "exportColorSets": True,
             "exportInstances": True,

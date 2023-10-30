@@ -457,6 +457,12 @@ class RenderlayerCreator(NewCreator, MayaCreatorBase):
             layer_instance_node = self.find_layer_instance_node(layer)
             if layer_instance_node:
                 data = self.read_instance_node(layer_instance_node)
+
+                # Allow subclass to override data behavior
+                data = self.read_instance_node_overrides(layer_instance_node,
+                                                         layer,
+                                                         data)
+
                 instance = CreatedInstance.from_existing(data, creator=self)
             else:
                 # No existing scene instance node for this layer. Note that
@@ -477,6 +483,11 @@ class RenderlayerCreator(NewCreator, MayaCreatorBase):
                     asset_doc,
                     project_name)
 
+                # Allow subclass to override data behavior
+                instance_data = self.read_instance_node_overrides(
+                    layer_instance_node, layer, instance_data
+                )
+
                 instance = CreatedInstance(
                     family=self.family,
                     subset_name=subset_name,
@@ -486,6 +497,17 @@ class RenderlayerCreator(NewCreator, MayaCreatorBase):
 
             instance.transient_data["layer"] = layer
             self._add_instance_to_context(instance)
+
+    def read_instance_node_overrides(self,
+                                     instance_node,
+                                     layer,
+                                     instance_data):
+        """Overridable by subclass to e.g. read data from elsewhere"""
+        return instance_data
+
+    def imprint_instance_node_data_overrides(self, data, instance):
+        """Overridable by subclass to e.g. store data differently"""
+        return data
 
     def find_layer_instance_node(self, layer):
         connected_sets = cmds.listConnections(
@@ -544,8 +566,11 @@ class RenderlayerCreator(NewCreator, MayaCreatorBase):
                 instance_node = self._create_layer_instance_node(layer)
                 instance.data["instance_node"] = instance_node
 
-            self.imprint_instance_node(instance_node,
-                                       data=instance.data_to_store())
+            data = instance.data_to_store()
+            # Allow subclass to override imprinted data behavior
+            data = self.imprint_instance_node_data_overrides(data,
+                                                             instance)
+            self.imprint_instance_node(instance_node, data=data)
 
     def imprint_instance_node(self, node, data):
         # Do not ever try to update the `renderlayer` since it'll try

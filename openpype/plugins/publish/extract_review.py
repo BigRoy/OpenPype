@@ -1209,16 +1209,6 @@ class ExtractReview(pyblish.api.InstancePlugin):
         reformat_in_baking = bool("reformated" in new_repre["tags"])
         self.log.debug("reformat_in_baking: `{}`".format(reformat_in_baking))
 
-        # Get instance data
-        pixel_aspect = temp_data["pixel_aspect"]
-
-        if reformat_in_baking:
-            self.log.debug((
-                "Using resolution from input. It is already "
-                "reformated from upstream process"
-            ))
-            pixel_aspect = 1
-
         # NOTE Skipped using instance's resolution
         full_input_path_single_file = temp_data["full_input_path_single_file"]
         try:
@@ -1249,7 +1239,7 @@ class ExtractReview(pyblish.api.InstancePlugin):
         if reformat_in_baking:
             self.log.debug((
                 "Using resolution from input. It is already "
-                "reformated from upstream process"
+                "reformatted from upstream process"
             ))
             pixel_aspect = 1
             output_width = input_width
@@ -1261,7 +1251,7 @@ class ExtractReview(pyblish.api.InstancePlugin):
                 "FFprobe couldn't read resolution from input file: \"{}\""
             ).format(full_input_path_single_file))
 
-        # NOTE Setting only one of `width` or `heigth` is not allowed
+        # NOTE Setting only one of `width` or `height` is not allowed
         # - settings value can't have None but has value of 0
         use_input_res = False
         def_width = output_def.get("width")

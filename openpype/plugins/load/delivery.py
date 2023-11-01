@@ -4,6 +4,7 @@ import platform
 import re
 from collections import defaultdict
 
+import clique
 from qtpy import QtWidgets, QtCore, QtGui
 
 from openpype.client import get_representations, get_versions
@@ -12,7 +13,6 @@ from openpype import resources, style
 
 from openpype.lib import (
     format_file_size,
-    collect_frames,
     get_datetime_data,
 )
 from openpype.pipeline.load import get_representation_path_with_anatomy
@@ -21,7 +21,28 @@ from openpype.pipeline.delivery import (
     check_destination_path,
     deliver_single_file,
     deliver_sequence,
+    format_delivery_path,
+    # todo: avoid private access
+    _copy_file,
 )
+from openpype.lib import StringTemplate
+
+
+def assemble(files):
+    """Returns collections (sequences) and separate files.
+
+    Args:
+        files(list): list of filepaths
+
+    Returns:
+        tuple[List[clique.Collection], List[str]]: 2-tuple of
+            list of collections and list of files not part of a collection
+    """
+
+    patterns = [clique.PATTERNS["frames"]]
+    collections, remainder = clique.assemble(
+        files, minimum_items=1, patterns=patterns)
+    return collections, remainder
 
 
 class Delivery(load.SubsetLoaderPlugin):
@@ -227,11 +248,12 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         format_dict = get_format_dict(self.anatomy, delivery_root)
         renumber_frame = self.renumber_frame.isChecked()
         frame_offset = self.first_frame_start.value()
+        processed = set()
         for repre in representations:
-
             repre_path = get_representation_path_with_anatomy(
                 repre, self.anatomy
             )
+            repre_path = os.path.normpath(repre_path)
 
             anatomy_data = copy.deepcopy(repre["context"])
             new_report_items = check_destination_path(str(repre["_id"]),
@@ -259,38 +281,106 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
                 src_paths = []
                 for repre_file in repre["files"]:
                     src_path = self.anatomy.fill_root(repre_file["path"])
+                    src_path = os.path.normpath(src_path)
                     src_paths.append(src_path)
-                sources_and_frames = collect_frames(src_paths)
 
-                frames = set(sources_and_frames.values())
-                frames.discard(None)
-                first_frame = None
-                if frames:
-                    first_frame = min(frames)
+                collections, remainder = assemble(src_paths)
 
-                for src_path, frame in sources_and_frames.items():
-                    args[0] = src_path
-                    # Renumber frames
-                    if renumber_frame and frame is not None:
-                        # Calculate offset between
-                        # first frame and current frame
-                        # - '0' for first frame
-                        offset = frame_offset - int(first_frame)
-                        # Add offset to new frame start
-                        dst_frame = int(frame) + offset
-                        if dst_frame < 0:
-                            msg = "Renumber frame has a smaller number than original frame"     # noqa
-                            report_items[msg].append(src_path)
-                            self.log.warning("{} <{}>".format(
-                                msg, dst_frame))
-                            continue
-                        frame = dst_frame
-
-                    if frame is not None:
-                        anatomy_data["frame"] = frame
+                # We must consider a few different types of files, the `files`
+                # list will include the representations files but also the
+                # resource files (e.g. textures in published looks). So we
+                # should identify initially whether the file we're processing
+                # is a file of the representation or resource files.
+                def deliver(*args):
                     new_report_items, uploaded = deliver_single_file(*args)
                     report_items.update(new_report_items)
                     self._update_progress(uploaded)
+
+                def is_main_file(path):
+                    """Return whether Collection or Path is main
+                    representation file or sequence - if not it's a resource"""
+                    if isinstance(path, clique.Collection):
+                        return path.match(repre_path)
+                    else:
+                        return path == repre_path
+
+                # Transfer source collection to destination collection
+                resources = []
+                for collection in collections:
+                    if not is_main_file(collection):
+                        resources.extend(list(collection))
+                        continue
+
+                    first_frame = min(collection.indexes)
+                    for src_path, frame in zip(collection, collection.indexes):
+
+                        # Renumber frames
+                        if renumber_frame and first_frame != frame_offset:
+                            # Calculate offset between
+                            # first frame and current frame
+                            # - '0' for first frame
+                            offset = frame_offset - int(first_frame)
+
+                            # Add offset to new frame start
+                            dst_frame = int(frame) + offset
+                            if dst_frame < 0:
+                                msg = "Renumbered frame is below zero."
+                                report_items[msg].append(src_path)
+                                self.log.warning("{} <{}>".format(
+                                    msg, dst_frame))
+                                continue
+                            frame = dst_frame
+
+                        # Deliver main representation sequence frame
+                        args[0] = src_path
+                        anatomy_data["frame"] = frame
+                        deliver(*args)
+
+                for single_filepath in remainder:
+                    if not is_main_file(single_filepath):
+                        resources.append(single_filepath)
+                        continue
+
+                    # Deliver main representation file
+                    args[0] = single_filepath
+                    deliver(*args)
+
+                # Resource files will be transferred to the last folder
+                # defined by the delivery template without renaming
+                # the files but keeping any subfolders from the source
+                # file compared to the representations 'template' publish/
+                # folder
+                if not resources:
+                    continue
+
+                publish_dir_template = (
+                    os.path.dirname(repre["data"]["template"])
+                )
+                publish_dir = StringTemplate.format_template(
+                    publish_dir_template, repre["context"]
+                )
+                delivery_dir = os.path.dirname(format_delivery_path(
+                    anatomy=self.anatomy,
+                    template_name=template_name,
+                    anatomy_data=anatomy_data,
+                    format_dict=format_dict
+                ))
+                for resource in resources:
+                    # Deliver resource file
+                    relative_path = os.path.relpath(resource, publish_dir)
+                    destination = os.path.join(delivery_dir, relative_path)
+                    if destination in processed:
+                        # Resources can be attached to more than one
+                        # representation so we might end up trying to process
+                        # the path more than once, if so we ignore it
+                        continue
+
+                    destination_dir = os.path.dirname(destination)
+                    os.makedirs(destination_dir, exist_ok=True)
+                    _copy_file(resource, destination)
+                    self._update_progress(1)
+                    processed.add(destination)
+
             else:  # fallback for Pype2 and representations without files
                 frame = repre['context'].get('frame')
                 if frame:
@@ -344,6 +434,10 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         """Returns tuple of number of selected files and their size."""
         files_selected = 0
         size_selected = 0
+
+        # Different representation can reference the same filepath due to
+        # 'resource' transfers that get linked to each representation
+        processed = set()
         for repre in self._representations:
             if repre["name"] in selected_repres:
                 files = repre.get("files", [])
@@ -352,8 +446,13 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
                     size_selected += 0
                 else:
                     for repre_file in files:
+                        path = repre_file["path"]
+                        if path in processed:
+                            continue
+
                         files_selected += 1
                         size_selected += repre_file["size"]
+                        processed.add(path)
 
         return files_selected, size_selected
 

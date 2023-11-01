@@ -112,6 +112,30 @@ def check_destination_path(
     return report_items
 
 
+def format_delivery_path(
+    anatomy,
+    template_name,
+    anatomy_data,
+    format_dict
+):
+    if format_dict:
+        anatomy_data = copy.deepcopy(anatomy_data)
+
+    anatomy_data["root"] = format_dict["root"]
+
+    template_obj = anatomy.templates_obj["delivery"][template_name]
+    delivery_path = template_obj.format_strict(anatomy_data)
+
+    # Backwards compatibility when extension contained `.`
+    delivery_path = delivery_path.replace("..", ".")
+    # Make sure path is valid for all platforms
+    delivery_path = os.path.normpath(delivery_path.replace("\\", "/"))
+    # Remove newlines from the end of the string to avoid OSError during copy
+    delivery_path = delivery_path.rstrip()
+
+    return delivery_path
+
+
 def deliver_single_file(
     src_path,
     repre,
@@ -147,18 +171,12 @@ def deliver_single_file(
         report_items["Source file was not found"].append(msg)
         return report_items, 0
 
-    if format_dict:
-        anatomy_data = copy.deepcopy(anatomy_data)
-        anatomy_data["root"] = format_dict["root"]
-    template_obj = anatomy.templates_obj["delivery"][template_name]
-    delivery_path = template_obj.format_strict(anatomy_data)
-
-    # Backwards compatibility when extension contained `.`
-    delivery_path = delivery_path.replace("..", ".")
-    # Make sure path is valid for all platforms
-    delivery_path = os.path.normpath(delivery_path.replace("\\", "/"))
-    # Remove newlines from the end of the string to avoid OSError during copy
-    delivery_path = delivery_path.rstrip()
+    delivery_path = format_delivery_path(
+        anatomy,
+        template_name,
+        anatomy_data,
+        format_dict
+    )
 
     delivery_folder = os.path.dirname(delivery_path)
     if not os.path.exists(delivery_folder):

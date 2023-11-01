@@ -321,15 +321,13 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
                             # - '0' for first frame
                             offset = frame_offset - int(first_frame)
 
-                            # Add offset to new frame start
-                            dst_frame = int(frame) + offset
-                            if dst_frame < 0:
+                            # Apply the offset to the frame number
+                            frame += offset
+                            if frame < 0:
                                 msg = "Renumbered frame is below zero."
                                 report_items[msg].append(src_path)
-                                self.log.warning("{} <{}>".format(
-                                    msg, dst_frame))
+                                self.log.warning("{} <{}>".format(msg, frame))
                                 continue
-                            frame = dst_frame
 
                         # Deliver main representation sequence frame
                         args[0] = src_path

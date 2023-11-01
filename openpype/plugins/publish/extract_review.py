@@ -1263,12 +1263,17 @@ class ExtractReview(pyblish.api.InstancePlugin):
 
         # NOTE Setting only one of `width` or `heigth` is not allowed
         # - settings value can't have None but has value of 0
-        output_width = output_def.get("width") or output_width or None
-        output_height = output_def.get("height") or output_height or None
-        # Force to use input resolution if output resolution was not defined
-        #   in settings. Resolution from instance is not used when
-        #   'use_input_res' is set to 'True'.
         use_input_res = False
+        def_width = output_def.get("width")
+        def_height = output_def.get("height")
+        if def_width and def_height:
+            output_width = def_width
+            output_height = def_height
+        else:
+            # Force to use input resolution if output resolution was not
+            # defined in settings. Resolution from instance is not used when
+            # 'use_input_res' is set to 'True'.
+            use_input_res = True
 
         # Overscan color
         overscan_color_value = "black"
@@ -1332,8 +1337,9 @@ class ExtractReview(pyblish.api.InstancePlugin):
 
         # Use instance resolution if output definition has not set it
         #   - use instance resolution only if there were not scale changes
-        #       that may massivelly affect output 'use_input_res'
-        if not use_input_res and output_width is None or output_height is None:
+        #       that may massively affect output 'use_input_res'
+        if not use_input_res and (output_width is None or
+                                  output_height is None):
             output_width = temp_data["resolution_width"]
             output_height = temp_data["resolution_height"]
 
@@ -1349,7 +1355,7 @@ class ExtractReview(pyblish.api.InstancePlugin):
         # Make sure output width and height is not an odd number
         # When this can happen:
         # - if output definition has set width and height with odd number
-        # - `instance.data` contain width and height with odd numbeer
+        # - `instance.data` contain width and height with odd number
         if output_width % 2 != 0:
             self.log.warning((
                 "Converting output width from odd to even number. {} -> {}"

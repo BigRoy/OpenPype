@@ -36,9 +36,9 @@ class MayaPlaceholderLoadPlugin(MayaPlaceholderPlugin, PlaceholderLoadMixin):
         # add loader arguments if any
         loader_args = placeholder_data["loader_args"]
         if loader_args:
-            loader_args = json.loads(loader_args.replace('\'', '\"'))
+            loader_args = eval(loader_args)
             for value in loader_args.values():
-                parts.append(value)
+                parts.append(str(value))
 
         parts.append(suffix)
         placeholder_name = "_".join(parts)

@@ -45,13 +45,20 @@ class MayaTemplateBuilder(AbstractTemplateBuilder):
             ))
 
         cmds.sets(name=PLACEHOLDER_SET, empty=True)
-        new_nodes = cmds.file(
-            path,
-            i=True,
-            returnNewNodes=True,
-            preserveReferences=True,
-            loadReferenceDepth="all",
-        )
+        try:
+            new_nodes = cmds.file(
+                path,
+                i=True,
+                returnNewNodes=True,
+                preserveReferences=True,
+                loadReferenceDepth="all",
+            )
+        except RuntimeError:
+            self.log.warning(
+                "Template import had errors on file import: {}\n"
+                "There might be unexpected behavior on template build."
+                "".format(path), exc_info=True
+            )
 
         # make default cameras non-renderable
         default_cameras = [cam for cam in cmds.ls(cameras=True)

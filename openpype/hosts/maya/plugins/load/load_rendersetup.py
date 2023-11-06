@@ -110,14 +110,6 @@ class RenderSetupLoader(load.LoaderPlugin):
                 renderSetup.instance().decode(
                     json.load(file), import_mode, None)
 
-        nodes = []
-        null = cmds.sets(name="null_SET", empty=True)
-        nodes.append(null)
-
-        self[:] = nodes
-        if not nodes:
-            return
-
         if data.get("load_managed", True):
             self.log.info(">>> containerising [ {} ]".format(name))
             asset = context['asset']['name']
@@ -130,7 +122,7 @@ class RenderSetupLoader(load.LoaderPlugin):
             return containerise(
                 name=name,
                 namespace=namespace,
-                nodes=nodes,
+                nodes=[],
                 context=context,
                 loader=self.__class__.__name__)
 

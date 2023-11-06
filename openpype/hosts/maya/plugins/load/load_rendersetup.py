@@ -134,7 +134,7 @@ class RenderSetupLoader(load.LoaderPlugin):
 
         self.log.info("Removing '%s' from Maya.." % container["name"])
 
-        container_content = cmds.sets(container_name, query=True)
+        container_content = cmds.sets(container_name, query=True) or []
         nodes = cmds.ls(container_content, long=True)
 
         nodes.append(container_name)

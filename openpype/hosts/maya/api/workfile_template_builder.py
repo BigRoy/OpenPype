@@ -199,7 +199,17 @@ class MayaPlaceholderPlugin(PlaceholderPlugin):
 
         Used only by PlaceholderCreateMixin and PlaceholderLoadMixin.
         """
-        cmds.delete(placeholder.scene_identifier)
+        node = placeholder.scene_identifier
+
+        # To avoid that deleting a placeholder node will have Maya delete
+        # any objectSets the node was a member of we will first remove it
+        # from any sets it was a member of. This way the `PLACEHOLDERS_SET`
+        # will survive long enough
+        sets = cmds.listSets(o=node) or []
+        for object_set in sets:
+            cmds.sets(node, remove=object_set)
+
+        cmds.delete(node)
 
     def imprint(self, node, data):
         """Imprint call for placeholder node"""

@@ -35,6 +35,8 @@ from openpype.lib import (
     filter_profiles,
     attribute_definitions,
 )
+from openpype.pipeline.plugin_discover import discover
+from openpype.lib.events import OrderedEventSystem
 from openpype.lib.attribute_definitions import get_attributes_keys
 from openpype.pipeline import Anatomy
 from openpype.pipeline.load import (
@@ -121,6 +123,8 @@ class AbstractTemplateBuilder(object):
         self._current_asset_doc = None
         self._linked_asset_docs = None
         self._task_type = None
+
+        self._event_system = OrderedEventSystem()
 
     @property
     def project_name(self):
@@ -210,9 +214,15 @@ class AbstractTemplateBuilder(object):
             List[PlaceholderPlugin]: Plugin classes available for host.
         """
 
+        plugins = []
+
+        # Backwards compatibility
         if hasattr(self._host, "get_workfile_build_placeholder_plugins"):
-            return self._host.get_workfile_build_placeholder_plugins()
-        return []
+            plugins = self._host.get_workfile_build_placeholder_plugins()
+
+        plugins.extend(discover(PlaceholderPlugin))
+
+        return plugins
 
     @property
     def host(self):
@@ -242,6 +252,10 @@ class AbstractTemplateBuilder(object):
             self._log = Logger.get_logger(repr(self))
         return self._log
 
+    @property
+    def event_system(self):
+        return self._event_system
+
     def refresh(self):
         """Reset cached data."""
 
@@ -255,6 +269,8 @@ class AbstractTemplateBuilder(object):
 
         self._system_settings = None
         self._project_settings = None
+
+        self._event_system = OrderedEventSystem()
 
         self.clear_shared_data()
         self.clear_shared_populate_data()
@@ -449,7 +465,7 @@ class AbstractTemplateBuilder(object):
 
         return list(sorted(
             placeholders,
-            key=lambda i: i.order
+            key=lambda placeholder: placeholder.order
         ))
 
     def build_template(
@@ -481,15 +497,17 @@ class AbstractTemplateBuilder(object):
                                               process if version is created
 
         """
-        template_preset = self.get_template_preset()
 
-        if template_path is None:
-            template_path = template_preset["path"]
-
-        if keep_placeholders is None:
-            keep_placeholders = template_preset["keep_placeholder"]
-        if create_first_version is None:
-            create_first_version = template_preset["create_first_version"]
+        if any(value is None for value in [template_path,
+                                           keep_placeholders,
+                                           create_first_version]):
+            template_preset = self.get_template_preset()
+            if template_path is None:
+                template_path = template_preset["path"]
+            if keep_placeholders is None:
+                keep_placeholders = template_preset["keep_placeholder"]
+            if create_first_version is None:
+                create_first_version = template_preset["create_first_version"]
 
         # check if first version is created
         created_version_workfile = False
@@ -662,7 +680,7 @@ class AbstractTemplateBuilder(object):
             for placeholder in placeholders
         }
         all_processed = len(placeholders) == 0
-        # Counter is checked at the ned of a loop so the loop happens at least
+        # Counter is checked at the end of a loop so the loop happens at least
         #   once.
         iter_counter = 0
         while not all_processed:
@@ -706,6 +724,16 @@ class AbstractTemplateBuilder(object):
 
                 placeholder.set_finished()
 
+            # Trigger on_depth_processed event
+            self.event_system.emit(
+                topic="template.depth_processed",
+                data={
+                    "depth": iter_counter,
+                    "placeholders_by_scene_id": placeholder_by_scene_id
+                },
+                source="builder"
+            )
+
             # Clear shared data before getting new placeholders
             self.clear_shared_populate_data()
 
@@ -723,6 +751,16 @@ class AbstractTemplateBuilder(object):
                 all_processed = False
                 placeholder_by_scene_id[identifier] = placeholder
                 placeholders.append(placeholder)
+
+        # Trigger on_finished event
+        self.event_system.emit(
+            topic="template.finished",
+            data={
+                "depth": iter_counter,
+                "placeholders_by_scene_id": placeholder_by_scene_id,
+            },
+            source="builder"
+        )
 
         self.refresh()
 
@@ -1022,7 +1060,7 @@ class PlaceholderPlugin(object):
 
         Using shared data from builder but stored under plugin identifier.
 
-        Key should be self explanatory to content.
+        Key should be self-explanatory to content.
         - wrong: 'asset'
         - good: 'asset_name'
 
@@ -1062,7 +1100,7 @@ class PlaceholderPlugin(object):
 
         Using shared data from builder but stored under plugin identifier.
 
-        Key should be self explanatory to content.
+        Key should be self-explanatory to content.
         - wrong: 'asset'
         - good: 'asset_name'
 
@@ -1079,15 +1117,49 @@ class PlaceholderPlugin(object):
         plugin_data[key] = value
         self.builder.set_shared_populate_data(self.identifier, plugin_data)
 
+    def register_on_finished_callback(
+            self, placeholder, callback, order=None
+    ):
+        self.register_callback(
+            placeholder,
+            topic="template.finished",
+            callback=callback,
+            order=order
+        )
+
+    def register_on_depth_processed_callback(
+            self, placeholder, callback, order=0
+    ):
+        self.register_callback(
+            placeholder,
+            topic="template.depth_processed",
+            callback=callback,
+            order=order
+        )
+
+    def register_callback(self, placeholder, topic, callback, order=None):
+
+        if order is None:
+            # Match placeholder order by default
+            order = placeholder.order
+
+        # We must persist the callback over time otherwise it will be removed
+        # by the event system as a valid function reference. We do that here
+        # always just so it's easier to develop plugins where callbacks might
+        # be partials or lambdas
+        placeholder.data.setdefault("callbacks", []).append(callback)
+        self.log.debug("Registering '%s' callback: %s", topic, callback)
+        self.builder.event_system.add_callback(topic, callback, order=order)
+
 
 class PlaceholderItem(object):
     """Item representing single item in scene that is a placeholder to process.
 
     Items are always created and updated by their plugins. Each plugin can use
-    modified class of 'PlacehoderItem' but only to add more options instead of
+    modified class of 'PlaceholderItem' but only to add more options instead of
     new other.
 
-    Scene identifier is used to avoid processing of the palceholder item
+    Scene identifier is used to avoid processing of the placeholder item
     multiple times so must be unique across whole workfile builder.
 
     Args:
@@ -1139,7 +1211,7 @@ class PlaceholderItem(object):
         """Placeholder data which can modify how placeholder is processed.
 
         Possible general keys
-        - order: Can define the order in which is palceholder processed.
+        - order: Can define the order in which is placeholder processed.
                     Lower == earlier.
 
         Other keys are defined by placeholder and should validate them on item
@@ -1241,7 +1313,7 @@ class PlaceholderLoadMixin(object):
         """Unified attribute definitions for load placeholder.
 
         Common function for placeholder plugins used for loading of
-        repsentations. Use it in 'get_placeholder_options'.
+        representations. Use it in 'get_placeholder_options'.
 
         Args:
             plugin (PlaceholderPlugin): Plugin used for loading of
@@ -1799,7 +1871,6 @@ class PlaceholderCreateMixin(object):
 
         if not placeholder.data.get("keep_placeholder", True):
             self.delete_placeholder(placeholder)
-
 
     def create_failed(self, placeholder, creator_data):
         if hasattr(placeholder, "create_failed"):

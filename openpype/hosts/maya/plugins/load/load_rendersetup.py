@@ -10,7 +10,7 @@ import json
 import sys
 import six
 
-from openpype.lib import BoolDef
+from openpype.lib import BoolDef, EnumDef
 from openpype.pipeline import (
     load,
     get_representation_path
@@ -76,7 +76,24 @@ class RenderSetupLoader(load.LoaderPlugin):
                   "Containerize the rendersetup on load so it can be "
                   "'updated' later."
                 ),
-                default=True)
+                default=True),
+        EnumDef("import_mode",
+                label="Import mode",
+                items={
+                    renderSetup.DECODE_AND_OVERWRITE: (
+                        "Flush existing render setup and "
+                        "add without any namespace"
+                    ),
+                    renderSetup.DECODE_AND_MERGE: (
+                        "Merge with the existing render setup objects and "
+                        "rename the unexpected objects"
+                    ),
+                    renderSetup.DECODE_AND_RENAME: (
+                        "Renaming all decoded render setup objects to not "
+                        "conflict with the existing render setup"
+                    ),
+                },
+                default=renderSetup.DECODE_AND_OVERWRITE)
     ]
 
     def load(self, context, name, namespace, data):
@@ -85,12 +102,13 @@ class RenderSetupLoader(load.LoaderPlugin):
         path = self.filepath_from_context(context)
 
         accept_import = data.get("accept_import", True)
+        import_mode = data.get("import_mode", renderSetup.DECODE_AND_OVERWRITE)
 
         self.log.info(">>> loading json [ {} ]".format(path))
         with mark_all_imported(accept_import):
             with open(path, "r") as file:
                 renderSetup.instance().decode(
-                    json.load(file), renderSetup.DECODE_AND_OVERWRITE, None)
+                    json.load(file), import_mode, None)
 
         nodes = []
         null = cmds.sets(name="null_SET", empty=True)

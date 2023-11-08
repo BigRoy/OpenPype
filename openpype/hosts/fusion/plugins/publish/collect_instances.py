@@ -58,8 +58,6 @@ class CollectInstanceData(pyblish.api.InstancePlugin):
             end_with_handle = comp_end
 
         if frame_range_source == "custom_range":
-            self.log.info(instance)
-            self.log.info("Using custom range..")
             start = int(instance.data["custom_frameStart"])
             end = int(instance.data["custom_frameEnd"])
             handle_start = int(instance.data["custom_handleStart"])

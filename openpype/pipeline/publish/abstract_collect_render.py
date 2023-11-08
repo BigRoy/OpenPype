@@ -213,6 +213,17 @@ class AbstractCollectRender(pyblish.api.ContextPlugin):
             render_instance_dict = attr.asdict(render_instance)
 
             instance = context.create_instance(render_instance.name)
+
+            # TODO: Avoid this transfer instance id hack
+            # Transfer the id from another instance, e.g. when the render
+            # instance is intended to "replace" an existing instance like
+            # fusion does in `CollectRender`. Without matching the ids any
+            # logs produced for the instance prior to the "replacement" will
+            # not show artist-facing logs in reports
+            transfer_id = getattr(render_instance, "id")
+            if transfer_id:
+                instance._id = transfer_id
+
             instance.data["label"] = render_instance.label
             instance.data.update(render_instance_dict)
             instance.data.update(data)

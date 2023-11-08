@@ -118,6 +118,12 @@ class CollectFusionRender(
             instances.append(instance)
             instances_to_remove.append(inst)
 
+            # TODO: Avoid this transfer instance id hack
+            # pass on the `id` of the original instance so any artist
+            # facing logs transfer as if they were made on the new instance
+            # instead, see `AbstractCollectRender.process()`
+            instance.id = inst.id
+
         for instance in instances_to_remove:
             context.remove(instance)
 

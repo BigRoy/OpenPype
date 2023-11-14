@@ -75,8 +75,6 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
 
         # TODO: Re-add force enable of workfile instance?
         # TODO: Re-add legacy layer support with LAYER_ prefix but in Creator
-        # TODO: Set and collect active state of RenderLayer in Creator using
-        #       renderlayer.isRenderable()
         context = instance.context
 
         layer = instance.data["transientData"]["layer"]

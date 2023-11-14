@@ -201,7 +201,7 @@ class CollectUpstreamInputs(pyblish.api.InstancePlugin):
             members.extend(shaders)
 
             # Explicitly include the camera being rendered in renderlayer
-            cameras = instance.data.get("cameras")
+            cameras = instance.data.get("cameras", [])
             members.extend(cameras)
 
             containers = collect_input_containers(scene_containers, members)

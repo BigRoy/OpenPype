@@ -3,7 +3,7 @@
 
 This collector will go through renderlayer instances and prepare all data
 needed to detect the expected rendered files for a layer, with resolution,
-frame ranges and collectes the data needed for publishing on the farm.
+frame ranges and collects the data needed for publishing on the farm.
 
 Requires:
     instance    -> families

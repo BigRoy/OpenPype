@@ -46,7 +46,6 @@ class ValidateRenderSingleCamera(pyblish.api.InstancePlugin):
             RenderSettings.get_image_prefix_attr(renderer)
         )
 
-
         if len(cameras) > 1:
             if re.search(cls.R_CAMERA_TOKEN, file_prefix):
                 # if there is <Camera> token in prefix and we have more then

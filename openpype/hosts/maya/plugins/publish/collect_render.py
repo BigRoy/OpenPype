@@ -157,7 +157,6 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
             )
 
         # append full path
-        aov_dict = {}
         image_directory = os.path.join(
             cmds.workspace(query=True, rootDirectory=True),
             cmds.workspace(fileRuleEntry="images")
@@ -165,6 +164,7 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
         # replace relative paths with absolute. Render products are
         # returned as list of dictionaries.
         publish_meta_path = "NOT-SET"
+        aov_dict = {}
         for aov in expected_files:
             full_paths = []
             aov_first_key = list(aov.keys())[0]

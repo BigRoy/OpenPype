@@ -82,7 +82,6 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
         layer = instance.data["transientData"]["layer"]
         objset = instance.data.get("instance_node")
         filepath = context.data["currentFile"].replace("\\", "/")
-        workspace = context.data["workspaceDir"]
 
         # check if layer is renderable
         if not layer.isRenderable():
@@ -117,7 +116,13 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
         except UnsupportedRendererException as exc:
             raise KnownPublishError(exc)
         render_products = layer_render_products.layer_data.products
-        assert render_products, "no render products generated"
+        if not render_products:
+            self.log.error(
+                "No render products generated for '%s'. You might not have "
+                "any render camera in the renderlayer or render end frame is "
+                "lower than start frame.",
+                instance
+            )
         expected_files = []
         multipart = False
         for product in render_products:
@@ -135,9 +140,13 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
                 })
 
         has_cameras = any(product.camera for product in render_products)
-        assert has_cameras, "No render cameras found."
-
-        assert expected_files, "no file names were generated, this is bug"
+        if render_products and not has_cameras:
+            self.log.error(
+                "No render cameras found for: %s",
+                instance
+            )
+        if not expected_files:
+            self.log.warning("No file names were generated, this is a bug")
 
         if os.environ.get("OPENPYPE_DEBUG") == "1":
             for render_product in render_products:
@@ -164,7 +173,7 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
         )
         # replace relative paths with absolute. Render products are
         # returned as list of dictionaries.
-        publish_meta_path = None
+        publish_meta_path = "NOT-SET"
         for aov in expected_files:
             full_paths = []
             aov_first_key = list(aov.keys())[0]
@@ -175,13 +184,6 @@ class CollectMayaRender(pyblish.api.InstancePlugin):
                 publish_meta_path = os.path.dirname(full_path)
             aov_dict[aov_first_key] = full_paths
         full_exp_files = [aov_dict]
-
-        if publish_meta_path is None:
-            raise KnownPublishError("Unable to detect any expected output "
-                                    "images for: {}. Make sure you have a "
-                                    "renderable camera and a valid frame "
-                                    "range set for your renderlayer."
-                                    "".format(instance.name))
 
         frame_start_render = int(self.get_render_attribute(
             "startFrame", layer=layer_name))

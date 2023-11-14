@@ -1,21 +1,15 @@
 # -*- coding: utf-8 -*-
 """Collect render data.
 
-This collector will go through render layers in maya and prepare all data
-needed to create instances and their representations for submission and
-publishing on farm.
+This collector will go through renderlayer instances and prepare all data
+needed to detect the expected rendered files for a layer, with resolution,
+frame ranges and collectes the data needed for publishing on the farm.
 
 Requires:
     instance    -> families
-    instance    -> setMembers
 
     context     -> currentFile
-    context     -> workspaceDir
     context     -> user
-
-    session     -> AVALON_ASSET
-
-Optional:
 
 Provides:
     instance    -> label
@@ -28,7 +22,6 @@ Provides:
     instance    -> byFrameStep
     instance    -> renderer
     instance    -> family
-    instance    -> families
     instance    -> asset
     instance    -> time
     instance    -> author

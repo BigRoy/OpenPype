@@ -508,6 +508,7 @@ class AssetModel(QtGui.QStandardItemModel):
             asset_name = asset_doc["name"]
             if item.data(ASSET_NAME_ROLE) != asset_name:
                 item.setData(asset_name, ASSET_NAME_ROLE)
+                item.setData(asset_name, QtCore.Qt.ToolTipRole)
 
             asset_data = asset_doc.get("data") or {}
             asset_label = asset_data.get("label") or asset_name

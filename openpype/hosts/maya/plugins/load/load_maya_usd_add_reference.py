@@ -30,7 +30,7 @@ class MayaUsdProxyReferenceUsd(load.LoaderPlugin):
     representations = ["usd", "usda", "usdc", "usdz", "abc"]
 
     label = "USD Add Reference"
-    order = -999
+    order = 0
     icon = "code-fork"
     color = "orange"
 

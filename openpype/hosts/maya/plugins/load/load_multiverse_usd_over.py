@@ -23,7 +23,7 @@ class MultiverseUsdOverLoader(load.LoaderPlugin):
     representations = ["usda", "usd", "udsz"]
 
     label = "Load Usd Override into Compound"
-    order = -10
+    order = -1
     icon = "code-fork"
     color = "orange"
 

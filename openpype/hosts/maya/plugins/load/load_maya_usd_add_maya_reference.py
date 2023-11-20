@@ -53,7 +53,7 @@ class MayaUsdProxyAddMayaReferenceLoader(load.LoaderPlugin):
     extensions = ["ma", "mb"]
 
     label = "USD Add Maya Reference"
-    order = -998
+    order = 1
     icon = "code-fork"
     color = "orange"
 

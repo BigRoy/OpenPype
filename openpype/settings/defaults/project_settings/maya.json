@@ -1395,6 +1395,8 @@
         },
         "ExtractGPUCache": {
             "enabled": false,
+            "optional": true,
+            "active": true,
             "families": [
                 "model",
                 "animation",

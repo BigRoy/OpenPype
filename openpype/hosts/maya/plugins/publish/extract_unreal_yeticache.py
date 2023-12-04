@@ -5,7 +5,7 @@ from maya import cmds
 from openpype.pipeline import publish
 
 
-class ExtractYetiCache(publish.Extractor):
+class ExtractUnrealYetiCache(publish.Extractor):
     """Producing Yeti cache files using scene time range.
 
     This will extract Yeti cache file sequence and fur settings.

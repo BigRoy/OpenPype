@@ -3,6 +3,7 @@ from maya import cmds
 import pyblish.api
 
 from openpype.hosts.maya.api import lib
+from openpype.hosts.maya.api.yeti import get_yeti_user_variables
 
 
 SETTINGS = {
@@ -71,6 +72,12 @@ class CollectYetiCache(pyblish.api.InstancePlugin):
                     current = ""
                 attr_data[attr] = current
 
+            # Get user variable attributes
+            user_variable_attrs = {
+                attr: lib.get_attribute("{}.{}".format(shape, attr))
+                for attr in get_yeti_user_variables(shape)
+            }
+
             # Get transform data
             parent = cmds.listRelatives(shape, parent=True)[0]
             transform_data = {"name": parent, "cbId": lib.get_id(parent)}
@@ -80,6 +87,7 @@ class CollectYetiCache(pyblish.api.InstancePlugin):
                 "name": shape,
                 "cbId": lib.get_id(shape),
                 "attrs": attr_data,
+                "user_variables": user_variable_attrs
             }
 
             settings["nodes"].append(shape_data)

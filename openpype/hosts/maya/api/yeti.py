@@ -1,7 +1,5 @@
 from maya import cmds
 
-from openpype.hosts.maya.api import lib
-
 
 def get_yeti_user_variables(yeti_shape_node):
     """Get user defined yeti user variables for a `pgYetiMaya` shape node.
@@ -58,11 +56,15 @@ def create_yeti_variable(yeti_shape_node,
             _create_float_yeti_user_variable(yeti_shape_node, attr_name)
 
     if value is not None and (not exists or force_value):
-        lib.set_attribute(
-            node=yeti_shape_node,
-            attribute=attr_name,
-            value=value
-        )
+        plug = "{}.{}".format(yeti_shape_node, attr_name)
+        if (
+                isinstance(value, (list, tuple))
+                and attr_name.startswith("yetiVariableV_")
+        ):
+            cmds.setAttr(plug, *value, type="double3")
+        else:
+            cmds.setAttr(plug, value)
+
         return True
     return False
 

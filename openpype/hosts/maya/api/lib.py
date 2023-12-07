@@ -1460,7 +1460,7 @@ def get_id_required_nodes(referenced_nodes=False,
         exclude_types.append("ilrBakeLayer")
 
     if exclude_types:
-        exclude_nodes = set(cmds.ls(nodes, long=True, types=exclude_types))
+        exclude_nodes = set(cmds.ls(nodes, long=True, type=exclude_types))
         if exclude_nodes:
             result = [node for node in nodes if node not in exclude_nodes]
 

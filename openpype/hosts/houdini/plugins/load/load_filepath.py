@@ -5,7 +5,7 @@ from openpype.pipeline import (
 )
 from openpype.hosts.houdini.api import pipeline
 
-import clique
+import re
 import hou
 
 
@@ -36,7 +36,10 @@ class FilePathLoader(load.LoaderPlugin):
             node.destroy()
 
         # Add filepath attribute, set value as default value
-        filepath = self.fname.replace("\\", "/")
+        filepath = self.format_path(
+            path=self.filepath_from_context(context),
+            representation=context["representation"]
+        )
         parm_template_group = container.parmTemplateGroup()
         attr_folder = hou.FolderParmTemplate("attributes_folder", "Attributes")
         parm = hou.StringParmTemplate(name="filepath",
@@ -75,8 +78,10 @@ class FilePathLoader(load.LoaderPlugin):
     def update(self, container, representation):
 
         # Update the file path
-        file_path = get_representation_path(representation)
-        file_path = self.format_path(file_path)
+        file_path = self.format_path(
+            path=get_representation_path(representation),
+            representation=representation
+        )
 
         node = container["node"]
         node.setParms({
@@ -97,45 +102,19 @@ class FilePathLoader(load.LoaderPlugin):
         node = container["node"]
         node.destroy()
 
-    def format_path(self, path):
-        """Format using $F{padding} token if sequence, otherwise just path."""
+    @staticmethod
+    def format_path(path, representation):
+        """Format file path for sequence with $F."""
+        if not os.path.exists(path):
+            raise RuntimeError("Path does not exist: %s" % path)
 
-        # Find all frames in the folder
-        _, ext = os.path.splitext(path)
-        folder = os.path.dirname(path)
-        frames = [f for f in os.listdir(folder) if f.endswith(ext)]
+        # The path is either a single file or sequence in a folder.
+        frame = representation["context"].get("frame")
+        if frame is not None:
+            # Substitute frame number in sequence with $F with padding
+            ext = representation.get("ext", representation["name"])
+            token = "$F{}".format(len(frame))   # e.g. $F4
+            pattern = r"\.(\d+)\.{ext}$".format(ext=re.escape(ext))
+            path = re.sub(pattern, ".{}.{}".format(token, ext), path)
 
-        # Get the collection of frames to detect frame padding
-        patterns = [clique.PATTERNS["frames"]]
-        collections, remainder = clique.assemble(frames,
-                                                 minimum_items=1,
-                                                 patterns=patterns)
-        self.log.debug("Detected collections: {}".format(collections))
-        self.log.debug("Detected remainder: {}".format(remainder))
-
-        if not collections and remainder:
-            if len(remainder) != 1:
-                raise ValueError("Frames not correctly detected "
-                                 "in: {}".format(remainder))
-
-            # A single frame without frame range detected
-            return os.path.normpath(path).replace("\\", "/")
-
-        # Frames detected with a valid "frame" number pattern
-        # Then we don't want to have any remainder files found
-        assert len(collections) == 1 and not remainder
-        collection = collections[0]
-
-        num_frames = len(collection.indexes)
-        if num_frames == 1:
-            # Return the input path without dynamic $F variable
-            result = path
-        else:
-            # More than a single frame detected - use $F{padding}
-            fname = "{}$F{}{}".format(collection.head,
-                                      collection.padding,
-                                      collection.tail)
-            result = os.path.join(folder, fname)
-
-        # Format file name, Houdini only wants forward slashes
-        return os.path.normpath(result).replace("\\", "/")
+        return os.path.normpath(path).replace("\\", "/")

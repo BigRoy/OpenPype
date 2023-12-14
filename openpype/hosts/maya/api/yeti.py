@@ -15,7 +15,7 @@ def get_yeti_user_variables(yeti_shape_node):
     attrs = cmds.listAttr(yeti_shape_node,
                           userDefined=True,
                           string=("yetiVariableV_*",
-                                  "yetiVariableF_*"))
+                                  "yetiVariableF_*")) or []
     valid_attrs = []
     for attr in attrs:
         attr_type = cmds.attributeQuery(attr, node=yeti_shape_node,

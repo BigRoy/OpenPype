@@ -164,21 +164,21 @@ class ExtractBurnin(publish.Extractor):
                                   logger=self.log)
 
         if not profile:
-            self.log.debug((
+            self.log.debug(
                 "Skipped instance. None of profiles in presets are for"
-                " Host: \"{}\" | Families: \"{}\" | Task \"{}\""
-                " | Task type \"{}\" | Subset \"{}\" "
-            ).format(host_name, family, task_name, task_type, subset))
+                " Host: \"%s\" | Families: \"%s\" | Task \"%s\""
+                " | Task type \"%s\" | Subset \"%s\" ",
+                host_name, family, task_name, task_type, subset)
             return
 
         # Pre-filter burnin definitions by instance families
         burnin_defs = self.filter_burnins_defs(profile, instance)
         if not burnin_defs:
-            self.log.debug((
+            self.log.debug(
                 "Skipped instance. Burnin definitions are not set for profile"
-                " Host: \"{}\" | Families: \"{}\" | Task \"{}\""
-                " | Profile \"{}\""
-            ).format(host_name, family, task_name, profile))
+                " Host: \"%s\" | Families: \"%s\" | Task \"%s\""
+                " | Task type \"%s\" | Subset \"%s\" ",
+                host_name, family, task_name, task_type, subset)
             return
 
         burnins_per_repres = self._get_burnins_per_representations(

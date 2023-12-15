@@ -2,6 +2,7 @@ import os
 
 import bpy
 
+from openpype.lib import BoolDef
 from openpype.pipeline import publish
 from openpype.hosts.blender.api import plugin
 
@@ -16,6 +17,8 @@ class ExtractABC(publish.Extractor, publish.OptionalPyblishPluginMixin):
     def process(self, instance):
         if not self.is_active(instance.data):
             return
+
+        attr_values = self.get_attr_values_from_data(instance.data)
 
         # Define extract output file path
         stagingdir = self.staging_dir(instance)
@@ -43,7 +46,8 @@ class ExtractABC(publish.Extractor, publish.OptionalPyblishPluginMixin):
             bpy.ops.wm.alembic_export(
                 filepath=filepath,
                 selected=True,
-                flatten=False
+                flatten=False,
+                subdiv_schema=attr_values.get("subdiv_schema", False)
             )
 
         plugin.deselect_all()
@@ -61,6 +65,21 @@ class ExtractABC(publish.Extractor, publish.OptionalPyblishPluginMixin):
 
         self.log.debug("Extracted instance '%s' to: %s",
                        instance.name, representation)
+
+    @classmethod
+    def get_attribute_defs(cls):
+        return [
+            BoolDef(
+                "subdiv_schema",
+                label="Alembic Mesh Subdiv Schema",
+                tooltip="Export Meshes using Alembic's subdivision schema.\n"
+                        "Enabling this includes creases with the export but "
+                        "excludes the mesh's normals.\n"
+                        "Enabling this usually result in smaller file size "
+                        "due to lack of normals.",
+                default=True
+            )
+        ]
 
 
 class ExtractModelABC(ExtractABC):

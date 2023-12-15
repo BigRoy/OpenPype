@@ -2,7 +2,9 @@ import bpy
 
 import pyblish.api
 
+from openpype.client import get_asset_by_name
 from openpype.pipeline.publish import get_errored_instances_from_context
+from openpype.hosts.blender.api.cbid import generate_ids, set_id
 
 
 class SelectInvalidAction(pyblish.api.Action):
@@ -45,3 +47,71 @@ class SelectInvalidAction(pyblish.api.Action):
             obj.select_set(True)
 
         bpy.context.view_layer.objects.active = invalid[-1]
+
+
+class GenerateUUIDsOnInvalidAction(pyblish.api.Action):
+    """Generate UUIDs on the invalid nodes in the instance.
+
+    Invalid nodes are those returned by the plugin's `get_invalid` method.
+    As such it is the plug-in's responsibility to ensure the nodes that
+    receive new UUIDs are actually invalid.
+
+    Requires:
+        - instance.data["asset"]
+
+    """
+
+    label = "Regenerate UUIDs"
+    on = "failed"  # This action is only available on a failed plug-in
+    icon = "wrench"  # Icon from Awesome Icon
+
+    def process(self, context, plugin):
+
+        self.log.info("Finding bad nodes..")
+
+        errored_instances = get_errored_instances_from_context(context)
+
+        # Apply pyblish logic to get the instances for the plug-in
+        instances = pyblish.api.instances_by_plugin(errored_instances, plugin)
+
+        # Get the nodes from the all instances that ran through this plug-in
+        all_invalid = []
+        for instance in instances:
+            invalid = plugin.get_invalid(instance)
+            if invalid:
+                self.log.info("Fixing instance {}".format(instance.name))
+                self._update_id_attribute(instance, invalid)
+
+                all_invalid.extend(invalid)
+
+        if not all_invalid:
+            self.log.info("No invalid nodes found.")
+            return
+
+        all_invalid = list(set(all_invalid))
+        self.log.info("Generated ids on nodes: {0}".format(all_invalid))
+
+    def _update_id_attribute(self, instance, nodes):
+        """Delete the id attribute
+
+        Args:
+            instance: The instance we're fixing for
+            nodes (list): all nodes to regenerate ids on
+        """
+
+        # Expecting this is called on validators in which case 'assetEntity'
+        #   should be always available, but kept a way to query it by name.
+        asset_doc = instance.data.get("assetEntity")
+        if not asset_doc:
+            asset_name = instance.data["asset"]
+            project_name = instance.context.data["projectName"]
+            self.log.info((
+                "Asset is not stored on instance."
+                " Querying by name \"{}\" from project \"{}\""
+            ).format(asset_name, project_name))
+            asset_doc = get_asset_by_name(
+                project_name, asset_name, fields=["_id"]
+            )
+
+        for node, _id in generate_ids(nodes, asset_id=asset_doc["_id"]):
+            set_id(node, _id, overwrite=True)

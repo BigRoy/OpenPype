@@ -11,6 +11,11 @@ from openpype.pipeline import publish
 from openpype.hosts.maya.api.lib import maintained_selection, maintained_time
 
 
+def parse_version(version_str):
+    """Parse string like '0.26.0' to (0, 26, 0)"""
+    return tuple(int(v) for v in version_str.split("."))
+
+
 def get_node_hash(node):
     """Return integer MObjectHandle hash code.
 
@@ -284,6 +289,27 @@ class ExtractMayaUsd(publish.Extractor,
         attrs += instance.data.get("userDefinedAttributes", [])
         attrs += ["cbId"]
         attr_prefixes = parse_attr_str(instance.data.get("attrPrefix", ""))
+
+        # Remove arguments for Maya USD versions not supporting them yet
+        # Note: Maya 2022.3 ships with Maya USD 0.13.0.
+        # TODO: Remove this backwards compatibility if Maya 2022 support is
+        #   dropped
+        maya_usd_version = parse_version(
+            cmds.pluginInfo("mayaUsdPlugin", query=True, version=True)
+        )
+        for key, required_minimal_version in {
+            "exportComponentTags": (0, 14, 0),
+            "jobContext": (0, 15, 0)
+        }.items():
+            if key in options:
+                self.log.warning(
+                    "Ignoring export flag '%s' because Maya USD version "
+                    "%s is lower than minimal supported version %s.",
+                    key,
+                    maya_usd_version,
+                    required_minimal_version
+                )
+                del options[key]
 
         self.log.debug('Exporting USD: {} / {}'.format(file_path, members))
         with maintained_time():

@@ -2501,7 +2501,7 @@ class PublisherController(BasePublisherController):
             plugin, self._publish_context, instance
         )
         pyblish.api.emit(
-            "pluginProcessed",
+            "pluginProcessedContext",
             context=self._publish_context,
             result=result,
         )

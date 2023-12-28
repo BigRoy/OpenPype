@@ -25,13 +25,24 @@ class ValidateUSDLayerPathBackslashes(pyblish.api.InstancePlugin,
     """
 
     order = pyblish.api.ValidatorOrder
-    families = ["usdrop", "usdrender"]
+    families = ["usd", "usdrender"]
     hosts = ["houdini"]
     label = "USD Layer path backslashes"
     optional = True
+    active = False
 
     def process(self, instance):
         if not self.is_active(instance.data):
+            return
+
+        if not instance.data.get("instance_node"):
+            # We don't actually want to skip instances 'silently' but we can't
+            # show the optional attribute definition checkbox for an instance's
+            # additional family expect for its primary family. As such, when
+            # targeting this to `usdrop` which primarily is `usd` family it
+            # won't show the attribute definition for instance with families
+            # `["usd", "usdrop"]`. So instead we target `usd` and ignore any
+            # USD instance that does not hav
             return
 
         rop = hou.node(instance.data.get("instance_node"))

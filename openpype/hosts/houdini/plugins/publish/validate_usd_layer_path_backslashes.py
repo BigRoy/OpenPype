@@ -25,6 +25,11 @@ class ValidateUSDLayerPathBackslashes(pyblish.api.InstancePlugin):
     hosts = ["houdini"]
     label = "USD Layer path backslashes"
     optional = True
+    # TODO: Hardcoded disabled for now since it had many false positives
+    #  and would also run on certain instances that generate `usd` family
+    #  but have a creator of different family making the "optional" toggle
+    #  not visible in publisher
+    enabled = False
 
     def process(self, instance):
 

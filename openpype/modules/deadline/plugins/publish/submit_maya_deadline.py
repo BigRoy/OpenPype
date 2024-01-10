@@ -158,6 +158,8 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
         cls.group = settings.get("group", cls.group)
         cls.strict_error_checking = settings.get("strict_error_checking",
                                                  cls.strict_error_checking)
+        cls.jobInfo = settings.get("jobInfo", cls.jobInfo)
+        cls.pluginInfo = settings.get("pluginInfo", cls.pluginInfo)
 
         # Colorbleed edit: Because we have only one Deadline URL we can
         #   always use the default and thus cache it to make the attribute def
@@ -266,7 +268,7 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
         job_info.EnvironmentKeyValue["OPENPYPE_LOG_NO_COLORS"] = "1"
 
         # Adding file dependencies.
-        if self.asset_dependencies:
+        if not bool(os.environ.get("IS_TEST")) and self.asset_dependencies:
             dependencies = instance.context.data["fileDependencies"]
             for dependency in dependencies:
                 job_info.AssetDependency += dependency
@@ -618,7 +620,7 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
 
         job_info = copy.deepcopy(self.job_info)
 
-        if self.asset_dependencies:
+        if not bool(os.environ.get("IS_TEST")) and self.asset_dependencies:
             # Asset dependency to wait for at least the scene file to sync.
             job_info.AssetDependency += self.scene_path
 
@@ -698,7 +700,7 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
         return job_info, attr.asdict(plugin_info)
 
     def _get_arnold_render_payload(self, data):
-
+        from maya import cmds
         # Job Info
         job_info = copy.deepcopy(self.job_info)
         job_info.Name = self._job_info_label("Render")

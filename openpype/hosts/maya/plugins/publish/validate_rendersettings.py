@@ -356,8 +356,7 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
             if not data["values"]:
                 continue
             for node in data["nodes"]:
-                lib.set_attribute(data["attribute"],
-                                  data["values"][0], node)
+                lib.set_attribute(data["attribute"], data["values"][0], node)
 
         # Apply render settings
         render_settings = RenderSettings(
@@ -384,7 +383,6 @@ class ValidateRenderSettings(pyblish.api.InstancePlugin):
                         default_prefix = default_prefix.replace(variant, "")
 
             if renderer != "renderman":
-                # Repair prefix
                 prefix_attr = render_settings.get_image_prefix_attr(renderer)
                 cmds.setAttr(prefix_attr, default_prefix, type="string")
 

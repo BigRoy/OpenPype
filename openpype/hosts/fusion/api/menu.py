@@ -1,3 +1,4 @@
+import os
 import sys
 
 from qtpy import QtWidgets, QtCore, QtGui
@@ -18,6 +19,10 @@ from openpype.resources import get_openpype_icon_filepath
 from .pipeline import FusionEventHandler
 from .pulse import FusionPulse
 
+
+MENU_LABEL = os.environ["AVALON_LABEL"]
+
+
 self = sys.modules[__name__]
 self.menu = None
 
@@ -26,7 +31,7 @@ class OpenPypeMenu(QtWidgets.QWidget):
     def __init__(self, *args, **kwargs):
         super(OpenPypeMenu, self).__init__(*args, **kwargs)
 
-        self.setObjectName("OpenPypeMenu")
+        self.setObjectName(f"{MENU_LABEL}Menu")
 
         icon_path = get_openpype_icon_filepath()
         icon = QtGui.QIcon(icon_path)
@@ -40,7 +45,7 @@ class OpenPypeMenu(QtWidgets.QWidget):
             | QtCore.Qt.WindowCloseButtonHint
             | QtCore.Qt.WindowStaysOnTopHint
         )
-        self.setWindowTitle("OpenPype")
+        self.setWindowTitle(MENU_LABEL)
 
         asset_label = QtWidgets.QLabel("Context", self)
         asset_label.setStyleSheet(
@@ -131,7 +136,7 @@ class OpenPypeMenu(QtWidgets.QWidget):
         self.asset_label.setText(asset_name)
 
         # Update window title
-        self.setWindowTitle("{} - OpenPype".format(asset_name))
+        self.setWindowTitle(f"{asset_name} - {MENU_LABEL}")
 
     def register_callback(self, name, fn):
         # Create a wrapper callback that we only store
@@ -164,7 +169,6 @@ class OpenPypeMenu(QtWidgets.QWidget):
         host_tools.show_library_loader()
 
     def on_saver_manager_clicked(self):
-        print("Clicked Saver Manager")
         from .saver_manager import FusionSaverManager
         manager = FusionSaverManager(parent=self)
         manager.setStyleSheet(load_stylesheet())

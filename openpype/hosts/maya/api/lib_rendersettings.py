@@ -113,8 +113,8 @@ class RenderSettings(object):
     def set_default_renderer_settings(self, renderer=None):
         """Set basic settings based on renderer."""
         # Not all hosts can import this module.
-        from maya import cmds
-        import maya.mel as mel
+        from maya import cmds  # noqa: F401
+        import maya.mel as mel  # noqa: F401
 
         if not renderer:
             renderer = cmds.getAttr(
@@ -156,6 +156,10 @@ class RenderSettings(object):
         """Sets settings for Arnold."""
         from mtoa.core import createOptions  # noqa
         from mtoa.aovs import AOVInterface  # noqa
+        # Not all hosts can import this module.
+        from maya import cmds  # noqa: F401
+        import maya.mel as mel  # noqa: F401
+
         createOptions()
         arnold_render_presets = self["arnold_renderer"]
         # Force resetting settings and AOV list to avoid having to deal with
@@ -214,6 +218,10 @@ class RenderSettings(object):
 
     def _set_redshift_settings(self, width, height):
         """Sets settings for Redshift."""
+        # Not all hosts can import this module.
+        from maya import cmds  # noqa: F401
+        import maya.mel as mel  # noqa: F401
+
         redshift_render_presets = self["redshift_renderer"]
 
         remove_aovs = self["remove_aovs"]
@@ -265,6 +273,10 @@ class RenderSettings(object):
 
     def _set_renderman_settings(self, width, height):
         """Sets settings for Renderman"""
+        # Not all hosts can import this module.
+        from maya import cmds  # noqa: F401
+        import maya.mel as mel  # noqa: F401
+
         rman_render_presets = (
             self._project_settings
             ["maya"]
@@ -338,6 +350,11 @@ class RenderSettings(object):
     def _set_vray_settings(self, width, height):
         # type: (int, int) -> None
         """Sets important settings for Vray."""
+        # Not all hosts can import this module.
+        from maya import cmds  # noqa: F401
+        import maya.mel as mel  # noqa: F401
+
+
         settings = cmds.ls(type="VRaySettingsNode")
         node = settings[0] if settings else cmds.createNode("VRaySettingsNode")
         vray_render_presets = self["vray_renderer"]
@@ -409,6 +426,10 @@ class RenderSettings(object):
 
     @staticmethod
     def _set_global_output_settings():
+        # Not all hosts can import this module.
+        from maya import cmds  # noqa: F401
+        import maya.mel as mel  # noqa: F401
+
         # enable animation
         cmds.setAttr("defaultRenderGlobals.outFormatControl", 0)
         cmds.setAttr("defaultRenderGlobals.animation", 1)
@@ -416,6 +437,10 @@ class RenderSettings(object):
         cmds.setAttr("defaultRenderGlobals.extensionPadding", 4)
 
     def _additional_attribs_setter(self, additional_attribs):
+        # Not all hosts can import this module.
+        from maya import cmds  # noqa: F401
+        import maya.mel as mel  # noqa: F401
+
         for item in additional_attribs:
             attribute, value = item
             diff = attribute_diff(attribute, value)

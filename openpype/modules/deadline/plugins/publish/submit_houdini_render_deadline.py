@@ -48,6 +48,32 @@ class RedshiftRenderPluginInfo():
     Version = attr.ib(default=None)
 
 
+@attr.s
+class HuskStandalonePluginInfo():
+    """Requires Deadline Husk Standalone Plugin.
+
+    See Deadline Plug-in:
+        https://github.com/DavidTree/HuskStandaloneSubmitter
+
+    Also see Husk options here:
+        https://www.sidefx.com/docs/houdini/ref/utils/husk.html
+
+    """
+    SceneFile = attr.ib()
+    # TODO: Below parameters are only supported by custom version of the plugin
+    Renderer = attr.ib(default=None)
+    RenderSettings = attr.ib(default="/Render/rendersettings")
+    Purpose = attr.ib(default="geometry,render")
+    Complexity = attr.ib(default="veryhigh")
+    Snapshot = attr.ib(default=-1)
+    LogLevel = attr.ib(default="2")
+    PreRender = attr.ib(default="")
+    PreFrame = attr.ib(default="")
+    PostFrame = attr.ib(default="")
+    PostRender = attr.ib(default="")
+    RestartDelegate = attr.ib(default="")
+
+
 class HoudiniSubmitDeadline(
     abstract_submit_deadline.AbstractSubmitDeadline,
     OpenPypePyblishPluginMixin
@@ -141,9 +167,14 @@ class HoudiniSubmitDeadline(
 
         job_type = "[RENDER]"
         if split_render_job and not is_export_job:
-            # Convert from family to Deadline plugin name
-            # i.e., arnold_rop -> Arnold
-            plugin = instance.data["family"].replace("_rop", "").capitalize()
+            family = instance.data["family"]
+            plugin = {
+                "usdrender": "HuskStandalone",
+            }.get(family)
+            if not plugin:
+                # Convert from family to Deadline plugin name
+                # i.e., arnold_rop -> Arnold
+                plugin = family.replace("_rop", "").capitalize()
         else:
             plugin = "Houdini"
             if split_render_job:
@@ -273,21 +304,8 @@ class HoudiniSubmitDeadline(
                 plugin_info = RedshiftRenderPluginInfo(
                     SceneFile=instance.data["ifdFile"]
                 )
-                # Note: To use different versions of Redshift on Deadline
-                #       set the `REDSHIFT_VERSION` env variable in the Tools
-                #       settings in the AYON Application plugin. You will also
-                #       need to set that version in `Redshift.param` file
-                #       of the Redshift Deadline plugin:
-                #           [Redshift_Executable_*]
-                #           where * is the version number.
-                if os.getenv("REDSHIFT_VERSION"):
-                    plugin_info.Version = os.getenv("REDSHIFT_VERSION")
-                else:
-                    self.log.warning((
-                        "REDSHIFT_VERSION env variable is not set"
-                        " - using version configured in Deadline"
-                    ))
-
+            elif family == "usdrender":
+                plugin_info = self._get_husk_standalone_plugin_info(instance)
             else:
                 self.log.error(
                     "Family '%s' not supported yet to split render job",
@@ -312,3 +330,36 @@ class HoudiniSubmitDeadline(
         # Store output dir for unified publisher (filesequence)
         output_dir = os.path.dirname(instance.data["files"][0])
         instance.data["outputDir"] = output_dir
+
+    def _get_husk_standalone_plugin_info(self, instance):
+        # Not all hosts can import this module.
+        import hou
+
+        # Supply additional parameters from the USD Render ROP
+        # to the Husk Standalone Render Plug-in
+        rop_node = hou.node(instance.data["instance_node"])
+        snapshot_interval = -1
+        if rop_node.evalParm("dosnapshot"):
+            snapshot_interval = rop_node.evalParm("snapshotinterval")
+
+        restart_delegate = 0
+        if rop_node.evalParm("husk_restartdelegate"):
+            restart_delegate = rop_node.evalParm("husk_restartdelegateframes")
+
+        rendersettings = (
+            rop_node.evalParm("rendersettings")
+            or "/Render/rendersettings"
+        )
+        return HuskStandalonePluginInfo(
+            SceneFile=instance.data["ifdFile"],
+            Renderer=rop_node.evalParm("renderer"),
+            RenderSettings=rendersettings,
+            Purpose=rop_node.evalParm("husk_purpose"),
+            Complexity=rop_node.evalParm("husk_complexity"),
+            Snapshot=snapshot_interval,
+            PreRender=rop_node.evalParm("husk_prerender"),
+            PreFrame=rop_node.evalParm("husk_preframe"),
+            PostFrame=rop_node.evalParm("husk_postframe"),
+            PostRender=rop_node.evalParm("husk_postrender"),
+            RestartDelegate=restart_delegate
+        )

@@ -46,6 +46,7 @@ class CollectRenderProducts(pyblish.api.InstancePlugin):
                                  "Render Product prim: %s", prim_path)
                 continue
 
+            render_product = pxr.UsdRender.Product(prim)
             # Get Render Product Name
             if override_output_image:
                 name = override_output_image
@@ -53,8 +54,7 @@ class CollectRenderProducts(pyblish.api.InstancePlugin):
                 # We force taking it from any random time sample as opposed to
                 # "default" that the USD Api falls back to since that won't
                 # return time sampled values if they were set per time sample.
-                product = pxr.UsdRender.Product(prim)
-                name = product.GetProductNameAttr().Get(time=0)
+                name = render_product.GetProductNameAttr().Get(time=0)
 
             dirname = os.path.dirname(name)
             basename = os.path.basename(name)
@@ -97,18 +97,48 @@ class CollectRenderProducts(pyblish.api.InstancePlugin):
 
             filenames.append(filename)
 
-            # TODO: Support multiple render products (currently this product
-            #   is assumed to be the beauty product or multilayer product)
-            #     files_by_product[aov_name] = self.generate_expected_files(
-            files_by_product[""] = self.generate_expected_files(
+            # TODO: Improve AOV name detection logic
+            aov_identifier = self.get_aov_identifier(render_product)
+            if aov_identifier in files_by_product:
+                self.log.error(
+                    "Multiple render products are identified as the same AOV "
+                    "which means one of the two will not be ingested during"
+                    "publishing. AOV: '%s'", aov_identifier
+                )
+                self.log.warning("Skipping Render Product: %s", render_product)
+
+            files_by_product[aov_identifier] = self.generate_expected_files(
                 instance,
                 filename
             )
-            self.log.info("Collected %s name: %s", prim_path, filename)
+
+            aov_label = f"'{aov_identifier}' aov in " if aov_identifier else ""
+            self.log.debug("Render Product %s%s", aov_label, prim_path)
+            self.log.debug("Product name: %s", filename)
 
         # Filenames for Deadline
         instance.data["files"] = filenames
         instance.data.setdefault("expectedFiles", []).append(files_by_product)
+
+    def get_aov_identifier(self, render_product):
+        # A Render Product does not really define "what AOV" it is if say
+        # it is rendering 'separate' rendervars. So we need to define what
+        # in particular of a `UsdRenderProduct` we use to separate the AOV
+        # (and thus subset sub-grouping with).
+        # For now we'll consider any Render Product that only refers
+        # to a single rendervar that the rendervars prim name is the AOV
+        # otherwise we'll assume renderproduct to be a combined multilayer
+        # 'main' layer
+        # TODO: Cryptomattes may be a special case where multiple rendervars
+        #   are supposed to go into a single render product even when rendering
+        #   to non-merged layers
+        targets = render_product.GetOrderedVarsRel().GetTargets()
+        if len(targets) > 1:
+            # Main layer
+            return ""
+        else:
+            # AOV for a single var
+            return targets[0].name
 
     def get_render_products(self, usdrender_rop, stage):
         """"The render products in the defined render settings

@@ -67,11 +67,6 @@ class FusionSubmitDeadline(
                 decimals=0,
                 minimum=1,
                 maximum=10
-            ),
-            BoolDef(
-                "suspend_publish",
-                default=False,
-                label="Suspend publish"
             )
         ]
 
@@ -80,12 +75,7 @@ class FusionSubmitDeadline(
             self.log.debug("Skipping local instance.")
             return
 
-        attribute_values = self.get_attr_values_from_data(
-            instance.data)
-
-        # add suspend_publish attributeValue to instance data
-        instance.data["suspend_publish"] = attribute_values[
-            "suspend_publish"]
+        attribute_values = self.get_attr_values_from_data(instance.data)
 
         context = instance.context
 

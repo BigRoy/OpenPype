@@ -11,7 +11,6 @@ from openpype_modules.deadline import abstract_submit_deadline
 from openpype_modules.deadline.abstract_submit_deadline import DeadlineJobInfo
 from openpype.lib import (
     is_running_from_build,
-    BoolDef,
     NumberDef
 )
 
@@ -140,11 +139,6 @@ class HoudiniSubmitDeadline(
                 decimals=0,
                 minimum=1,
                 maximum=1000
-            ),
-            BoolDef(
-                "suspend_publish",
-                default=False,
-                label="Suspend publish"
             )
         ]
 

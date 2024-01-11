@@ -27,6 +27,6 @@ class FusionLaunchMenuHook(PreLaunchHook):
         path = os.path.join(FUSION_HOST_DIR,
                             "deploy",
                             "MenuScripts",
-                            "openpype_menu.py").replace("\\", "/")
+                            "launch_menu.py").replace("\\", "/")
         script = f"fusion:RunScript('{path}')"
         self.launch_context.launch_args.extend(["/execute", script])

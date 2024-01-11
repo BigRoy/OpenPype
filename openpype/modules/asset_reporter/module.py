@@ -14,7 +14,8 @@ class AssetReporterAction(OpenPypeModule, ITrayAction):
         pass
 
     def initialize(self, modules_settings):
-        self.enabled = not AYON_SERVER_ENABLED
+        if not AYON_SERVER_ENABLED:
+            self.enabled = False
 
     def on_action_trigger(self):
         args = get_openpype_execute_args()

@@ -223,6 +223,13 @@ class HoudiniSubmitDeadline(
                 "chunk", self.chunk_size
             )
 
+        # Apply render globals, like e.g. data from collect machine list
+        render_globals = instance.data.get("renderGlobals", {})
+        if render_globals:
+            self.log.debug("Applying 'renderGlobals' to job info: %s",
+                           render_globals)
+            job_info.update(render_globals)
+
         job_info.Comment = context.data.get("comment")
 
         keys = [

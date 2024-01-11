@@ -9,7 +9,11 @@ class CollectDeadlineMachineList(pyblish.api.InstancePlugin,
                                  OpenPypePyblishPluginMixin):
 
     label = "Collect Deadline Machine Limit"
-    order = pyblish.api.CollectorOrder
+
+    # Ordered just after Collect Pools so the attribute definitions show
+    # after those
+    order = pyblish.api.CollectorOrder + 0.425
+
     hosts = ["maya", "houdini", "fusion"]
     families = [
         # Maya

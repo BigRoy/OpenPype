@@ -36,14 +36,11 @@ from openpype.pipeline import (
 from openpype.lib import (
     BoolDef,
     NumberDef,
-    TextDef,
-    EnumDef
 )
 from openpype.hosts.maya.api.lib_rendersettings import RenderSettings
 from openpype.hosts.maya.api.lib import get_attr_in_layer
 
 from openpype_modules.deadline import abstract_submit_deadline
-from openpype.modules.deadline.deadline_module import DeadlineModule
 from openpype_modules.deadline.abstract_submit_deadline import DeadlineJobInfo
 from openpype.tests.lib import is_in_tests
 from openpype.lib import is_running_from_build
@@ -161,16 +158,6 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
         cls.jobInfo = settings.get("jobInfo", cls.jobInfo)
         cls.pluginInfo = settings.get("pluginInfo", cls.pluginInfo)
 
-        # Colorbleed edit: Because we have only one Deadline URL we can
-        #   always use the default and thus cache it to make the attribute def
-        #   and enum
-        deadline_url = (
-            system_settings["modules"]["deadline"]["deadline_urls"]["default"]
-        )
-        cls.slaves = DeadlineModule.get_deadline_slaves_cached(
-            deadline_url, log=cls.log
-        )
-
     def get_job_info(self):
         job_info = DeadlineJobInfo(Plugin="MayaBatch")
 
@@ -216,22 +203,16 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
             job_info.LimitGroups = ",".join(self.limit)
 
         attr_values = self.get_attr_values_from_data(instance.data)
-        render_globals = instance.data.setdefault("renderGlobals", dict())
-        machine_list = attr_values.get("machineList", [])
-        if machine_list:
-            machine_list = ",".join(machine_list)
-            if attr_values.get("whitelist", True):
-                machine_list_key = "Whitelist"
-            else:
-                machine_list_key = "Blacklist"
-            render_globals[machine_list_key] = machine_list
-
         job_info.Priority = attr_values.get("priority")
         job_info.ChunkSize = attr_values.get("chunkSize")
 
         # Add options from RenderGlobals
+        # Apply render globals, like e.g. data from collect machine list
         render_globals = instance.data.get("renderGlobals", {})
-        job_info.update(render_globals)
+        if render_globals:
+            self.log.debug("Applying 'renderGlobals' to job info: %s",
+                           render_globals)
+            job_info.update(render_globals)
 
         keys = [
             "FTRACK_API_KEY",
@@ -592,7 +573,7 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
                 self.assemble_payload(
                     job_info=frame_assembly_job_info,
                     plugin_info=assembly_plugin_info.copy(),
-                    # This would fail if the client machine and webserice are
+                    # This would fail if the client machine and webservice are
                     # using different storage paths.
                     aux_files=[config_file]
                 )
@@ -826,20 +807,6 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
                       decimals=0,
                       minimum=1,
                       maximum=1000),
-            EnumDef("machineList",
-                    label="Machine List",
-                    default=None,
-                    items=cls.slaves or [""],
-                    hidden=not cls.slaves,
-                    multiselection=True),
-            EnumDef("whitelist",
-                    label="Machine List (Allow/Deny)",
-                    items={
-                        True: "Allow List",
-                        False: "Deny List",
-                    },
-                    hidden=not cls.slaves,
-                    default=False),
             NumberDef("tile_priority",
                       label="Tile Assembler Priority",
                       decimals=0,
@@ -851,6 +818,7 @@ class MayaSubmitDeadline(abstract_submit_deadline.AbstractSubmitDeadline,
         ])
 
         return defs
+
 
 def _format_tiles(
         filename,

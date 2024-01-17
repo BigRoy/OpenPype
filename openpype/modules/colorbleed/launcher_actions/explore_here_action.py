@@ -2,6 +2,10 @@ import os
 import getpass
 
 from openpype.pipeline import LauncherAction
+from openpype.client import (
+    get_project,
+    get_asset_by_name,
+)
 
 STUB = "<<NULL>>"
 
@@ -14,12 +18,11 @@ class ExploreToCurrent(LauncherAction):
     order = 7
 
     def is_compatible(self, session):
-        return "AVALON_PROJECT" in session
+        return session.get("AVALON_PROJECT")
 
     def process(self, session, **kwargs):
 
-        from Qt import QtCore, QtWidgets
-        from openpype.pipeline import AvalonMongoDB
+        from qtpy import QtCore, QtWidgets
         from openpype.pipeline.anatomy import Anatomy
 
         # Prerequirements
@@ -29,14 +32,12 @@ class ExploreToCurrent(LauncherAction):
         host_name = None    # never present in session
 
         # Create mongo connection
-        dbcon = AvalonMongoDB()
-        dbcon.Session["AVALON_PROJECT"] = project_name
-        project_doc = dbcon.find_one({"type": "project"})
+        project_doc = get_project(project_name)
         assert project_doc, "Project not found. This is a bug."
 
         asset_doc = None
         if asset_name is not None:
-            asset_doc = dbcon.find_one({"name": asset_name, "type": "asset"})
+            asset_doc = get_asset_by_name(project_name, asset_name)
 
         data = self.get_workdir_data(project_doc=project_doc,
                                      asset_doc=asset_doc,
@@ -91,10 +92,14 @@ class ExploreToCurrent(LauncherAction):
             dict: Workdir data.
 
         """
+        from openpype import AYON_SERVER_ENABLED
+        STUB = "<<NULL>>"
+
+        asset_key = "folder" if AYON_SERVER_ENABLED else "asset"
+        asset_value = {"name": STUB} if AYON_SERVER_ENABLED else STUB
 
         # Start with mostly stub placeholder data where we cannot match
         # `openpype.lib.get_workdir_data` due to lack of input variables.
-        STUB = "<<NULL>>"
         data = {
             "project": {
                 "name": project_doc["name"],
@@ -105,7 +110,7 @@ class ExploreToCurrent(LauncherAction):
                 "type": STUB,
                 "short": STUB,
             },
-            "asset": STUB,
+            asset_key: asset_value,
             "parent": STUB,
             "hierarchy": STUB,
             "app": STUB,
@@ -122,9 +127,14 @@ class ExploreToCurrent(LauncherAction):
             if asset_parents:
                 parent_name = asset_parents[-1]
 
+            if AYON_SERVER_ENABLED:
+                asset_value = {"name": asset_doc["name"]}
+            else:
+                asset_value = asset_doc["name"]
+
             # Insert asset data
             data.update({
-                "asset": asset_doc["name"],
+                asset_key: asset_value,
                 "parent": parent_name,
                 "hierarchy": hierarchy,
             })

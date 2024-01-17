@@ -2,6 +2,7 @@ import os
 import subprocess
 
 from openpype.pipeline import LauncherAction
+from openpype.client import get_project
 
 
 class DebugShell(LauncherAction):
@@ -14,7 +15,7 @@ class DebugShell(LauncherAction):
 
     def is_compatible(self, session):
         required = {"AVALON_PROJECT", "AVALON_ASSET", "AVALON_TASK"}
-        return required.issubset(session)
+        return all(session.get(key) for key in required)
 
     def process(self, session, **kwargs):
         from openpype.lib.applications import get_app_environments_for_context
@@ -54,7 +55,7 @@ class DebugShell(LauncherAction):
 
     def choose_app(self, applications):
         import openpype.style
-        from Qt import QtWidgets, QtGui
+        from qtpy import QtWidgets, QtGui
         from openpype.tools.launcher.lib import get_action_icon
 
         menu = QtWidgets.QMenu()
@@ -81,7 +82,6 @@ class DebugShell(LauncherAction):
             return result.data()
 
     def get_applications(self, project_name):
-        from openpype.pipeline import AvalonMongoDB
         from openpype.lib import ApplicationManager
 
         # Get applications
@@ -89,20 +89,11 @@ class DebugShell(LauncherAction):
         manager.refresh()
 
         # Create mongo connection
-        dbcon = AvalonMongoDB()
-        dbcon.Session["AVALON_PROJECT"] = project_name
-        project_doc = dbcon.find_one({"type": "project"})
+        project_doc = get_project(project_name)
         assert project_doc, "Project not found. This is a bug."
 
         # Filter to apps valid for this current project, with logic from:
         # `openpype.tools.launcher.models.ActionModel.get_application_actions`
-        project_doc = dbcon.find_one(
-            {"type": "project"},
-            {"config.apps": True}
-        )
-        if not project_doc:
-            return {}
-
         applications = {}
         for app_def in project_doc["config"]["apps"]:
             app_name = app_def["name"]

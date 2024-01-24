@@ -121,19 +121,38 @@ class CollectRenderProducts(pyblish.api.InstancePlugin):
         instance.data.setdefault("expectedFiles", []).append(files_by_product)
 
     def get_aov_identifier(self, render_product):
-        # A Render Product does not really define "what AOV" it is if say
-        # it is rendering 'separate' rendervars. So we need to define what
-        # in particular of a `UsdRenderProduct` we use to separate the AOV
-        # (and thus subset sub-grouping with).
-        # For now we'll consider any Render Product that only refers
-        # to a single rendervar that the rendervars prim name is the AOV
-        # otherwise we'll assume renderproduct to be a combined multilayer
-        # 'main' layer
-        # TODO: Cryptomattes may be a special case where multiple rendervars
-        #   are supposed to go into a single render product even when rendering
-        #   to non-merged layers
+        """Return the AOV identfier for a Render Product
+
+        A Render Product does not really define what 'AOV' it is, it
+        defines the product name (output path) and the render vars to
+        include.
+
+        So we need to define what in particular of a `UsdRenderProduct`
+        we use to separate the AOV (and thus apply sub-grouping with).
+
+        For now we'll consider any Render Product that only refers
+        to a single rendervar that the rendervars prim name is the AOV
+        otherwise we'll assume renderproduct to be a combined multilayer
+        'main' layer
+
+        Args:
+            render_product (pxr.UsdRender.Product): The Render Product
+
+        Returns:
+            str: The AOV identifier
+
+        """
         targets = render_product.GetOrderedVarsRel().GetTargets()
         if len(targets) > 1:
+            # Cryptomattes usually are combined render vars, for example:
+            # - crypto_asset, crypto_asset01, crypto_asset02, crypto_asset03
+            # - crypto_object, crypto_object01, etc.
+            # These still refer to the same AOV so we take the common prefix
+            # e.g. `crypto_asset` or `crypto` (if multiple are combined)
+            if all(target.name.startswith("crypto") for target in targets):
+                start = os.path.commonpath([target.name for target in targets])
+                return start.rstrip("_")  # remove any trailing _
+
             # Main layer
             return ""
         else:

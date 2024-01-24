@@ -65,6 +65,18 @@ class CollectInstanceData(pyblish.api.InstancePlugin):
             start_with_handle = start - handle_start
             end_with_handle = end + handle_end
 
+        frame = instance.data["creator_attributes"].get("frame")
+        # explicitly publishing only single frame
+        if frame is not None:
+            frame = int(frame)
+
+            start = frame
+            end = frame
+            handle_start = 0
+            handle_end = 0
+            start_with_handle = frame
+            end_with_handle = frame
+
         # Include start and end render frame in label
         subset = instance.data["subset"]
         label = (

@@ -5,6 +5,7 @@ from openpype.lib import (
     UILabelDef,
     NumberDef,
 )
+from openpype.hosts.fusion.api.lib import get_current_comp
 
 
 class CreateSaver(GenericCreateSaver):

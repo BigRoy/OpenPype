@@ -272,6 +272,10 @@ class ProcessSubmittedJobOnFarmModel(BaseSettingsModel):
         default_factory=list,
         title="Reviewable products filter",
     )
+    legacy_beauty_trailing_underscore: bool = Field(
+        title="Backwards Compatibility: Preserve legacy behavior to suffix "
+              "beauty layer with a trailing underscore"
+    )
 
     @validator("aov_filter")
     def validate_unique_names(cls, value):
@@ -487,6 +491,7 @@ DEFAULT_DEADLINE_PLUGINS_SETTINGS = {
                     ".*"
                 ]
             }
-        ]
+        ],
+        "legacy_beauty_trailing_underscore": False,
     }
 }

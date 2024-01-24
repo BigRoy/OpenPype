@@ -289,9 +289,20 @@ class ExtractAlembicModel(BaseSettingsModel):
     families: list[str] = Field(
         default_factory=list,
         title="Families")
+    bake_attributes: list[str] = Field(
+        default_factory=list,
+        title="Always include attributes")
+    bake_attribute_prefixes: list[str] = Field(
+        default_factory=list,
+        title="Always include attributes with prefix")
 
 
 class ExtractObjModel(BaseSettingsModel):
+    enabled: bool = Field(title="Enabled")
+    optional: bool = Field(title="Optional")
+
+
+class ExtractModel(BaseSettingsModel):
     enabled: bool = Field(title="Enabled")
     optional: bool = Field(title="Optional")
 
@@ -349,7 +360,9 @@ class ExtractLookModel(BaseSettingsModel):
 
 
 class ExtractGPUCacheModel(BaseSettingsModel):
-    enabled: bool = True
+    enabled: bool = False
+    optional: bool = True
+    active: bool = True
     families: list[str] = Field(default_factory=list, title="Families")
     step: float = Field(1.0, ge=1.0, title="Step")
     stepSave: int = Field(1, ge=1, title="Step Save")
@@ -769,6 +782,10 @@ class PublishersModel(BaseSettingsModel):
     ExtractGPUCache: ExtractGPUCacheModel = Field(
         default_factory=ExtractGPUCacheModel,
         title="Extract GPU Cache",
+    )
+    ExtractModel: ExtractModel = Field(
+        default_factory=ExtractModel,
+        title="Extract Model (.mayaAscii)"
     )
 
 

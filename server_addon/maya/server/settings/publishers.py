@@ -302,7 +302,7 @@ class ExtractObjModel(BaseSettingsModel):
     optional: bool = Field(title="Optional")
 
 
-class ExtractModel(BaseSettingsModel):
+class ExtractModelModel(BaseSettingsModel):
     enabled: bool = Field(title="Enabled")
     optional: bool = Field(title="Optional")
 
@@ -783,8 +783,8 @@ class PublishersModel(BaseSettingsModel):
         default_factory=ExtractGPUCacheModel,
         title="Extract GPU Cache",
     )
-    ExtractModel: ExtractModel = Field(
-        default_factory=ExtractModel,
+    ExtractModel: ExtractModelModel = Field(
+        default_factory=ExtractModelModel,
         title="Extract Model (.mayaAscii)"
     )
 
@@ -1349,5 +1349,10 @@ DEFAULT_PUBLISH_SETTINGS = {
         "optimizeAnimationsForMotionBlur": True,
         "writeMaterials": True,
         "useBaseTessellation": True
-    }
+    },
+    "ExtractModel": {
+        "enabled": False,
+        "optional": True,
+        "active": True
+    },
 }

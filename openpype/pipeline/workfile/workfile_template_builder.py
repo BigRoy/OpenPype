@@ -2109,7 +2109,7 @@ class CreatePlaceholderItem(PlaceholderItem):
         self._failed_created_publish_instances = []
 
     def get_errors(self):
-        if not self._failed_representations:
+        if not self._failed_created_publish_instances:
             return []
         message = (
             "Failed to create {} instance using Creator {}"

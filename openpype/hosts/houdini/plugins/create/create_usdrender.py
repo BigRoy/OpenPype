@@ -41,7 +41,7 @@ class CreateUSDRender(plugin.HoudiniCreator):
         if pre_create_data.get("split_render", self.split_render):
             # Do not trigger the husk render, only trigger the USD export
             parms["runcommand"] = False
-            # By default the render ROP writes out the render file to a
+            # By default, the render ROP writes out the render file to a
             # temporary directory. But if we want to render the USD file on
             # the farm we instead want it in the project available
             # to all machines. So we ensure all USD files are written to a

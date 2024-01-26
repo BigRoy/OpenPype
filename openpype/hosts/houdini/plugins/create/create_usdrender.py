@@ -51,6 +51,13 @@ class CreateUSDRender(plugin.HoudiniCreator):
             parms["savetodirectory_directory"] = "$HIP/render/usd/$HIPNAME/$OS"
             parms["lopoutput"] = "__render__.usd"
 
+        if self.selected_nodes:
+            # Use the first selected LOP node
+            for node in self.selected_nodes:
+                if node.type().category() == hou.lopNodeTypeCategory():
+                    parms["loppath"] = node.path()
+                    break
+
         instance_node.setParms(parms)
 
         # Lock some Avalon attributes
@@ -58,7 +65,8 @@ class CreateUSDRender(plugin.HoudiniCreator):
         self.lock_parameters(instance_node, to_lock)
 
     def get_pre_create_attr_defs(self):
-        return [
+        attrs = super(CreateUSDRender, self).get_pre_create_attr_defs()
+        return attrs + [
             BoolDef("split_render",
                     label="Split export and render jobs",
                     default=self.split_render),

@@ -291,7 +291,7 @@ class ProcessSubmittedJobOnFarmModel(BaseSettingsModel):
         default_factory=list,
         title="Reviewable products filter",
     )
-    legacy_beauty_trailing_underscore: bool = Field(
+    legacy_beauty_trailing_underscore: bool = SettingsField(
         title="Backwards Compatibility: Preserve legacy behavior to suffix "
               "beauty layer with a trailing underscore"
     )

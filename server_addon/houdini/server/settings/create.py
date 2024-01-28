@@ -44,6 +44,7 @@ class CreateUSDRenderModel(BaseSettingsModel):
         description=(
             "Specify either the Hydra renderer plug-in nice name, like "
             "'Karma CPU', or the plug-in name, like 'BRAY_HdKarma'"
+        )
     )
 
 

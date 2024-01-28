@@ -32,6 +32,23 @@ class CreateStaticMeshModel(BaseSettingsModel):
     )
 
 
+class CreateUSDRenderModel(BaseSettingsModel):
+    # TODO: Move docstring as tooltip to `default_renderer`
+    """
+    Specify either the Hydra renderer plug-in nice name, like 'Karma CPU',
+    or the plug-in name, e.g. 'BRAY_HdKarma'"
+    """
+    enabled: bool = SettingsField(title="Enabled")
+    default_variants: list[str] = SettingsField(
+        title="Default Products",
+        default_factory=list,
+    )
+    default_renderer: str = SettingsField(
+        title="Default Renderer",
+        placeholder="Karma CPU",
+    )
+
+
 class CreatePluginsModel(BaseSettingsModel):
     CreateAlembicCamera: CreatorModel = SettingsField(
         default_factory=CreatorModel,
@@ -79,8 +96,8 @@ class CreatePluginsModel(BaseSettingsModel):
     CreateUSD: CreatorModel = SettingsField(
         default_factory=CreatorModel,
         title="Create USD")
-    CreateUSDRender: CreatorModel = SettingsField(
-        default_factory=CreatorModel,
+    CreateUSDRender: CreateUSDRenderModel = SettingsField(
+        default_factory=CreateUSDRenderModel,
         title="Create USD render")
     CreateVDBCache: CreatorModel = SettingsField(
         default_factory=CreatorModel,
@@ -163,7 +180,8 @@ DEFAULT_HOUDINI_CREATE_SETTINGS = {
     },
     "CreateUSDRender": {
         "enabled": False,
-        "default_variants": ["Main"]
+        "default_variants": ["Main"],
+        "default_renderer": "Karma CPU"
     },
     "CreateVDBCache": {
         "enabled": True,

@@ -131,16 +131,40 @@
             ]
         },
         {
+            "type": "dict",
+            "collapsible": true,
+            "key": "CreateUSDRender",
+            "label": "Create USD render",
+            "checkbox_key": "enabled",
+            "children": [
+                {
+                    "type": "boolean",
+                    "key": "enabled",
+                    "label": "Enabled"
+                },
+                {
+                    "type": "list",
+                    "key": "default_variants",
+                    "label": "Default Variants",
+                    "object_type": "text"
+                },
+                {
+                    "type": "text",
+                    "key": "default_renderer",
+                    "label": "Default Renderer",
+                    "placeholder": "Karma CPU",
+                    "docstring": "Specify either the Hydra renderer plug-in nice name, like 'Karma CPU', or the plug-in name, e.g. 'BRAY_HdKarma'",
+                    "object_type": "text"
+                }
+            ]
+        },
+        {
             "type": "schema_template",
             "name": "template_create_plugin",
             "template_data": [
                 {
                     "key": "CreateUSD",
                     "label": "Create USD"
-                },
-                {
-                    "key": "CreateUSDRender",
-                    "label": "Create USD render"
                 },
                 {
                     "key": "CreateVDBCache",

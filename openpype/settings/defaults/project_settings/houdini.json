@@ -3,7 +3,7 @@
         "add_self_publish_button": false,
         "update_houdini_var_context": {
             "enabled": true,
-            "houdini_vars":[
+            "houdini_vars": [
                 {
                     "var": "JOB",
                     "value": "{root[work]}/{project[name]}/{hierarchy}/{asset}/work/{task[name]}",
@@ -117,13 +117,14 @@
                 "UCX"
             ]
         },
-        "CreateUSD": {
+        "CreateUSDRender": {
             "enabled": true,
             "default_variants": [
                 "Main"
-            ]
+            ],
+            "default_renderer": "Karma CPU"
         },
-        "CreateUSDRender": {
+        "CreateUSD": {
             "enabled": true,
             "default_variants": [
                 "Main"

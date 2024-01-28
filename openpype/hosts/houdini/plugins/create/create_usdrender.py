@@ -2,7 +2,33 @@
 """Creator plugin for creating USD renders."""
 from openpype.hosts.houdini.api import plugin
 from openpype.pipeline import CreatedInstance
-from openpype.lib import BoolDef
+from openpype.lib import BoolDef, EnumDef
+
+import hou
+
+
+def pairwise(iterable):
+    it = iter(iterable)
+    return zip(it, it)
+
+
+def get_usd_rop_renderers():
+    """Return all available renderers supported by USD Render ROP.
+
+    Note that the USD Render ROP does not include all Hydra renderers, because
+    it excludes the GL ones like Houdini GL and Storm.
+
+    Returns:
+        dict[str, str]: Plug-in name to display name mapping.
+
+    """
+    # USD Render ROP only lists the renderers that have `aovsupport`
+    # enabled. This might be a pure coincidence, but I couldn't find
+    # another decent way to quickly find the right name
+    return {
+        info["name"]: info["displayname"] for info
+        in hou.lop.availableRendererInfo() if info.get('aovsupport')
+    }
 
 
 class CreateUSDRender(plugin.HoudiniCreator):
@@ -13,6 +39,7 @@ class CreateUSDRender(plugin.HoudiniCreator):
     icon = "magic"
 
     split_render = True
+    default_renderer = "Karma CPU"
 
     def create(self, subset_name, instance_data, pre_create_data):
         import hou  # noqa
@@ -51,22 +78,49 @@ class CreateUSDRender(plugin.HoudiniCreator):
             parms["savetodirectory_directory"] = "$HIP/render/usd/$HIPNAME/$OS"
             parms["lopoutput"] = "__render__.usd"
 
+        # Use the first selected LOP node if "Use Selection" is enabled
+        # and the user had any nodes selected
         if self.selected_nodes:
-            # Use the first selected LOP node
             for node in self.selected_nodes:
                 if node.type().category() == hou.lopNodeTypeCategory():
                     parms["loppath"] = node.path()
                     break
 
+        # Set default renderer if defined in settings
+        if pre_create_data.get("renderer"):
+            parms["renderer"] = pre_create_data.get("renderer")
+
         instance_node.setParms(parms)
 
-        # Lock some Avalon attributes
+        # Lock some AYON attributes
         to_lock = ["family", "id"]
         self.lock_parameters(instance_node, to_lock)
 
     def get_pre_create_attr_defs(self):
+
+        # Retrieve available renderers and convert default renderer to
+        # plug-in name if settings provided the display name
+        renderer_plugin_to_display_name = get_usd_rop_renderers()
+        default_renderer = self.default_renderer or None
+        if (
+                default_renderer
+                and default_renderer not in renderer_plugin_to_display_name
+        ):
+            # Map default renderer display name to plugin name
+            for name, display_name in renderer_plugin_to_display_name.items():
+                if default_renderer == display_name:
+                    default_renderer = name
+                    break
+            else:
+                # Default renderer not found in available renderers
+                default_renderer = None
+
         attrs = super(CreateUSDRender, self).get_pre_create_attr_defs()
         return attrs + [
+            EnumDef("renderer",
+                    label="Renderer",
+                    default=default_renderer,
+                    items=renderer_plugin_to_display_name),
             BoolDef("split_render",
                     label="Split export and render jobs",
                     default=self.split_render),

@@ -46,6 +46,14 @@ class CreateUSDRender(plugin.HoudiniCreator):
         instance_data.pop("active", None)
         instance_data.update({"node_type": "usdrender"})
 
+        # Override default value for the Export Chunk Size because if the
+        # a single USD file is written as opposed to per frame we want to
+        # ensure only one machine picks up that sequence
+        # TODO: Probably better to change the default somehow for just this
+        #    Creator on the HoudiniSubmitDeadline plug-in, if possible?
+        instance_data.setdefault("publish_attributes", {}) \
+            .setdefault("HoudiniSubmitDeadline", {})["export_chunk"] = 1000
+
         instance = super(CreateUSDRender, self).create(
             subset_name,
             instance_data,

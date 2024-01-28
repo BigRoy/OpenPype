@@ -7,11 +7,6 @@ from openpype.lib import BoolDef, EnumDef
 import hou
 
 
-def pairwise(iterable):
-    it = iter(iterable)
-    return zip(it, it)
-
-
 def get_usd_rop_renderers():
     """Return all available renderers supported by USD Render ROP.
 

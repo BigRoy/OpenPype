@@ -209,7 +209,8 @@ class HoudiniSubmitDeadline(
         # Make sure we make job frame dependent so render tasks pick up a soon
         # as export tasks are done
         if split_render_job and not is_export_job:
-            job_info.IsFrameDependent = True
+            job_info.IsFrameDependent = bool(instance.data.get(
+                "splitRenderFrameDependent", True))
 
         job_info.Pool = instance.data.get("primaryPool")
         job_info.SecondaryPool = instance.data.get("secondaryPool")

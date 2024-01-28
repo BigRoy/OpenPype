@@ -69,6 +69,12 @@ class CollectUsdRender(pyblish.api.InstancePlugin):
             )
             instance.data["ifdFile"] = export_file
 
+            # The render job is not frame dependent but fully dependent on
+            # the job having been completed, since the extracted file is a
+            # single file.
+            if "$F" not in export_file:
+                instance.data["splitRenderFrameDependent"] = False
+
         instance.data["farm"] = True  # always submit to farm
 
         # update the colorspace data

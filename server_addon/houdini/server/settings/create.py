@@ -33,11 +33,6 @@ class CreateStaticMeshModel(BaseSettingsModel):
 
 
 class CreateUSDRenderModel(BaseSettingsModel):
-    # TODO: Move docstring as tooltip to `default_renderer`
-    """
-    Specify either the Hydra renderer plug-in nice name, like 'Karma CPU',
-    or the plug-in name, e.g. 'BRAY_HdKarma'"
-    """
     enabled: bool = SettingsField(title="Enabled")
     default_variants: list[str] = SettingsField(
         title="Default Products",
@@ -46,6 +41,9 @@ class CreateUSDRenderModel(BaseSettingsModel):
     default_renderer: str = SettingsField(
         title="Default Renderer",
         placeholder="Karma CPU",
+        description=(
+            "Specify either the Hydra renderer plug-in nice name, like "
+            "'Karma CPU', or the plug-in name, like 'BRAY_HdKarma'"
     )
 
 

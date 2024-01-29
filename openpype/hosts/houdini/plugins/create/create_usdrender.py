@@ -11,15 +11,14 @@ def get_usd_rop_renderers():
     """Return all available renderers supported by USD Render ROP.
 
     Note that the USD Render ROP does not include all Hydra renderers, because
-    it excludes the GL ones like Houdini GL and Storm.
+    it excludes the GL ones like Houdini GL and Storm. USD Render ROP only
+    lists the renderers that have `aovsupport` enabled. Also see:
+        https://www.sidefx.com/docs/houdini/nodes/out/usdrender.html#list
 
     Returns:
         dict[str, str]: Plug-in name to display name mapping.
 
     """
-    # USD Render ROP only lists the renderers that have `aovsupport`
-    # enabled. This might be a pure coincidence, but I couldn't find
-    # another decent way to quickly find the right name
     return {
         info["name"]: info["displayname"] for info
         in hou.lop.availableRendererInfo() if info.get('aovsupport')

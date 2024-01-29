@@ -6,8 +6,8 @@ import contextlib
 from maya import cmds
 import maya.api.OpenMaya as om
 
-import pyblish.api
 from openpype.pipeline import publish
+from openpype.lib import BoolDef
 from openpype.hosts.maya.api.lib import maintained_selection, maintained_time
 
 
@@ -239,6 +239,8 @@ class ExtractMayaUsd(publish.Extractor,
         if not self.is_active(instance.data):
             return
 
+        attr_values = self.get_attr_values_from_data(instance.data)
+
         # Load plugin first
         cmds.loadPlugin("mayaUsdPlugin", quiet=True)
 
@@ -276,6 +278,8 @@ class ExtractMayaUsd(publish.Extractor,
         else:
             options["selection"] = True
 
+        options["stripNamespaces"] = attr_values.get("stripNamespaces", True)
+
         def parse_attr_str(attr_str):
             result = list()
             for attr in attr_str.split(","):
@@ -301,7 +305,7 @@ class ExtractMayaUsd(publish.Extractor,
             "exportComponentTags": (0, 14, 0),
             "jobContext": (0, 15, 0)
         }.items():
-            if key in options:
+            if key in options and maya_usd_version < required_minimal_version:
                 self.log.warning(
                     "Ignoring export flag '%s' because Maya USD version "
                     "%s is lower than minimal supported version %s.",
@@ -337,6 +341,14 @@ class ExtractMayaUsd(publish.Extractor,
             "Extracted instance {} to {}".format(instance.name, file_path)
         )
 
+    @classmethod
+    def get_attribute_defs(cls):
+        return super(ExtractMayaUsd, cls).get_attribute_defs() + [
+            BoolDef("stripNamespaces",
+                    label="Strip Namespaces (USD)",
+                    default=True)
+        ]
+
 
 class ExtractMayaUsdAnim(ExtractMayaUsd):
     """Extractor for Maya USD Animation Sparse Cache data.
@@ -346,9 +358,11 @@ class ExtractMayaUsdAnim(ExtractMayaUsd):
 
     Upon publish a .usd sparse cache will be written.
     """
-    label = "Extract Maya USD Animation Sparse Cache"
-    families = ["animation", "mayaUsd"]
-    match = pyblish.api.Subset
+    label = "Extract USD Animation"
+    families = ["animation"]
+
+    optional = True
+    active = False
 
     def filter_members(self, members):
         out_set = next((i for i in members if i.endswith("out_SET")), None)
@@ -368,7 +382,6 @@ class ExtractMayaUsdModel(ExtractMayaUsd):
     """
 
     label = "Extract USD"
-    hosts = ["maya"]
     families = ["model"]
 
     # TODO: Expose in settings

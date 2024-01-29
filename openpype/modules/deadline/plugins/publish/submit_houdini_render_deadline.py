@@ -92,14 +92,12 @@ class HoudiniSubmitDeadline(
     label = "Submit Render to Deadline"
     order = pyblish.api.IntegratorOrder
     hosts = ["houdini"]
-    families = ["usdrender",
-                "redshift_rop",
+    families = ["redshift_rop",
                 "arnold_rop",
                 "mantra_rop",
                 "karma_rop",
                 "vray_rop"]
     targets = ["local"]
-    use_published = True
 
     # presets
     priority = 50
@@ -365,3 +363,11 @@ class HoudiniSubmitDeadline(
             PostRender=rop_node.evalParm("husk_postrender"),
             RestartDelegate=restart_delegate
         )
+
+
+class HoudiniSubmitDeadlineUsdRender(HoudiniSubmitDeadline):
+    # Do not use published workfile paths for USD Render ROP because the
+    # Export Job doesn't seem to occur using the published path either, so
+    # output paths then do not match the actual rendered paths
+    use_published = False
+    families = ["usdrender"]

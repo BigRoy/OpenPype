@@ -178,7 +178,8 @@ class ExtractMayaUsd(publish.Extractor,
             "renderableOnly": bool,
             "convertMaterialsTo": str,
             "shadingMode": (str, None),  # optional str
-            "jobContext": (list, None)  # optional list
+            "jobContext": (list, None),  # optional list
+            "staticSingleSample": bool
             # "worldspace": bool,
         }
 
@@ -202,7 +203,8 @@ class ExtractMayaUsd(publish.Extractor,
             "renderableOnly": False,
             "shadingMode": "none",
             "convertMaterialsTo": "none",
-            "jobContext": None
+            "jobContext": None,
+            "staticSingleSample": True
             # "worldspace": False
         }
 

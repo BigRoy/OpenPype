@@ -31,6 +31,7 @@ class ExtractAlembic(publish.Extractor,
     # Configurable in project settings
     bake_attributes = []
     bake_attribute_prefixes = []
+    strip_namespaces = False
 
     def process(self, instance):
         if instance.data.get("farm"):
@@ -72,7 +73,8 @@ class ExtractAlembic(publish.Extractor,
             "uvWrite": True,
             "selection": True,
             "worldSpace": instance.data.get("worldSpace", True),
-            "stripNamespaces": attr_values.get("stripNamespaces", False)
+            "stripNamespaces": attr_values.get("stripNamespaces",
+                                               self.strip_namespaces)
         }
 
         if not instance.data.get("includeParentHierarchy", True):
@@ -162,7 +164,7 @@ class ExtractAlembic(publish.Extractor,
             BoolDef("stripNamespaces",
                     label="Strip Namespaces",
                     tooltip="Strip Namespaces in the Alembic export",
-                    default=False),
+                    default=cls.strip_namespaces),
         ]
 
 

@@ -1110,7 +1110,8 @@
                 "vrayproxy.alembic"
             ],
             "bake_attributes": [],
-            "bake_attribute_prefixes": []
+            "bake_attribute_prefixes": [],
+            "strip_namespaces": false
         },
         "ExtractObj": {
             "enabled": false,

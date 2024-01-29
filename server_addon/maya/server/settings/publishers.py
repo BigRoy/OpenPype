@@ -305,6 +305,10 @@ class ExtractAlembicModel(BaseSettingsModel):
     bake_attribute_prefixes: list[str] = SettingsField(
         default_factory=list,
         title="Always include attributes with prefix")
+    strip_namespaces: bool = SettingsField(
+        title="Strip Namespaces",
+        description="Defines the default state for strip namespaces "
+                    "toggle in publisher.")
 
 
 class ExtractObjModel(BaseSettingsModel):
@@ -1210,7 +1214,10 @@ DEFAULT_PUBLISH_SETTINGS = {
             "pointcache",
             "model",
             "vrayproxy.alembic"
-        ]
+        ],
+        "bake_attributes": [],
+        "bake_attribute_prefixes": [],
+        "strip_namespaces": False
     },
     "ExtractObj": {
         "enabled": False,

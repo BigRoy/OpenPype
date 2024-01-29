@@ -779,6 +779,11 @@
                             "label": "Always include attributes with prefix",
                             "type": "list",
                             "object_type": "text"
+                        },
+                        {
+                            "key": "strip_namespaces",
+                            "label": "Strip Namespaces",
+                            "type": "boolean"
                         }
                     ]
                 },

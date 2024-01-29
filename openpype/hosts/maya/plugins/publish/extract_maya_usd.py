@@ -366,6 +366,9 @@ class ExtractMayaUsdAnim(ExtractMayaUsd):
     optional = True
     active = False
 
+    # TODO: Support writing out point deformation only, avoid writing UV sets
+    #       component tags and potentially remove `faceVertexCounts`,
+    #       `faceVertexIndices` and `doubleSided` parameters as well.
     def filter_members(self, members):
         out_set = next((i for i in members if i.endswith("out_SET")), None)
 

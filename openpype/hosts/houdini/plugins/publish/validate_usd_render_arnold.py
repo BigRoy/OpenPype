@@ -65,15 +65,16 @@ class ValidateUSDRenderSettings(pyblish.api.InstancePlugin):
                     "frames '%s'. The export file is not a file per frame."
                     "Hence data will be lost because multiple frames will "
                     "write into the same file. Make sure to increase chunk "
-                    "size to higher than the amount of frames to render: %s",
+                    "size to higher than the amount of frames to render: >%s",
                     export_chunk_size, num_frames, num_frames
                 )
                 invalid = True
 
             if all_frames_at_once and render_chunk_size > 1:
-                self.log.warning(
-                    "USD Render ROP is set to render all frames with a single "
-                    "process with a chunk size of %s. However, because "
+                self.log.debug(
+                    "USD Render ROP is set to render all frames within a "
+                    "single process with a chunk size of %s",
+                    render_chunk_size
                 )
 
         if invalid:

@@ -37,6 +37,7 @@
              {"rig": "rig"},
              {"setdress": "setdress"},
              {"take": "take"},
+             {"usd": "usd"},
              {"usdShade": "usdShade"},
              {"vdbcache": "vdbcache"},
              {"vrayproxy": "vrayproxy"},

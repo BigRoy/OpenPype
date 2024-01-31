@@ -348,6 +348,7 @@ class ExtractMayaUsd(publish.Extractor,
         return super(ExtractMayaUsd, cls).get_attribute_defs() + [
             BoolDef("stripNamespaces",
                     label="Strip Namespaces (USD)",
+                    tooltip="Strip Namespaces in the USD Export",
                     default=True)
         ]
 
@@ -396,3 +397,14 @@ class ExtractMayaUsdModel(ExtractMayaUsd):
         # TODO: Fix this without changing instance data
         instance.data["exportAnimationData"] = False
         super(ExtractMayaUsdModel, self).process(instance)
+
+
+class ExtractMayaUsdPointcache(ExtractMayaUsd):
+    """Extractor for Maya USD for 'pointcache' family"""
+
+    label = "Extract USD"
+    families = ["pointcache"]
+
+    # TODO: Expose in settings
+    optional = True
+    active = False

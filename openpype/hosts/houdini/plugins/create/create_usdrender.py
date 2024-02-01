@@ -80,6 +80,10 @@ class CreateUSDRender(plugin.HoudiniCreator):
             parms["savetodirectory_directory"] = "$HIP/render/usd/$HIPNAME/$OS"
             parms["lopoutput"] = "__render__.usd"
 
+        # By default strip any Houdini custom data from the output file
+        # since the renderer doesn't care about it
+        parms["clearhoudinicustomdata"] = True
+
         # Use the first selected LOP node if "Use Selection" is enabled
         # and the user had any nodes selected
         if self.selected_nodes:

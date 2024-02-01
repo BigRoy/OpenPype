@@ -5,7 +5,7 @@ import logging
 import json
 
 import hou
-from pxr import Sdf, Vt
+from pxr import Sdf, Vt, UsdRender
 
 
 log = logging.getLogger(__name__)
@@ -307,3 +307,43 @@ def remap_paths(rop_node, mapping):
             (rop_node.parm("ayon_remap_paths_remap_json"), value)
         ]):
             yield
+
+
+def get_usd_render_rop_rendersettings(rop_node, stage=None, logger=None):
+    """"Return the chosen UsdRender.Settings from the stage (if any).
+
+    Args:
+        rop_node (hou.Node): The Houdini USD Render ROP node.
+        stage (pxr.Usd.Stage): The USD stage to find the render settings
+             in. This is usually the stage from the LOP path the USD Render
+             ROP node refers to.
+        logger (logging.Logger): Logger to log warnings to if no render
+            settings were find in stage.
+
+    Returns:
+        Optional[UsdRender.Settings]: Render Settings.
+
+    """
+    if logger is None:
+        logger = log
+
+    if stage is None:
+        lop_node = get_usd_rop_loppath(rop_node)
+        stage = lop_node.stage()
+
+    path = rop_node.evalParm("rendersettings")
+    if not path:
+        # Default behavior
+        path = "/Render/rendersettings"
+
+    prim = stage.GetPrimAtPath(path)
+    if not prim:
+        logger.warning("No render settings primitive found at: %s", path)
+        return
+
+    render_settings = UsdRender.Settings(prim)
+    if not render_settings:
+        logger.warning("Prim at %s is not a valid RenderSettings prim.", path)
+        return
+
+    return render_settings

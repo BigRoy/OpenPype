@@ -6,6 +6,10 @@ import pxr.UsdRender
 
 import pyblish.api
 
+from openpype.hosts.houdini.api.usd import (
+    get_usd_render_rop_rendersettings
+)
+
 
 class CollectRenderProducts(pyblish.api.InstancePlugin):
     """Collect USD Render Products.
@@ -172,19 +176,10 @@ class CollectRenderProducts(pyblish.api.InstancePlugin):
             List[Sdf.Path]: Render Product paths enabled in the render settings
 
         """
-        path = usdrender_rop.evalParm("rendersettings")
-        if not path:
-            path = "/Render/rendersettings"
-
-        prim = stage.GetPrimAtPath(path)
-        if not prim:
-            self.log.warning("No render settings primitive found at: %s", path)
-            return []
-
-        render_settings = pxr.UsdRender.Settings(prim)
+        render_settings = get_usd_render_rop_rendersettings(usdrender_rop,
+                                                            stage,
+                                                            logger=self.log)
         if not render_settings:
-            self.log.warning("Prim at %s is not a valid RenderSettings prim.",
-                             path)
             return []
 
         return render_settings.GetProductsRel().GetTargets()

@@ -3,7 +3,7 @@ import inspect
 
 import pyblish.api
 
-from openpype.pipeline import PublishValidationError
+from openpype.pipeline.publish import PublishValidationError, RepairAction
 from openpype.hosts.houdini.api.action import SelectROPAction
 from openpype.hosts.houdini.api.usd import get_usd_render_rop_rendersettings
 
@@ -12,24 +12,26 @@ import pxr
 from pxr import UsdRender
 
 
-class ValidateUSDRenderSettings(pyblish.api.InstancePlugin):
-    """Generic export settings validator for USD Render ROP."""
+class ValidateUSDRenderSingleFile(pyblish.api.InstancePlugin):
+    """Validate the writing of a single USD Render Output file.
+
+     When writing to single file with USD Render ROP make sure to write the
+     output USD file from a single process to avoid overwriting it with
+     different processes.
+     """
 
     order = pyblish.api.ValidatorOrder
     families = ["usdrender"]
     hosts = ["houdini"]
     label = "Validate USD Render ROP Settings"
-    actions = [SelectROPAction]
+    actions = [SelectROPAction, RepairAction]
 
     def process(self, instance):
-        # TODO: Validate "Render All Frames With a Single Process"
-        # TODO: Validate $F in USD export filepath if not 'Single Process'
-
         # Get configured settings for this instance
         submission_data = (
             instance.data
             .get("publish_attributes", {})
-            .get("HoudiniSubmitDeadline", {})
+            .get("HoudiniSubmitDeadlineUsdRender", {})
         )
         render_chunk_size = submission_data.get("chunk", 1)
         export_chunk_size = submission_data.get("export_chunk", 1)
@@ -51,7 +53,7 @@ class ValidateUSDRenderSettings(pyblish.api.InstancePlugin):
             # log a warning that the optimization will be less efficient
             # since husk will still restart per frame.
             if render_chunk_size > 1:
-                self.log.warning(
+                self.log.debug(
                     "Render chunk size is bigger than one but export file is "
                     "a USD file per frame. Husk does not allow rendering "
                     "separate USD files in one process. As such, Husk will "
@@ -65,24 +67,66 @@ class ValidateUSDRenderSettings(pyblish.api.InstancePlugin):
             # ends up containing all frames correctly
             if export_chunk_size < num_frames:
                 self.log.error(
-                    "Export chunk size '%s' is smaller than the amount of "
-                    "frames '%s'. The export file is not a file per frame."
-                    "Hence data will be lost because multiple frames will "
-                    "write into the same file. Make sure to increase chunk "
-                    "size to higher than the amount of frames to render: >%s",
+                    "The export chunk size %s is smaller than the amount of "
+                    "frames %s, so multiple tasks will try to export to "
+                    "the same file. Make sure to increase chunk "
+                    "size to higher than the amount of frames to render, "
+                    "more than >%s",
                     export_chunk_size, num_frames, num_frames
                 )
                 invalid = True
 
-            if all_frames_at_once and render_chunk_size > 1:
-                self.log.debug(
-                    "USD Render ROP is set to render all frames within a "
-                    "single process with a chunk size of %s",
-                    render_chunk_size
+            if not all_frames_at_once:
+                self.log.error(
+                    "Please enable 'Render All Frames With A Single Process' "
+                    "on the USD Render ROP node or add $F to the USD filename",
                 )
+                invalid = True
 
         if invalid:
-            raise PublishValidationError("Invalid, see logs.")
+            raise PublishValidationError(
+                "Render USD file being overwritten during export.",
+                title="Render USD file overwritten",
+                description=self.get_description())
+
+    @classmethod
+    def repair(cls, instance):
+        # Enable all frames at once and make the frames per task
+        # very large
+        rop_node = hou.node(instance.data["instance_node"])
+        rop_node.parm("allframesatonce").set(True)
+
+        # Override instance setting for export chunk size
+        create_context = instance.context.data["create_context"]
+        created_instance = create_context.get_instance_by_id(
+            instance.data["instance_id"]
+        )
+        created_instance.publish_attributes["HoudiniSubmitDeadlineUsdRender"]["export_chunk"] = 1000  # noqa
+        create_context.save_changes()
+
+    def get_description(self):
+        return inspect.cleandoc(
+            """### Render USD file configured incorrectly
+
+            The USD render ROP is currently configured to write a single
+            USD file to render instead of a file per frame.
+
+            When that is the case, a single machine must produce that file in
+            one process to avoid the file being overwritten by the other
+            processes.
+
+            We resolve that by enabling _Render All Frames With A Single
+            Process_ on the ROP node and ensure the export job task size
+            is larger than the amount of frames of the sequence, so the file
+            gets written in one go.
+
+            Run **Repair** to resolve this for you.
+
+            If instead you want to write separate render USD files, please
+            include $F in the USD output filename on the `ROP node > Output >
+            USD Export > Output File`
+            """
+        )
 
 
 class ValidateUSDRenderArnoldSettings(pyblish.api.InstancePlugin):

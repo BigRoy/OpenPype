@@ -31,6 +31,7 @@ class CreateUSDRender(plugin.HoudiniCreator):
     label = "USD Render"
     family = "usdrender"
     icon = "magic"
+    description = "Create USD Render"
 
     split_render = True
     default_renderer = "Karma CPU"
@@ -50,8 +51,11 @@ class CreateUSDRender(plugin.HoudiniCreator):
         # ensure only one machine picks up that sequence
         # TODO: Probably better to change the default somehow for just this
         #    Creator on the HoudiniSubmitDeadline plug-in, if possible?
-        instance_data.setdefault("publish_attributes", {}) \
-            .setdefault("HoudiniSubmitDeadline", {})["export_chunk"] = 1000
+        (
+            instance_data
+            .setdefault("publish_attributes", {})
+            .setdefault("HoudiniSubmitDeadlineUsdRender", {})["export_chunk"]
+        ) = 1000
 
         instance = super(CreateUSDRender, self).create(
             subset_name,

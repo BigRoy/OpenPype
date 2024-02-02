@@ -18,7 +18,7 @@ class SubstanceLoadProjectMesh(load.LoaderPlugin):
     """Load mesh for project"""
 
     families = ["*"]
-    representations = ["abc", "fbx", "obj", "gltf"]
+    representations = ["abc", "fbx", "obj", "gltf", "usd", "usda", "usdc"]
 
     label = "Load mesh"
     order = -10

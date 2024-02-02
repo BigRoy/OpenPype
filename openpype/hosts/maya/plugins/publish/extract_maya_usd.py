@@ -276,7 +276,11 @@ class ExtractMayaUsd(publish.Extractor,
             options["frameStride"] = instance.data.get("step", 1.0)
 
         if instance.data.get("exportRoots", True):
-            options["exportRoots"] = members
+            # Do not include 'objectSets' as roots because the export command
+            # will fail. We only include the transforms among the members.
+            options["exportRoots"] = cmds.ls(members,
+                                             type="transform",
+                                             long=True)
         else:
             options["selection"] = True
 

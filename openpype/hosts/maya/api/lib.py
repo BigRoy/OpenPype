@@ -3329,7 +3329,6 @@ def update_content_on_context_change():
         try:
             if cmds.getAttr("{}.id".format(s)) == "pyblish.avalon.instance":
                 attr = cmds.listAttr(s)
-                print(s)
                 if "asset" in attr:
                     print("  - setting asset to: [ {} ]".format(new_asset))
                     cmds.setAttr("{}.asset".format(s),

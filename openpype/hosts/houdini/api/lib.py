@@ -1258,3 +1258,49 @@ def get_node_thumbnail(node, first_only=True):
         return next(attached_images, None)
     else:
         return attached_images
+
+
+def find_active_network(category, default):
+    """Find the first active network editor in the UI.
+
+    If no active network editor pane is found at the given category then the
+    `default` path will be used as fallback.
+
+    For example, to find an active LOPs network:
+    >>> network = find_active_network(
+    ...     category=hou.lopNodeTypeCategory(),
+    ...     fallback="/stage"
+    ... )
+    hou.Node("/stage/lopnet1")
+
+    Arguments:
+        category (hou.NodeTypeCategory): The node network category type.
+        default (str): The default path to fallback to if no active pane
+            is found with the given category.
+
+    Returns:
+        hou.Node: The node network to return.
+
+    """
+    # Find network editors that are current tab of given category
+    index = 0
+    while True:
+        pane = hou.ui.paneTabOfType(hou.paneTabType.NetworkEditor, index)
+        index += 1
+        if pane is None:
+            break
+
+        if not pane.isCurrentTab():
+            continue
+
+        pwd = pane.pwd()
+        if pwd.type().category() != category:
+            continue
+
+        if not pwd.isEditable():
+            continue
+
+        return pwd
+
+    # Default to the fallback if no valid candidate was found
+    return hou.node(default)

@@ -1,4 +1,6 @@
 from openpype.pipeline import load
+from openpype.hosts.houdini.api.lib import find_active_network
+import hou
 
 
 class LOPLoadAssetLoader(load.LoaderPlugin):
@@ -12,17 +14,17 @@ class LOPLoadAssetLoader(load.LoaderPlugin):
 
     def load(self, context, name=None, namespace=None, data=None):
 
-        import toolutils
-        kwargs = {}
-        node = toolutils.genericTool(kwargs, "ayon::lop_import",
-                                     exact_node_type=False)
-        if not node:
-            return
-
         # Define node name
         namespace = namespace if namespace else context["asset"]["name"]
         node_name = "{}_{}".format(namespace, name) if namespace else name
-        node.setName(node_name, unique_name=True)
+
+        # Create node
+        network = find_active_network(
+            category=hou.lopNodeTypeCategory(),
+            default="/stage"
+        )
+        node = network.createNode("ayon::lop_import", node_name=node_name)
+        node.moveToGoodPosition()
 
         # Set representation id
         representation_id = str(context["representation"]["_id"])

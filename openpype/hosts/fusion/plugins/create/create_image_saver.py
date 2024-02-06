@@ -1,7 +1,6 @@
 from openpype.lib import NumberDef
 
 from openpype.hosts.fusion.api.plugin import GenericCreateSaver
-from openpype.hosts.fusion.api import get_current_comp
 
 
 class CreateImageSaver(GenericCreateSaver):

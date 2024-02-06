@@ -2773,7 +2773,7 @@ def set_context_settings(
 
     # Set frame range.
     if frame_range:
-        reset_frame_range()
+        reset_frame_range(fps=False)
 
     # Set colorspace
     if colorspace:

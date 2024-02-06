@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pyblish.api
 from openpype.pipeline import PublishValidationError
+from openpype.hosts.houdini.api.action import SelectROPAction
 
 
 class ValidateUSDOutputNode(pyblish.api.InstancePlugin):
@@ -17,6 +18,7 @@ class ValidateUSDOutputNode(pyblish.api.InstancePlugin):
     families = ["usdrop"]
     hosts = ["houdini"]
     label = "Validate Output Node (USD)"
+    actions = [SelectROPAction]
 
     def process(self, instance):
 

@@ -549,7 +549,7 @@ def parm_values(overrides):
                 parm.set(value)
 
 
-def reset_framerange():
+def reset_framerange(fps=True, frame_range=True):
     """Set frame range and FPS to current asset"""
 
     # Get asset data
@@ -559,29 +559,30 @@ def reset_framerange():
     asset_doc = get_asset_by_name(project_name, asset_name)
     asset_data = asset_doc["data"]
 
-    # Get FPS
-    fps = get_asset_fps(asset_doc)
+    if fps:
+        # Set frame range and FPS
+        asset_fps = get_asset_fps(asset_doc)
+        print("Setting scene FPS to {}".format(int(asset_fps)))
+        set_scene_fps(asset_fps)
 
-    # Get Start and End Frames
-    frame_start = asset_data.get("frameStart")
-    frame_end = asset_data.get("frameEnd")
+    if frame_range:
+        # Get Start and End Frames
+        frame_start = asset_data.get("frameStart")
+        frame_end = asset_data.get("frameEnd")
 
-    if frame_start is None or frame_end is None:
-        log.warning("No edit information found for %s" % asset_name)
-        return
+        if frame_start is None or frame_end is None:
+            log.warning("No edit information found for %s" % asset_name)
+            return
 
-    handle_start = asset_data.get("handleStart", 0)
-    handle_end = asset_data.get("handleEnd", 0)
+        handle_start = asset_data.get("handleStart", 0)
+        handle_end = asset_data.get("handleEnd", 0)
 
-    frame_start -= int(handle_start)
-    frame_end += int(handle_end)
+        frame_start -= int(handle_start)
+        frame_end += int(handle_end)
 
-    # Set frame range and FPS
-    print("Setting scene FPS to {}".format(int(fps)))
-    set_scene_fps(fps)
-    hou.playbar.setFrameRange(frame_start, frame_end)
-    hou.playbar.setPlaybackRange(frame_start, frame_end)
-    hou.setFrame(frame_start)
+        hou.playbar.setFrameRange(frame_start, frame_end)
+        hou.playbar.setPlaybackRange(frame_start, frame_end)
+        hou.setFrame(frame_start)
 
 
 def get_main_window():
@@ -1304,3 +1305,74 @@ def find_active_network(category, default):
 
     # Default to the fallback if no valid candidate was found
     return hou.node(default)
+
+
+def update_content_on_context_change():
+    """Update all Creator instances to current asset"""
+    context = get_current_context()
+    asset = context["asset_name"]
+    task = context["task_name"]
+
+    host = registered_host()
+    create_context = CreateContext(host, reset=True)
+
+    for instance in create_context.instances:
+        instance_asset = instance.get("asset")
+        if instance_asset and instance_asset != asset:
+            instance["asset"] = asset
+        instance_task = instance.get("task")
+        if instance_task and instance_task != task:
+            instance["task"] = task
+
+    create_context.save_changes()
+
+
+def prompt_reset_context():
+    """Prompt the user what context settings to reset.
+
+    This prompt is used on saving to a different task to allow the scene to
+    get matched to the new context.
+
+    """
+    # TODO: Cleanup this prototyped mess of imports and odd dialog
+    # TODO: Reduce code duplication with the implementation in Maya
+    import openpype.tools.utils.widgets as widgets
+    from qtpy import QtWidgets
+    import qargparse  # noqa
+    from openpype.style import load_stylesheet
+
+    option_labels = {
+        "fps": "FPS",
+        "frame_range": "Frame Range",
+        "instances": "Publish instances asset",
+    }
+    definitions = [
+        qargparse.Boolean(key, label=label, default=True)
+        for key, label in option_labels.items()
+    ]
+
+    parent = get_main_window()
+    dialog = widgets.OptionDialog(parent)
+    dialog.create(definitions)
+    dialog.setWindowTitle("Saving to different context. Reset options")
+    dialog.setStyleSheet(load_stylesheet())
+
+    # Insert descriptive label into the pup-up
+    label = QtWidgets.QLabel("You are saving your scene into a different task."
+                             "\n\n"
+                             "Would you like to reset some settings for the "
+                             "for the new context?\n")
+    dialog.layout().insertWidget(0, label)
+
+    if not dialog.exec_():
+        return None
+
+    options = dialog.parse()
+    if options.get("fps", True) or options.get("frame_range", True):
+        reset_framerange(
+            fps=options.get("fps", True),
+            frame_range=options.get("frame_range", True)
+        )
+
+    if options.get("instances", True):
+        update_content_on_context_change()

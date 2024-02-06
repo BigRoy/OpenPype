@@ -18,7 +18,7 @@ def validate_name(subset):
     return all(x in allowed for x in subset)
 
 
-class ValidateSubsetName(pyblish.api.InstancePlugin):
+class ValidateInstanceSubsetName(pyblish.api.InstancePlugin):
     """Validates subset name has only valid characters"""
 
     order = ValidateContentsOrder

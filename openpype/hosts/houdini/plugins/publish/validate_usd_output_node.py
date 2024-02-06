@@ -33,7 +33,7 @@ class ValidateUSDOutputNode(pyblish.api.InstancePlugin):
 
         import hou
 
-        output_node = instance.data["output_node"]
+        output_node = instance.data.get("output_node")
 
         if output_node is None:
             node = hou.node(instance.data.get("instance_node"))

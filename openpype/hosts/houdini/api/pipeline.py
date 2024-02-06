@@ -321,15 +321,10 @@ def before_save():
 
 
 def on_save():
-
     log.info("Running callback on save..")
 
     # update houdini vars
     lib.update_houdini_vars_context_dialog()
-
-    nodes = lib.get_id_required_nodes()
-    for node, new_id in lib.generate_ids(nodes):
-        lib.set_id(node, new_id, overwrite=False)
 
     # We are now starting the actual save directly
     global ABOUT_TO_SAVE

@@ -13,6 +13,7 @@ class CreateUSD(plugin.HoudiniCreator):
     family = "usd"
     icon = "gears"
     enabled = False
+    description = "Create USD"
 
     def create(self, subset_name, instance_data, pre_create_data):
 

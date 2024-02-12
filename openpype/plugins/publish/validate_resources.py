@@ -52,7 +52,7 @@ class ValidateResources(pyblish.api.InstancePlugin):
             if "source" not in resource:
                 invalid_data = True
                 self.log.error("Missing 'source' in resource: %s", resource)
-            if "files" not in resource:
+            if "files" not in resource or not resource["files"]:
                 invalid_data = True
                 self.log.error("Missing 'files' in resource: %s", resource)
             if not all(os.path.exists(f) for f in resource.get("files", [])):

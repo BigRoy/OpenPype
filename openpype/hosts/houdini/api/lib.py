@@ -586,7 +586,7 @@ def get_frame_data(node, log=None):
         data["frameEndHandle"] = hou.intFrame()
         data["byFrameStep"] = 1.0
 
-        log.info(
+        log.debug(
             "Node '{}' has 'Render current frame' set.\n"
             "Asset Handles are ignored.\n"
             "frameStart and frameEnd are set to the "

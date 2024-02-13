@@ -399,6 +399,28 @@ class CollectUSDLayerContributions(pyblish.api.InstancePlugin,
         ]
 
 
+class CollectUSDLayerContributionsHoudiniLook(CollectUSDLayerContributions):
+    """
+    This is solely here to expose the attribute definitions for the
+    Houdini "look" family.
+    """
+    # TODO: Improve how this is built for the look family
+    hosts = ["houdini"]
+    families = ["look"]
+    label = CollectUSDLayerContributions.label + " (Look)"
+
+    @classmethod
+    def get_attribute_defs(cls):
+        defs = super(CollectUSDLayerContributionsHoudiniLook,
+                     cls).get_attribute_defs()
+
+        # Update default for department layer to look
+        layer_def = next(d for d in defs if d.key == "contribution_layer")
+        layer_def.default = "look"
+
+        return defs
+
+
 class ExtractUSDLayerContribution(publish.Extractor):
 
     families = ["usdLayer"]

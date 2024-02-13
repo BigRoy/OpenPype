@@ -29,6 +29,14 @@ class ExtractUSD(publish.Extractor):
         self.log.info("Writing USD '%s' to '%s'" % (file_name, staging_dir))
 
         mapping = self.get_source_to_publish_paths(instance.context)
+
+        # Allow instance-specific path remapping overrides, e.g. changing
+        # paths on used resources/textures for looks
+        instance_mapping = instance.data.get("assetRemap", {})
+        if instance_mapping:
+            self.log.info(instance_mapping)
+        mapping.update(instance_mapping)
+
         with remap_paths(ropnode, mapping):
             render_rop(ropnode)
 

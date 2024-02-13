@@ -234,7 +234,7 @@ class CollectUsdLookResourceTransfers(pyblish.api.InstancePlugin):
 
         resources_dir = instance.data["resourcesDir"]
         transfers = instance.data.setdefault("transfers", [])
-        for resource in instance.data["resources"]:
+        for resource in instance.data.get("resources", []):
             for src in resource["files"]:
                 dest = os.path.join(resources_dir, os.path.basename(src))
                 transfers.append((src, dest))

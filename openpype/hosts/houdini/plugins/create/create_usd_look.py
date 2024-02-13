@@ -32,6 +32,9 @@ class CreateUSDLook(plugin.HoudiniCreator):
         parms = {
             "lopoutput": "$HIP/pyblish/{}.usd".format(subset_name),
             "enableoutputprocessor_simplerelativepaths": False,
+
+            # Set the 'default prim' by default to the asset being published to
+            "defaultprim": '/`chs("asset")`',
         }
 
         if self.selected_nodes:

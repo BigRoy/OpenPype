@@ -730,7 +730,7 @@ def parse_ayon_uri(uri):
             &version={version}
             &representation={representation}
     URI example:
-        ayon+entity://test/hero?modelMain&version=2&representation=usd
+        ayon+entity://test/hero?product=modelMain&version=2&representation=usd
 
     However - if the netloc is `ayon://` it will by default also resolve as
     `ayon+entity://` on AYON server, thus we need to support both. The shorter

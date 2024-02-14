@@ -606,18 +606,18 @@ def set_variant_reference(sdf_layer, prim_path, variant_selections, path,
                 Sdf.Payload(assetPath=path)
             )
         else:
-            variant_prim.payloadList.prependedItems.append(
+            variant_prim.payloadList.prependedItems[:] = [
                 Sdf.Payload(assetPath=path)
-            )
+            ]
     else:
         # Reference
         if append:
+            variant_prim.referenceList.prependedItems.append(
+                Sdf.Reference(assetPath=path)
+            )
+        else:
             variant_prim.referenceList.prependedItems[:] = [
                 Sdf.Reference(assetPath=path)
-            ]
-        else:
-            variant_prim.payloadList.prependedItems[:] = [
-                Sdf.Payload(assetPath=path)
             ]
 
     return variant_prim

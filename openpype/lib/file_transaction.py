@@ -8,7 +8,23 @@ from openpype.lib import create_hard_link
 
 # this is needed until speedcopy for linux is fixed
 if sys.platform == "win32":
-    from speedcopy import copyfile
+    # TODO(colorbleed): Remove workaround for ADS issues with `speedcopy`
+    import ctypes
+    from speedcopy import copyfile as _copyfile
+
+    def copyfile(src, dst, follow_symlinks=True):
+        """Small wrapper around speedcopy.copyfile as a 'hotfix' to allow
+        transfers that fail due to Alternate Data Streams to still be
+        considered a success since the transfer finishes fine, but fails on
+        the alternate data streams.
+
+        See: https://github.com/antirotor/speedcopy/issues/24
+        """
+        try:
+            _copyfile(src, dst, follow_symlinks)
+        except OSError:
+            if ctypes.get_last_error() != 123 or not os.path.isfile(dst):
+                raise
 else:
     from shutil import copyfile
 

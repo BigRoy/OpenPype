@@ -60,21 +60,29 @@ BUILD_INTO_LAST_VERSIONS = True
 
 
 @dataclasses.dataclass
-class Contribution:
+class _BaseContribution:
     # What are we contributing?
     instance: pyblish.api.Instance  # instance that contributes it
 
     # Where are we contributing to?
     layer_id: str  # usually the department or task name
-    target_product: str = "usdAsset"  # target subset the layer should merge to
+    target_product: str  # target subset the layer should merge to
+
+    order: int
+
+
+class SublayerContribution(_BaseContribution):
+    """Sublayer contribution"""
+
+
+@dataclasses.dataclass
+class VariantContribution(_BaseContribution):
+    """Reference contribution within a Variant Set"""
 
     # Variant
-    apply_as_variant: bool = False
-    variant_set_name: str = ""
-    variant_name: str = ""
-    variant_is_default: bool = False
-
-    order: int = 0
+    variant_set_name: str
+    variant_name: str
+    variant_is_default: bool  # Whether to author variant selection opinion
 
 
 def get_instance_uri_path(
@@ -200,16 +208,25 @@ class CollectUSDLayerContributions(pyblish.api.InstancePlugin,
 
         # Define contribution
         order = LAYER_ORDERS.get(attr_values["contribution_layer"], 0)
-        contribution = Contribution(
-            instance=instance,
-            layer_id=attr_values["contribution_layer"],
-            target_product=attr_values["contribution_target_product"],
-            apply_as_variant=attr_values["contribution_apply_as_variant"],
-            variant_set_name=attr_values["contribution_variant_set_name"],
-            variant_name=attr_values["contribution_variant"],
-            variant_is_default=attr_values["contribution_variant_is_default"],
-            order=order
-        )
+
+        if attr_values["contribution_apply_as_variant"]:
+            contribution = VariantContribution(
+                instance=instance,
+                layer_id=attr_values["contribution_layer"],
+                target_product=attr_values["contribution_target_product"],
+                variant_set_name=attr_values["contribution_variant_set_name"],
+                variant_name=attr_values["contribution_variant"],
+                variant_is_default=attr_values["contribution_variant_is_default"],  # noqa: E501
+                order=order
+            )
+        else:
+            contribution = SublayerContribution(
+                instance=instance,
+                layer_id=attr_values["contribution_layer"],
+                target_product=attr_values["contribution_target_product"],
+                order=order
+            )
+
         asset_subset = contribution.target_product
         layer_subset = "{}_{}".format(asset_subset, contribution.layer_id)
 
@@ -247,6 +264,10 @@ class CollectUSDLayerContributions(pyblish.api.InstancePlugin,
         )
 
     def find_instance(self, context, data, ignore_instance):
+        """Return instance in context that has matching `instance.data`.
+
+        If no matching instance is found, then `None` is returned.
+        """
         for instance in context:
             if instance is ignore_instance:
                 continue
@@ -446,7 +467,7 @@ class ExtractUSDLayerContribution(publish.Extractor):
         contributions = instance.data.get("usd_contributions", [])
         for contribution in sorted(contributions, key=attrgetter("order")):
             path = get_instance_uri_path(contribution.instance)
-            if contribution.apply_as_variant:
+            if isinstance(contribution, VariantContribution):
                 # Add contribution as variants to their layer subsets
                 self.log.debug(f"Adding variant: {contribution}")
                 prim_path = f"/{default_prim}"
@@ -458,14 +479,14 @@ class ExtractUSDLayerContribution(publish.Extractor):
                     variant_selections=[(variant_set_name, variant_name)],
                     path=path
                 )
-                prim = sdf_layer.GetPrimAtPath(prim_path)
+                prim_spec = sdf_layer.GetPrimAtPath(prim_path)
 
                 # Set default variant selection
                 if contribution.variant_is_default or \
-                        variant_set_name not in prim.variantSelections:
-                    prim.variantSelections[variant_set_name] = variant_name
+                        variant_set_name not in prim_spec.variantSelections:
+                    prim_spec.variantSelections[variant_set_name] = variant_name
 
-            else:
+            elif isinstance(contribution, SublayerContribution):
                 # Sublayer source file
                 self.log.debug(f"Adding sublayer: {contribution}")
 
@@ -480,6 +501,8 @@ class ExtractUSDLayerContribution(publish.Extractor):
                     order=None,  # unordered
                     add_sdf_arguments_metadata=True
                 )
+            else:
+                raise TypeError(f"Unsupported contribution: {contribution}")
 
         # Save the file
         staging_dir = self.staging_dir(instance)
@@ -521,7 +544,7 @@ class ExtractUSDAssetContribution(publish.Extractor):
 
             asset_layer = Sdf.Layer.OpenAsAnonymous(path)
         else:
-            # If not existing publish of this product yet then we initialize
+            # If no existing publish of this product exists then we initialize
             # the layer as either a default asset or shot structure.
             init_type = instance.data["contribution_target_product_init"]
             asset_layer, payload_layer = self.init_layer(asset_name=asset,

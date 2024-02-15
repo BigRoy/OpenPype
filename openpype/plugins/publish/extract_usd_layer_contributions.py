@@ -495,8 +495,8 @@ class ExtractUSDLayerContribution(publish.Extractor):
                 variant_prim_spec = sdf_layer.GetPrimAtPath(variant_prim_path)
                 if variant_prim_spec:
                     self.remove_previous_reference_contribution(
-                        variant_prim_spec,
-                        instance
+                        prim_spec=variant_prim_spec,
+                        instance=contribution.instance
                     )
 
                 # Add the contribution at the indicated order
@@ -562,7 +562,7 @@ class ExtractUSDLayerContribution(publish.Extractor):
             prim_spec.referenceList.prependedItems[:] = [
                 ref for index, ref
                 in enumerate(prim_spec.referenceList.prependedItems)
-                if index in remove_indices
+                if index not in remove_indices
             ]
 
     def add_reference_contribution(self,
@@ -590,14 +590,18 @@ class ExtractUSDLayerContribution(publish.Extractor):
     def instance_match_ayon_uri(self, instance, ayon_uri):
 
         uri_data = parse_ayon_uri(ayon_uri)
+        if not uri_data:
+            return False
 
-        for instance_key, ayon_key in {
-            "project": "project",
-            "asset": "asset",
-            "subset": "product",
-        }.items():
-            if instance.data.get(instance_key) != uri_data.get(ayon_key):
-                return False
+        # Check if project, asset and product match
+        if instance.data["projectEntity"]["name"] != uri_data.get("project"):
+            return False
+
+        if instance.data["asset"] != uri_data.get("asset"):
+            return False
+
+        if instance.data["subset"] != uri_data.get("product"):
+            return False
 
         return True
 

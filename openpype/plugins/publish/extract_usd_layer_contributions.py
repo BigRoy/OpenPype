@@ -13,10 +13,13 @@ from openpype.lib import (
     EnumDef
 )
 from openpype.lib.usdlib import (
-    set_variant_reference,
+    get_or_define_prim_spec,
+    add_ordered_reference,
+    variant_nested_prim_path,
     setup_asset_layer,
     add_ordered_sublayer,
     construct_ayon_uri,
+    parse_ayon_uri,
     get_representation_path_by_ayon_uri,
     get_representation_path_by_names,
     set_layer_defaults
@@ -469,23 +472,45 @@ class ExtractUSDLayerContribution(publish.Extractor):
         for contribution in sorted(contributions, key=attrgetter("order")):
             path = get_instance_uri_path(contribution.instance)
             if isinstance(contribution, VariantContribution):
-                # Add contribution as variants to their layer subsets
+                # Add contribution as a reference inside a variant
                 self.log.debug(f"Adding variant: {contribution}")
-                prim_path = f"/{default_prim}"
-                variant_set_name = contribution.variant_set_name
-                variant_name = contribution.variant_name
-                set_variant_reference(
-                    sdf_layer,
+
+                # Make sure at least the prim exists outside the variant
+                # selection, so it can house the variant selection and the
+                # variants themselves
+                prim_path = Sdf.Path(f"/{default_prim}")
+                prim_spec = get_or_define_prim_spec(sdf_layer,
+                                                    prim_path,
+                                                    "Xform")
+
+                variant_prim_path = variant_nested_prim_path(
                     prim_path=prim_path,
-                    variant_selections=[(variant_set_name, variant_name)],
-                    path=path
+                    variant_selections=[
+                        (contribution.variant_set_name,
+                         contribution.variant_name)
+                    ]
                 )
-                prim_spec = sdf_layer.GetPrimAtPath(prim_path)
+
+                # Remove any existing matching entry of same product/subset
+                variant_prim_spec = sdf_layer.GetPrimAtPath(variant_prim_path)
+                if variant_prim_spec:
+                    self.remove_previous_reference_contribution(
+                        variant_prim_spec,
+                        instance
+                    )
+
+                # Add the contribution at the indicated order
+                self.add_reference_contribution(sdf_layer,
+                                                variant_prim_path,
+                                                path,
+                                                contribution)
 
                 # Set default variant selection
+                variant_set_name = contribution.variant_set_name
+                variant_name = contribution.variant_name
                 if contribution.variant_is_default or \
                         variant_set_name not in prim_spec.variantSelections:
-                    prim_spec.variantSelections[variant_set_name] = variant_name
+                    prim_spec.variantSelections[variant_set_name] = variant_name  # noqa: E501
 
             elif isinstance(contribution, SublayerContribution):
                 # Sublayer source file
@@ -517,6 +542,64 @@ class ExtractUSDLayerContribution(publish.Extractor):
             files=filename,
             staging_dir=staging_dir
         )
+
+    def remove_previous_reference_contribution(self,
+                                               prim_spec: Sdf.PrimSpec,
+                                               instance: pyblish.api.Instance):
+        # Remove existing contributions of the same product - ignoring
+        # the picked version and representation. We assume there's only ever
+        # one version of a product you want to have referenced into a Prim.
+        remove_indices = set()
+        for index, ref in enumerate(prim_spec.referenceList.prependedItems):
+            ref: Sdf.Reference  # type hint
+
+            uri = ref.customData.get("ayon_uri")
+            if uri and self.instance_match_ayon_uri(instance, uri):
+                self.log.debug("Removing existing reference: %s", ref)
+                remove_indices.add(index)
+
+        if remove_indices:
+            prim_spec.referenceList.prependedItems[:] = [
+                ref for index, ref
+                in enumerate(prim_spec.referenceList.prependedItems)
+                if index in remove_indices
+            ]
+
+    def add_reference_contribution(self,
+                                   layer: Sdf.Layer,
+                                   prim_path: Sdf.Path,
+                                   filepath: str,
+                                   contribution: VariantContribution):
+        instance = contribution.instance
+        uri = construct_ayon_uri(
+            project_name=instance.data["projectEntity"]["name"],
+            asset_name=instance.data["asset"],
+            product=instance.data["subset"],
+            version=instance.data["version"],
+            representation_name="usd"
+        )
+        reference = Sdf.Reference(assetPath=filepath,
+                                  customData={"ayon_uri": uri})
+        add_ordered_reference(
+            layer=layer,
+            prim_path=prim_path,
+            reference=reference,
+            order=contribution.order
+        )
+
+    def instance_match_ayon_uri(self, instance, ayon_uri):
+
+        uri_data = parse_ayon_uri(ayon_uri)
+
+        for instance_key, ayon_key in {
+            "project": "project",
+            "asset": "asset",
+            "subset": "product",
+        }.items():
+            if instance.data.get(instance_key) != uri_data.get(ayon_key):
+                return False
+
+        return True
 
 
 class ExtractUSDAssetContribution(publish.Extractor):

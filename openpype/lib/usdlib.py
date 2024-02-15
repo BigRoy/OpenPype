@@ -567,6 +567,66 @@ def variant_nested_prim_path(prim_path, variant_selections):
     return variant_prim_path
 
 
+def add_ordered_reference(
+        layer,
+        prim_path,
+        reference,
+        order
+):
+    """Add reference alongside other ordered references.
+
+    Args:
+        layer (Sdf.Layer): Layer to operate in.
+        prim_path (Sdf.Path): Prim path to reference into.
+            This may include variant selections to reference into a prim
+            inside the variant selection.
+        reference (Sdf.Reference): Reference to add.
+        order  (int): Order.
+
+    Returns:
+        Sdf.PrimSpec: The prim spec for the prim path.
+
+    """
+    assert isinstance(order, int), "order must be integer"
+
+    # Sdf.Reference is immutable, see: `pxr/usd/sdf/wrapReference.cpp`
+    # A Sdf.Reference can't be edited in Python so we create a new entry
+    # matching the original with the extra data entry added.
+    custom_data = reference.customData
+    custom_data["ayon_order"] = order
+    reference = Sdf.Reference(
+        assetPath=reference.assetPath,
+        primPath=reference.primPath,
+        layerOffset=reference.layerOffset,
+        customData=custom_data
+    )
+
+    # TODO: inherit type from outside of variants if it has it
+    prim_spec = get_or_define_prim_spec(layer, prim_path, "Xform")
+
+    # Insert new entry at correct order
+    entries = list(prim_spec.referenceList.prependedItems)
+
+    if not entries:
+        prim_spec.referenceList.prependedItems.append(reference)
+        return prim_spec
+
+    for index, existing_ref in enumerate(entries):
+        existing_order = existing_ref.customData.get("order")
+        if existing_order is not None and existing_order < order:
+            log.debug(
+                f"Inserting new reference at {index}: {reference}"
+            )
+            entries.insert(index, reference)
+            break
+    else:
+        prim_spec.referenceList.prependedItems.append(reference)
+        return prim_spec
+
+    prim_spec.referenceList.prependedItems[:] = entries
+    return prim_spec
+
+
 def set_variant_reference(sdf_layer, prim_path, variant_selections, path,
                           as_payload=False,
                           append=True):

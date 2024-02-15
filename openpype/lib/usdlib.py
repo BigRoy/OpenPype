@@ -751,7 +751,8 @@ def parse_ayon_uri(uri):
      'representation': 'exr'}
 
     Returns:
-        dict: The individual keys of the ayon entity query.
+        dict[str, Union[str, int]]: The individual key with their values as
+            found in the ayon entity URI.
 
     """
 

@@ -453,7 +453,6 @@ class ExtractUSDLayerContribution(publish.Extractor):
     order = pyblish.api.ExtractorOrder + 0.45
 
     def process(self, instance):
-        from pxr import Sdf
 
         asset = instance.data["asset"]
         product = instance.data["subset"]
@@ -613,7 +612,6 @@ class ExtractUSDAssetContribution(publish.Extractor):
     order = ExtractUSDLayerContribution.order + 0.01
 
     def process(self, instance):
-        from pxr import Sdf
 
         asset = instance.data["asset"]
         subset = instance.data["subset"]

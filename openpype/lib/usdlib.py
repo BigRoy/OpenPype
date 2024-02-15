@@ -817,11 +817,11 @@ def parse_ayon_uri(uri):
     """
 
     if not (uri.startswith("ayon+entity://") or uri.startswith("ayon://")):
-        return
+        return {}
 
     parsed = urlparse(uri)
     if parsed.scheme not in {"ayon+entity", "ayon"}:
-        return
+        return {}
 
     result = {
         "project": parsed.netloc,

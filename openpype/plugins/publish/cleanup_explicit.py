@@ -3,6 +3,8 @@
 import os
 import shutil
 import pyblish.api
+import tempfile
+from pathlib import Path
 
 
 class ExplicitCleanUp(pyblish.api.ContextPlugin):
@@ -68,9 +70,29 @@ class ExplicitCleanUp(pyblish.api.ContextPlugin):
                 failed.append((filepath, exc))
 
         if succeeded_files:
-            self.log.info(
-                "Removed files:\n{}".format("\n".join(sorted(succeeded_files)))
-            )
+            # Log as info only the files that are not part of the
+            # temporary directory, otherwise it's just a debug log since
+            # artist doesn't care about temporary files
+            tempdir = Path(tempfile.gettempdir())
+            temp_files = []
+            non_temp_files = []
+            for filepath in sorted(succeeded_files):
+                if tempdir in Path(filepath).parents:
+                    temp_files.append(filepath)
+                else:
+                    non_temp_files.append(filepath)
+
+            if non_temp_files:
+                self.log.info(
+                    "Removed files:\n{}".format(
+                        "\n".join(non_temp_files))
+                )
+
+            if temp_files:
+                self.log.debug(
+                    "Removed temporary files:\n{}".format(
+                        "\n".join(temp_files))
+                )
 
         # Delete folders with its content
         succeeded = set()

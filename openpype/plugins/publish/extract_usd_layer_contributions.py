@@ -40,6 +40,7 @@ LAYER_ORDERS = {
     # asset layers
     "model": 100,
     "assembly": 150,
+    "groom": 175,
     "look": 200,
     "rig": 300,
     # shot layers

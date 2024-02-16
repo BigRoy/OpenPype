@@ -339,6 +339,12 @@ class CollectUSDLayerContributions(pyblish.api.InstancePlugin,
         new_instance.append(source_instance.id)
         new_instance.data["source_instances"] = [source_instance]
 
+        # The contribution target publishes should never match versioning of
+        # the workfile but should just always increment from their last version
+        # so that there will never be conflicts between contributions from
+        # different departments and scenes.
+        new_instance.data["followWorkfileVersion"] = False
+
         return new_instance
 
     @classmethod

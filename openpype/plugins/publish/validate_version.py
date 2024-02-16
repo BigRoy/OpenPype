@@ -24,11 +24,11 @@ class ValidateVersion(pyblish.api.InstancePlugin):
         if latest_version is not None and int(version) <= int(latest_version):
             # TODO: Remove full non-html version upon drop of old publisher
             msg = (
-                "Version '{0}' from instance '{1}' that you are "
-                "trying to publish is lower or equal to an existing version "
-                "in the database. Version in database: '{2}'."
+                "Version {0} from instance '{1}' that you are "
+                "trying to publish is lower or equal to existing version: "
+                "{2}.\n"
                 "Please version up your workfile to a higher version number "
-                "than: '{2}'."
+                "than {2}."
             ).format(version, instance.data["name"], latest_version)
 
             msg_markdown = (

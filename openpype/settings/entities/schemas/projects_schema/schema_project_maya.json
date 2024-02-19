@@ -7,6 +7,11 @@
     "children": [
         {
             "type": "boolean",
+            "key": "use_cbid_workflow",
+            "label": "Use legacy 'cbId' workflow"
+        },
+        {
+            "type": "boolean",
             "key": "open_workfile_post_initialization",
             "label": "Open Workfile Post Initialization"
         },

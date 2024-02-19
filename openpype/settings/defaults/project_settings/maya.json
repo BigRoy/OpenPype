@@ -1,4 +1,5 @@
 {
+    "use_cbid_workflow": true,
     "open_workfile_post_initialization": false,
     "explicit_plugins_loading": {
         "enabled": false,

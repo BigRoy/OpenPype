@@ -31,6 +31,13 @@ class ValidateRigOutSetNodeIds(pyblish.api.InstancePlugin):
     ]
     allow_history_only = False
 
+    @classmethod
+    def apply_settings(cls, project_settings):
+        # Disable plug-in if cbId workflow is disabled
+        if not project_settings["maya"].get("use_cbid_workflow", True):
+            cls.enabled = False
+            return
+
     def process(self, instance):
         """Process all meshes"""
 

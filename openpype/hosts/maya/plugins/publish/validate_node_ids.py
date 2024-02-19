@@ -2,7 +2,8 @@ import pyblish.api
 
 from openpype.pipeline.publish import (
     ValidatePipelineOrder,
-    PublishXmlValidationError
+    PublishXmlValidationError,
+    OpenPypePyblishPluginMixin
 )
 import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api import lib
@@ -30,6 +31,13 @@ class ValidateNodeIDs(pyblish.api.InstancePlugin):
 
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction,
                openpype.hosts.maya.api.action.GenerateUUIDsOnInvalidAction]
+
+    @classmethod
+    def apply_settings(cls, project_settings):
+        # Disable plug-in if cbId workflow is disabled
+        if not project_settings["maya"].get("use_cbid_workflow", True):
+            cls.enabled = False
+            return
 
     def process(self, instance):
         """Process all meshes"""

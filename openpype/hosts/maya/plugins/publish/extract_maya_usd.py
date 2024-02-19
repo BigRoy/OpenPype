@@ -197,7 +197,7 @@ class ExtractMayaUsd(publish.Extractor,
             "exportInstances": True,
             "exportUVs": True,
             "exportVisibility": True,
-            "exportComponentTags": True,
+            "exportComponentTags": False,
             "exportRefsAsInstanceable": False,
             "eulerFilter": True,
             "renderableOnly": False,
@@ -285,6 +285,8 @@ class ExtractMayaUsd(publish.Extractor,
             options["selection"] = True
 
         options["stripNamespaces"] = attr_values.get("stripNamespaces", True)
+        options["exportComponentTags"] = attr_values.get("exportComponentTags",
+                                                         False)
 
         def parse_attr_str(attr_str):
             result = list()
@@ -353,7 +355,12 @@ class ExtractMayaUsd(publish.Extractor,
             BoolDef("stripNamespaces",
                     label="Strip Namespaces (USD)",
                     tooltip="Strip Namespaces in the USD Export",
-                    default=True)
+                    default=True),
+            BoolDef("exportComponentTags",
+                    label="Export Component Tags",
+                    tooltip="When enabled, export any geometry component tags "
+                            "as UsdGeomSubset data.",
+                    default=False)
         ]
 
 

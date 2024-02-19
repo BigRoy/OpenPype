@@ -151,6 +151,18 @@ class ImagePlaneLoader(load.LoaderPlugin):
                 fileName=context["representation"]["data"]["path"],
                 camera=camera
             )
+
+        # Set colorspace
+        colorspace = self.get_colorspace(context["representation"])
+        if colorspace:
+            cmds.setAttr(
+                "{}.ignoreColorSpaceFileRules".format(image_plane_shape),
+                True
+            )
+            cmds.setAttr("{}.colorSpace".format(image_plane_shape),
+                         colorspace, type="string")
+
+        # Set offset frame range
         start_frame = cmds.playbackOptions(query=True, min=True)
         end_frame = cmds.playbackOptions(query=True, max=True)
 
@@ -220,6 +232,15 @@ class ImagePlaneLoader(load.LoaderPlugin):
                      str(representation["_id"]),
                      type="string")
 
+        colorspace = self.get_colorspace(representation)
+        if colorspace:
+            cmds.setAttr(
+                "{}.ignoreColorSpaceFileRules".format(image_plane_shape),
+                True
+            )
+            cmds.setAttr("{}.colorSpace".format(image_plane_shape),
+                         colorspace, type="string")
+
         # Set frame range.
         project_name = get_current_project_name()
         version = get_version_by_id(
@@ -257,3 +278,12 @@ class ImagePlaneLoader(load.LoaderPlugin):
                            deleteNamespaceContent=True)
         except RuntimeError:
             pass
+
+    def get_colorspace(self, representation):
+
+        data = representation.get("data", {}).get("colorspaceData", {})
+        if not data:
+            return
+
+        colorspace = data.get("colorspace")
+        return colorspace

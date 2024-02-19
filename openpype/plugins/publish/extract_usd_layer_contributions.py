@@ -642,6 +642,32 @@ class ExtractUSDAssetContribution(publish.Extractor):
             asset_layer, payload_layer = self.init_layer(asset_name=asset,
                                                          init_type=init_type)
 
+        # Author timeCodesPerSecond and framesPerSecond if the asset layer
+        # is currently lacking any but our current context does specify an FPS
+        fps = instance.data.get("fps", instance.context.data.get("fps"))
+        if fps is not None:
+            if (
+                not asset_layer.HasTimeCodesPerSecond()
+                    and not asset_layer.HasFramesPerSecond()
+            ):
+                # Author FPS on the asset layer since there is no opinion yet
+                self.log.info("Authoring FPS on Asset Layer: %s FPS", fps)
+                asset_layer.timeCodesPerSecond = fps
+                asset_layer.framesPerSecond = fps
+
+            if fps != asset_layer.timeCodesPerSecond:
+                self.log.warning(
+                    "Current instance FPS '%s' does not match asset layer "
+                    "timecodes per second '%s'",
+                    fps, asset_layer.timeCodesPerSecond
+                )
+            if fps != asset_layer.framesPerSecond:
+                self.log.warning(
+                    "Current instance FPS '%s' does not match asset layer "
+                    "frames per second '%s'",
+                    fps, asset_layer.framesPerSecond
+                )
+
         target_layer = payload_layer if payload_layer else asset_layer
 
         # Get unique layer instances (remove duplicate entries)

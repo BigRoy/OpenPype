@@ -242,27 +242,32 @@ class ImagePlaneLoader(load.LoaderPlugin):
                          colorspace, type="string")
 
         # Set frame range.
-        project_name = get_current_project_name()
-        version = get_version_by_id(
-            project_name, representation["parent"], fields=["parent"]
-        )
-        subset = get_subset_by_id(
-            project_name, version["parent"], fields=["parent"]
-        )
-        asset = get_asset_by_id(
-            project_name, subset["parent"], fields=["parent"]
-        )
-        start_frame = asset["data"]["frameStart"]
-        end_frame = asset["data"]["frameEnd"]
-
-        for attr, value in {
-            "frameOffset": 0,
-            "frameIn": start_frame,
-            "frameOut": end_frame,
-            "frameCache": end_frame
-        }:
-            plug = "{}.{}".format(image_plane_shape, attr)
-            cmds.setAttr(plug, value)
+        # TODO(Colorbleed): clean up commented code
+        #  This is disabled because we don't want the loaded content to be
+        #  re-shifted upon updates
+        # project_name = get_current_project_name()
+        # version = get_version_by_id(
+        #     project_name, representation["parent"], fields=["parent"]
+        # )
+        # subset = get_subset_by_id(
+        #     project_name, version["parent"], fields=["parent"]
+        # )
+        # asset = get_asset_by_id(
+        #     project_name, subset["parent"], fields=["parent",
+        #                                             "data.frameStart",
+        #                                             "data.frameEnd"]
+        # )
+        # start_frame = asset["data"]["frameStart"]
+        # end_frame = asset["data"]["frameEnd"]
+        #
+        # for attr, value in {
+        #     "frameOffset": 0,
+        #     "frameIn": start_frame,
+        #     "frameOut": end_frame,
+        #     "frameCache": end_frame
+        # }:
+        #     plug = "{}.{}".format(image_plane_shape, attr)
+        #     cmds.setAttr(plug, value)
 
     def switch(self, container, representation):
         self.update(container, representation)

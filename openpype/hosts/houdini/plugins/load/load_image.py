@@ -1,4 +1,5 @@
 import os
+import re
 
 from openpype.pipeline import (
     load,
@@ -62,10 +63,8 @@ class ImageLoader(load.LoaderPlugin):
     def load(self, context, name=None, namespace=None, data=None):
 
         # Format file name, Houdini only wants forward slashes
-        file_path = self.filepath_from_context(context)
-        file_path = os.path.normpath(file_path)
-        file_path = file_path.replace("\\", "/")
-        file_path = self._get_file_sequence(file_path)
+        path = self.filepath_from_context(context)
+        path = self.format_path(path, representation=context["representation"])
 
         # Get the root node
         parent = get_image_avalon_container()
@@ -77,7 +76,10 @@ class ImageLoader(load.LoaderPlugin):
         node = parent.createNode("file", node_name=node_name)
         node.moveToGoodPosition()
 
-        node.setParms({"filename1": file_path})
+        parms = {"filename1": path}
+        parms.update(self.get_colorspace_parms(context["representation"]))
+
+        node.setParms(parms)
 
         # Imprint it manually
         data = {
@@ -100,16 +102,17 @@ class ImageLoader(load.LoaderPlugin):
 
         # Update the file path
         file_path = get_representation_path(representation)
-        file_path = file_path.replace("\\", "/")
-        file_path = self._get_file_sequence(file_path)
+        file_path = self.format_path(file_path, representation)
+
+        parms = {
+            "filename1": file_path,
+            "representation": str(representation["_id"]),
+        }
+
+        parms.update(self.get_colorspace_parms(representation))
 
         # Update attributes
-        node.setParms(
-            {
-                "filename1": file_path,
-                "representation": str(representation["_id"]),
-            }
-        )
+        node.setParms(parms)
 
     def remove(self, container):
 
@@ -126,14 +129,42 @@ class ImageLoader(load.LoaderPlugin):
         if not parent.children():
             parent.destroy()
 
-    def _get_file_sequence(self, file_path):
-        root = os.path.dirname(file_path)
-        files = sorted(os.listdir(root))
+    @staticmethod
+    def format_path(path, representation):
+        """Format file path correctly for single image or sequence."""
+        if not os.path.exists(path):
+            raise RuntimeError("Path does not exist: %s" % path)
 
-        first_fname = files[0]
-        prefix, padding, suffix = first_fname.rsplit(".", 2)
-        fname = ".".join([prefix, "$F{}".format(len(padding)), suffix])
-        return os.path.join(root, fname).replace("\\", "/")
+        ext = os.path.splitext(path)[-1]
+
+        is_sequence = bool(representation["context"].get("frame"))
+        # The path is either a single file or sequence in a folder.
+        if not is_sequence:
+            filename = path
+        else:
+            filename = re.sub(r"(.*)\.(\d+){}$".format(re.escape(ext)),
+                              "\\1.$F4{}".format(ext),
+                              path)
+
+            filename = os.path.join(path, filename)
+
+        filename = os.path.normpath(filename)
+        filename = filename.replace("\\", "/")
+
+        return filename
+
+    def get_colorspace_parms(self, representation):
+
+        data = representation.get("data", {}).get("colorspaceData", {})
+        if not data:
+            return {}
+
+        colorspace = data["colorspace"]
+        if colorspace:
+            return {
+                "colorspace": 3,  # Use OpenColorIO
+                "ocio_space": colorspace
+            }
 
     def switch(self, container, representation):
         self.update(container, representation)

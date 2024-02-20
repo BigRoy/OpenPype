@@ -32,10 +32,11 @@ class CollectRenderProducts(pyblish.api.InstancePlugin):
         node = instance.data.get("output_node")
         if not node:
             rop_path = rop_node.path()
-            raise RuntimeError(
-                "No output node found. Make sure to connect an "
+            self.log.error(
+                "No output node found. Make sure to connect a valid "
                 "input to the USD ROP: %s" % rop_path
             )
+            return
 
         override_output_image = rop_node.evalParm("outputimage")
 

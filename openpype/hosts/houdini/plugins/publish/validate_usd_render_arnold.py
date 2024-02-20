@@ -142,6 +142,11 @@ class ValidateUSDRenderArnoldSettings(pyblish.api.InstancePlugin):
 
         rop_node = hou.node(instance.data["instance_node"])
         node = instance.data.get("output_node")
+        if not node:
+            # No valid output node was set. We ignore it since it will
+            # be validated by another plug-in.
+            return
+
 
         # Check only for Arnold renderer
         renderer = rop_node.evalParm("renderer")
@@ -206,7 +211,12 @@ class ValidateUSDRenderCamera(pyblish.api.InstancePlugin):
     def process(self, instance):
 
         rop_node = hou.node(instance.data["instance_node"])
-        lop_node = instance.data["output_node"]
+        lop_node = instance.data.get("output_node")
+        if not lop_node:
+            # No valid output node was set. We ignore it since it will
+            # be validated by another plug-in.
+            return
+
         stage = lop_node.stage()
 
         render_settings = get_usd_render_rop_rendersettings(rop_node, stage,

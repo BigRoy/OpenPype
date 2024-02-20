@@ -14,7 +14,10 @@ class ValidateUSDOutputNode(pyblish.api.InstancePlugin):
 
     """
 
-    order = pyblish.api.ValidatorOrder
+    # Validate early so that this error reports higher than others to the user
+    # so that if another invalidation is due to the output node being invalid
+    # the user will likely first focus on this first issue
+    order = pyblish.api.ValidatorOrder - 0.4
     families = ["usdrop"]
     hosts = ["houdini"]
     label = "Validate Output Node (USD)"

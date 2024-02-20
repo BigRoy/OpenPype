@@ -7,6 +7,7 @@ from openpype.hosts.houdini.api.action import SelectROPAction
 from openpype.pipeline import PublishValidationError
 
 import hou
+from pxr import Sdf
 
 
 class ValidateUSDRopDefaultPrim(pyblish.api.InstancePlugin):
@@ -24,7 +25,6 @@ class ValidateUSDRopDefaultPrim(pyblish.api.InstancePlugin):
         rop_node = hou.node(instance.data["instance_node"])
 
         default_prim = rop_node.evalParm("defaultprim")
-
         if not default_prim:
             self.log.debug(
                 "No default prim specified on ROP node: %s", rop_node.path()
@@ -62,6 +62,38 @@ class ValidateUSDRopDefaultPrim(pyblish.api.InstancePlugin):
                 title="Default Prim",
                 description=self.get_description()
             )
+
+        # Warn about any paths that are authored that are not a child
+        # of the default prim
+        outside_paths = set()
+        default_prim_path = f"/{default_prim.strip('/')}"
+        for layer in layers:
+
+            def collect_outside_paths(path: Sdf.Path):
+                """Collect all paths that are no child of the default prim"""
+
+                if not path.IsPrimPath():
+                    # Collect only prim paths
+                    return
+
+                # Ignore the HoudiniLayerInfo prim
+                if path.pathString == "/HoudiniLayerInfo":
+                    return
+
+                if not path.pathString.startswith(default_prim_path):
+                    outside_paths.add(path)
+
+            layer.Traverse("/", collect_outside_paths)
+
+        if outside_paths:
+            self.log.warning(
+                "Found paths that are not within default primitive path '%s'. "
+                "When referencing the following paths by default will not be "
+                "loaded:",
+                default_prim
+            )
+            for outside_path in sorted(outside_paths):
+                self.log.warning("Outside default prim: %s", outside_path)
 
     def get_description(self):
         return inspect.cleandoc(

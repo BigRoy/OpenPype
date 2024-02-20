@@ -83,6 +83,7 @@ class CreateUSDRender(plugin.HoudiniCreator):
             # in that folder will then be the file to render.
             parms["savetodirectory_directory"] = "$HIP/render/usd/$HIPNAME/$OS"
             parms["lopoutput"] = "__render__.usd"
+            parms["allframesatonce"] = True
 
         # By default strip any Houdini custom data from the output file
         # since the renderer doesn't care about it

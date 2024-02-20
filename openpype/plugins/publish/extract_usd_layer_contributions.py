@@ -18,11 +18,13 @@ from openpype.lib.usdlib import (
     variant_nested_prim_path,
     setup_asset_layer,
     add_ordered_sublayer,
+    set_layer_defaults
+)
+from openpype.pipeline.ayon_uri import (
     construct_ayon_uri,
     parse_ayon_uri,
     get_representation_path_by_ayon_uri,
-    get_representation_path_by_names,
-    set_layer_defaults
+    get_representation_path_by_names
 )
 from openpype.pipeline import publish
 

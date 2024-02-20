@@ -2,7 +2,7 @@ import logging
 
 from husd.outputprocessor import OutputProcessor
 
-from openpype.lib import usdlib
+from openpype.pipeline import ayon_uri
 
 
 class AyonURIOutputProcessor(OutputProcessor):
@@ -54,7 +54,7 @@ class AyonURIOutputProcessor(OutputProcessor):
         if asset_path in cache:
             return cache[asset_path]
 
-        uri_data = usdlib.parse_ayon_uri(asset_path)
+        uri_data = ayon_uri.parse_ayon_uri(asset_path)
         if not uri_data:
             cache[asset_path] = asset_path
             return asset_path
@@ -67,7 +67,7 @@ class AyonURIOutputProcessor(OutputProcessor):
             "version_name": uri_data["version"],
             "representation_name": uri_data["representation"],
         }
-        path = usdlib.get_representation_path_by_names(
+        path = ayon_uri.get_representation_path_by_names(
             **query
         )
         if path:
@@ -115,7 +115,7 @@ class AyonURIOutputProcessor(OutputProcessor):
         if asset_path in cache:
             return cache[asset_path]
 
-        uri_data = usdlib.parse_ayon_uri(asset_path)
+        uri_data = ayon_uri.parse_ayon_uri(asset_path)
         if not uri_data:
             cache[asset_path] = asset_path
             return asset_path

@@ -58,7 +58,9 @@ class ExtractUSD(publish.Extractor):
         file to publish file so this can be used on the USD save to remap
         asset layer paths on publish via AyonRemapPaths output processor"""
 
-        from openpype.lib.usdlib import get_instance_expected_output_path
+        from openpype.pipeline.ayon_uri import (
+            get_instance_expected_output_path
+        )
 
         mapping = {}
         for instance in context:

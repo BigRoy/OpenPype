@@ -156,6 +156,11 @@ class ValidateUsdLookContents(pyblish.api.InstancePlugin):
             bindings and render geometry settings are overrides applied to the
             loaded content after the **Layer Break LOP** node.
 
+            If you happen to write out additional data for the meshes via
+            e.g. a SOP Modify make sure to import to LOPs only the relevant
+            attributes, mark them as static attributes, static topology and
+            set the Primitive Definitions to be Overlay instead of Defines.
+
             Currently, to avoid issues with referencing/payloading geometry
             from external files any references or payloads are also disallowed
             for looks.

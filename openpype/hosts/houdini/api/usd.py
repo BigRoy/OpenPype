@@ -270,10 +270,7 @@ def setup_lop_python_layer(layer, node, savepath=None,
     if savepath:
         if apply_file_format_args:
             args = layer.GetFileFormatArguments()
-            if args:
-                args = ":".join("{}={}".format(key, value)
-                                for key, value in args.items())
-                savepath = "{}:SDF_FORMAT_ARGS:{}".format(savepath, args)
+            savepath = Sdf.Layer.CreateIdentifier(savepath, args)
 
         p.customData['HoudiniSavePath'] = savepath
         p.customData['HoudiniSaveControl'] = 'Explicit'

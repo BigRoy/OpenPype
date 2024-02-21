@@ -297,16 +297,12 @@ def add_ordered_sublayer(layer, contribution_path, layer_id, order=None,
     def _format_path(path, layer_id, order):
         # TODO: Avoid this hack to store 'order' and 'layer' metadata
         #   for sublayers; in USD sublayers can't hold customdata
-        if add_sdf_arguments_metadata:
-            parts = [
-                contribution_path,
-                # Special separator for SDF Format Args used in USD
-                "SDF_FORMAT_ARGS",
-                "layer_id={}".format(layer_id)
-            ]
-            if order is not None:
-                parts.append("order={}".format(order))
-            return ":".join(parts)
+        if not add_sdf_arguments_metadata:
+            return path
+        data = {"layer_id": str(layer_id)}
+        if order is not None:
+            data["order"] = str(order)
+        return Sdf.Layer.CreateIdentifier(path, data)
 
     # If the layer was already in the layers, then replace it
     for index, existing_path in enumerate(layer.subLayerPaths):
@@ -671,16 +667,5 @@ def set_variant_reference(sdf_layer, prim_path, variant_selections, path,
 
 def get_sdf_format_args(path):
     """Return SDF_FORMAT_ARGS parsed to `dict`"""
-    if ":SDF_FORMAT_ARGS:" not in path:
-        return {}
-
-    format_args_str = path.split(":SDF_FORMAT_ARGS:", 1)[-1]
-    args = {}
-    for arg_str in format_args_str.split(":"):
-        if "=" not in arg_str:
-            # ill-formed argument key=value
-            continue
-
-        key, value = arg_str.split("=", 1)
-        args[key] = value
-    return args
+    _raw_path, data = Sdf.Layer.SplitIdentifier(path)
+    return data

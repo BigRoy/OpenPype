@@ -15,6 +15,7 @@ class SetFrameRangeLoader(load.LoaderPlugin):
         "vdbcache",
         "usd",
         "render",
+        "plate",
         "mayaScene",
         "review"
     ]
@@ -56,6 +57,7 @@ class SetFrameRangeWithHandlesLoader(load.LoaderPlugin):
         "vdbcache",
         "usd",
         "render",
+        "plate",
         "mayaScene",
         "review"
     ]

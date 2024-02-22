@@ -65,7 +65,6 @@ class CollectRenderProducts(pyblish.api.InstancePlugin):
             basename = os.path.basename(name)
 
             dollarf_regex = r"(\$F([0-9]?))"
-            frame_regex = r"^(.+\.)([0-9]+)(\.[a-zA-Z]+)$"
             if re.match(dollarf_regex, basename):
                 # TODO: Confirm this actually is allowed USD stages and HUSK
                 # Substitute $F
@@ -77,6 +76,15 @@ class CollectRenderProducts(pyblish.api.InstancePlugin):
                 filename_base = re.sub(dollarf_regex, replace, basename)
                 filename = os.path.join(dirname, filename_base)
             else:
+                # Last group of digits in the filename before the extension
+                # The frame number must always be prefixed by underscore or dot
+                # Allow product names like:
+                #   - filename.1001.exr
+                #   - filename.1001.aov.exr
+                #   - filename.aov.1001.exr
+                #   - filename_1001.exr
+                frame_regex = r"(.*[._])(\d+)(?!.*\d)(.*\.[A-Za-z0-9]+$)"
+
                 # It may be the case that the current USD stage has stored
                 # product name samples (e.g. when loading a USD file with
                 # time samples) where it does not refer to e.g. $F4. And thus
@@ -87,9 +95,9 @@ class CollectRenderProducts(pyblish.api.InstancePlugin):
                 #  actual product name set at that point in time?
                 # Substitute basename.0001.ext
                 def replace(match):
-                    prefix, frame, ext = match.groups()
+                    head, frame, tail = match.groups()
                     padding = "#" * len(frame)
-                    return prefix + padding + ext
+                    return head + padding + tail
 
                 filename_base = re.sub(frame_regex, replace, basename)
                 filename = os.path.join(dirname, filename_base)

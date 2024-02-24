@@ -147,7 +147,6 @@ class ValidateUSDRenderArnoldSettings(pyblish.api.InstancePlugin):
             # be validated by another plug-in.
             return
 
-
         # Check only for Arnold renderer
         renderer = rop_node.evalParm("renderer")
         if renderer != "HdArnoldRendererPlugin":
@@ -227,10 +226,9 @@ class ValidateUSDRenderCamera(pyblish.api.InstancePlugin):
             return
 
         render_settings_camera = self._get_camera(render_settings)
-
-        invalid = False
         rop_camera = rop_node.evalParm("override_camera")
 
+        invalid = False
         camera_paths = set()
         for render_product in self.iter_render_products(render_settings,
                                                         stage):

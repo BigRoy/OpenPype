@@ -38,6 +38,9 @@ def _unlocked_parm(parm):
 def get_available_versions(node):
     """Return the versions list for node.
 
+    Args:
+        node (hou.Node): Node to query selected products's versions for.
+
     Returns:
         List[int]: Version numbers for the subset
     """
@@ -73,6 +76,17 @@ def get_available_versions(node):
 
 
 def get_entity_thumbnail(project_name, entity_id, entity_type):
+    """Return thumbnail binary data from version id.
+
+    Args:
+        project_name (str): Name of project where to look for queried entities.
+        entity_id (str): Id of source entity.
+        entity_type (str): Type of source entity ('asset', 'version').
+
+    Returns:
+        Optional[str]: Thumbnail image data/bytes, if found.
+
+    """
     thumbnail_id = get_thumbnail_id_from_source(project_name, entity_type,
                                                 entity_id)
     if not thumbnail_id:
@@ -85,7 +99,16 @@ def get_entity_thumbnail(project_name, entity_id, entity_type):
 
 
 def get_version_thumbnail(project_name, version_id):
-    """Return thumbnail binary data from version id"""
+    """Return thumbnail binary data from version id.
+
+    Args:
+        project_name (str): Name of project where to look for queried entities.
+        version_id (str): Id of version entity.
+
+    Returns:
+        Optional[str]: Thumbnail image data/bytes, if found.
+
+    """
     return get_entity_thumbnail(project_name,
                                 entity_id=version_id,
                                 entity_type="version")
@@ -199,11 +222,11 @@ def set_representation(node, repre_id):
                 thumbnail_path = _get_thumbnail(project_name, version_id,
                                                 thumbnail_dir)
                 set_node_thumbnail(node, thumbnail_path)
-            return
-
-    with _unlocked_parm(file_parm):
-        file_parm.set("")
-    set_node_thumbnail(node, None)
+    else:
+        # Clear filepath and thumbnail
+        with _unlocked_parm(file_parm):
+            file_parm.set("")
+        set_node_thumbnail(node, None)
 
 
 def set_node_thumbnail(node, thumbnail):

@@ -2,9 +2,19 @@
 
 import os
 import random
+import contextlib
 
-from openpype.pipeline import registered_host, get_representation_path
-from openpype.client import get_representation_by_id, get_representations
+from openpype.pipeline import get_representation_path
+from openpype.client import (
+    get_project,
+    get_representation_by_id,
+    get_representations,
+    get_versions,
+    get_asset_by_name,
+    get_subset_by_name,
+    get_version_by_name,
+    get_representation_by_name
+)
 from openpype.pipeline.context_tools import get_current_project_name
 
 from openpype.pipeline.thumbnail import get_thumbnail_binary
@@ -15,17 +25,51 @@ from openpype.hosts.houdini.api import lib
 import hou
 
 
-def get_versions(node):
+@contextlib.contextmanager
+def _unlocked_parm(parm):
+    """Unlock parm during context; will always lock after"""
+    try:
+        parm.lock(False)
+        yield
+    finally:
+        parm.lock(True)
 
-    # Query versions for representation id
-    # so we can use it to update the version menu
-    # TODO: implement getting versions from current representation id
-    result = []
-    for version in [1, 2, 3, 4, 5]:
-        result.append(version)
-        result.append("v{0:03d}".format(version))
 
-    return result
+def get_available_versions(node):
+    """Return the versions list for node.
+
+    Returns:
+        List[int]: Version numbers for the subset
+    """
+
+    project_name = node.evalParm("project_name") or get_current_project_name()
+    asset_name = node.evalParm("asset_name")
+    product_name = node.evalParm("product_name")
+
+    if not all([
+        project_name, asset_name, product_name
+    ]):
+        return []
+
+    id_only = ["_id"]
+    asset_doc = get_asset_by_name(project_name, asset_name, fields=id_only)
+    if not asset_doc:
+        return []
+    subset_doc = get_subset_by_name(
+        project_name,
+        subset_name=product_name,
+        asset_id=asset_doc["_id"],
+        fields=id_only)
+    if not subset_doc:
+        return []
+
+    versions = get_versions(project_name=project_name,
+                            subset_ids=[subset_doc["_id"]],
+                            fields=["name"])
+
+    version_names = [version["name"] for version in versions]
+    version_names.reverse()
+    return version_names
 
 
 def get_entity_thumbnail(project_name, entity_id, entity_type):
@@ -61,7 +105,7 @@ def on_pick_representation(node):
     repre_id = str(repre["_id"])
 
     node.parm("representation").set(repre_id)
-    on_representation_id_change(node)
+    on_representation_id_changed(node)
 
 
 def update_info(node, representation_doc):
@@ -72,30 +116,41 @@ def update_info(node, representation_doc):
          representation_doc (dict): Representation entity document.
 
      """
-    if representation_doc:
-        context = representation_doc["context"]
-        project = context["project"]["name"]
-        asset = context["asset"]
-        subset = context["subset"]
-        if "version" in context:
-            version = "v{0:03d}".format(context["version"])
-        else:
-            # TODO: Some contexts don't appear to have version, maybe those are
-            #   hero versions?
-            version = "<hero>"
-        representation = context["representation"]
+    context = representation_doc["context"]
+    project = context["project"]["name"]
+    asset = context["asset"]
+    product = context["subset"]
+    if "version" in context:
+        version = str(context["version"])
     else:
-        project = "-"
-        asset = "-"
-        subset = "-"
-        version = "-"
-        representation = "-"
+        # TODO: Some contexts don't appear to have version, maybe those are
+        #   hero versions?
+        version = "<hero>"
+    representation = context["representation"]
 
-    node.parm('project_name').set(project)
-    node.parm('asset_name').set(asset)
-    node.parm('subset_name').set(subset)
-    node.parm('version_name').set(version)
-    node.parm('representation_name').set(representation)
+    # TODO: Avoid 'duplicate' taking over the expression if originally
+    #       it was $OS and by duplicating, e.g. the `asset` does not exist
+    #       anymore since it is now `hero1` instead of `hero`
+    # We only set the values if the value does not match the currently
+    # evaluated result of the other parms, so that if the the project name
+    # value was dynamically set by the user with an expression or alike
+    # then if it still matches the value of the current representation id
+    # we preserve it
+    parms = {
+        "project_name": project,
+        "asset_name": asset,
+        "product_name": product,
+        "version": version,
+        "representation_name": representation,
+    }
+    parms = {key: value for key, value in parms.items()
+             if node.evalParm(key) != value}
+    parms["load_message"] = ""  # clear any warnings/errors
+
+    # Note that these never trigger any parm callbacks since we do not
+    # trigger the `parm.pressButton` and programmatically setting values
+    # in Houdini does not trigger callbacks automatically
+    node.setParms(parms)
 
 
 def _get_thumbnail(project_name, version_id, thumbnail_dir):
@@ -116,26 +171,25 @@ def _get_thumbnail(project_name, version_id, thumbnail_dir):
 
 
 def set_representation(node, repre_id):
+    file_parm = node.parm("file")
     if repre_id:
-        host = registered_host()
-        context = host.get_current_context()
-        project_name = context["project_name"]
+        project_name = node.evalParm("project_name") or \
+                       get_current_project_name()
         try:
             repre_doc = get_representation_by_id(project_name, repre_id)
         except Exception:
             # Ignore invalid representation ids silently
             repre_doc = None
-        update_info(node, repre_doc)
 
         if repre_doc:
+            update_info(node, repre_doc)
             path = get_representation_path(repre_doc)
             # Load fails on UNC paths with backslashes and also
             # fails to resolve @sourcename var with backslashed
             # paths correctly. So we force forward slashes
             path = path.replace("\\", "/")
-            node.parm('file').lock(False)
-            node.parm('file').set(path)
-            node.parm('file').lock(True)
+            with _unlocked_parm(file_parm):
+                file_parm.set(path)
 
             if node.evalParm("show_thumbnail"):
                 # Update thumbnail
@@ -147,9 +201,8 @@ def set_representation(node, repre_id):
                 set_node_thumbnail(node, thumbnail_path)
             return
 
-    node.parm('file').lock(False)
-    node.parm('file').set("")
-    node.parm('file').lock(True)
+    with _unlocked_parm(file_parm):
+        file_parm.set("")
     set_node_thumbnail(node, None)
 
 
@@ -167,8 +220,7 @@ def compute_thumbnail_rect(node):
     offset_x = node.evalParm("thumbnail_offsetx")
     offset_y = node.evalParm("thumbnail_offsety")
     width = node.evalParm("thumbnail_size")
-    # todo: compute height from aspect of actual
-    #   image file.
+    # todo: compute height from aspect of actual image file.
     aspect = 0.5625  # for now assume 16:9
     height = width * aspect
 
@@ -187,7 +239,7 @@ def on_thumbnail_show_changed(node):
     """Callback on thumbnail show parm changed"""
     if node.evalParm("show_thumbnail"):
         # For now, update all
-        on_representation_id_change(node)
+        on_representation_id_changed(node)
     else:
         lib.remove_all_thumbnails(node)
 
@@ -201,10 +253,126 @@ def on_thumbnail_size_changed(node):
         lib.set_node_thumbnail(node, thumbnail)
 
 
-def on_representation_id_change(node):
-    """Callback on representation id changed"""
+def on_representation_id_changed(node):
+    """Callback on representation id changed
+
+    Args:
+        node (hou.Node): Node to update.
+    """
     repre_id = node.evalParm("representation")
     set_representation(node, repre_id)
+
+
+def on_representation_parms_changed(node):
+    """
+    Usually used as callback to the project, asset, product, version and
+    representation parms which on change - would result in a different
+    representation id to be resolved.
+
+    Args:
+        node (hou.Node): Node to update.
+    """
+    project_name = node.evalParm("project_name") or get_current_project_name()
+    representation_id = get_representation_id(
+        project_name=project_name,
+        asset_name=node.evalParm("asset_name"),
+        product_name=node.evalParm("product_name"),
+        version=node.evalParm("version"),
+        representation_name=node.evalParm("representation_name"),
+        load_message_parm=node.parm("load_message")
+    )
+    if representation_id is None:
+        representation_id = ""
+    else:
+        representation_id = str(representation_id)
+
+    if node.evalParm("representation") != representation_id:
+        node.parm("representation").set(representation_id)
+        node.parm("representation").pressButton()  # trigger callback
+
+
+def get_representation_id(
+        project_name,
+        asset_name,
+        product_name,
+        version,
+        representation_name,
+        load_message_parm,
+):
+    """Get representation id.
+
+    Args:
+        project_name (str): Project name
+        asset_name (str): Asset name
+        product_name (str): Product (subset) name
+        version (str): Version name as string
+        representation_name (str): Representation name
+        load_message_parm (hou.Parm): A string message parm to report
+            any error messages to.
+
+    Returns:
+        Optional[str]: Representation id or None if not found.
+
+    """
+
+    if not all([
+        project_name, asset_name, product_name, version, representation_name
+    ]):
+        labels = {
+            "project": project_name,
+            "asset": asset_name,
+            "product": product_name,
+            "version": version,
+            "representation": representation_name
+        }
+        missing = ", ".join(key for key, value in labels.items() if not value)
+        load_message_parm.set(f"Load info incomplete. Found empty: {missing}")
+        return
+
+    try:
+        version = int(version.strip())
+    except ValueError:
+        load_message_parm.set(f"Invalid version format: '{version}'\n"
+                              "Make sure to set a valid version number.")
+        return
+
+    id_only = ["_id"]
+    asset_doc = get_asset_by_name(project_name, asset_name, fields=id_only)
+    if not asset_doc:
+        # This may be due to the project not existing - so let's validate
+        # that first
+        if not get_project(project_name):
+            load_message_parm.set(f"Project not found: '{project_name}'")
+            return
+        load_message_parm.set(f"Asset not found: '{asset_name}'")
+        return
+
+    subset_doc = get_subset_by_name(
+        project_name,
+        subset_name=product_name,
+        asset_id=asset_doc["_id"],
+        fields=id_only)
+    if not subset_doc:
+        load_message_parm.set(f"Product not found: '{product_name}'")
+        return
+    version_doc = get_version_by_name(
+        project_name,
+        version,
+        subset_id=subset_doc["_id"],
+        fields=id_only)
+    if not version_doc:
+        load_message_parm.set(f"Version not found: '{version}'")
+        return
+    representation_doc = get_representation_by_name(
+        project_name,
+        representation_name,
+        version_id=version_doc["_id"],
+        fields=id_only)
+    if not representation_doc:
+        load_message_parm.set(
+            f"Representation not found: '{representation_name}'.")
+        return
+    return representation_doc["_id"]
 
 
 def setup_flag_changed_callback(node):
@@ -220,6 +388,11 @@ def on_flag_changed(node, **kwargs):
 
     Updates the brightness of attached thumbnails
     """
+    # Showing thumbnail is disabled so can return early since
+    # there should be no thumbnail to update.
+    if not node.evalParm('show_thumbnail'):
+        return
+
     # Update node thumbnails brightness with the
     # bypass state of the node.
     parent = node.parent()

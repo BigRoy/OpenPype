@@ -42,6 +42,12 @@ class LoadClip(plugin.TimelineItemLoader):
 
     def load(self, context, name, namespace, options):
 
+        # COLORBLEED edit: Override the default behavior to be a sequential
+        # load which we have configured to be 'end of timeline' to avoid
+        # errors on load when clips would overlap and fail to load
+        if "load_how" not in options:
+            options["load_how"] = "Sequentially in order"
+
         # load clip to timeline and get main variables
         files = plugin.get_representation_files(context["representation"])
 

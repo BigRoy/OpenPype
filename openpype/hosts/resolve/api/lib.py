@@ -272,8 +272,7 @@ def create_timeline_item(
     # get all variables
     project = get_current_project()
     media_pool = project.GetMediaPool()
-    _clip_property = media_pool_item.GetClipProperty
-    clip_name = _clip_property("File Name")
+    clip_name = media_pool_item.GetClipProperty("File Name")
     timeline = timeline or get_current_timeline()
 
     # timing variables
@@ -298,16 +297,22 @@ def create_timeline_item(
         if source_end:
             clip_data["endFrame"] = source_end
         if timecode_in:
+            # Note: specifying a recordFrame will fail to place the timeline
+            #  item if there's already an existing clip at that time on the
+            #  active track.
             clip_data["recordFrame"] = timeline_in
 
         # add to timeline
-        media_pool.AppendToTimeline([clip_data])
+        output_timeline_item = media_pool.AppendToTimeline([clip_data])[0]
 
-        output_timeline_item = get_timeline_item(
-            media_pool_item, timeline)
+        # Adding the item may fail whilst Resolve will still return a
+        # TimelineItem instance - however all `Get*` calls return None
+        # Hence, we check whether the result is valid
+        if output_timeline_item.GetDuration() is None:
+            output_timeline_item = None
 
     assert output_timeline_item, AssertionError((
-        "Clip name '{}' was't created on the timeline: '{}' \n\n"
+        "Clip name '{}' wasn't created on the timeline: '{}' \n\n"
         "Please check if correct track position is activated, \n"
         "or if a clip is not already at the timeline in \n"
         "position: '{}' out: '{}'. \n\n"
@@ -330,19 +335,25 @@ def get_timeline_item(media_pool_item: object,
     Returns:
         object: resolve.TimelineItem
     """
-    _clip_property = media_pool_item.GetClipProperty
-    clip_name = _clip_property("File Name")
+    clip_name = media_pool_item.GetClipProperty("File Name")
     output_timeline_item = None
     timeline = timeline or get_current_timeline()
 
     with maintain_current_timeline(timeline):
         # search the timeline for the added clip
 
-        for _ti_data in get_current_timeline_items():
-            _ti_clip = _ti_data["clip"]["item"]
-            _ti_clip_property = _ti_clip.GetMediaPoolItem().GetClipProperty
-            if clip_name in _ti_clip_property("File Name"):
-                output_timeline_item = _ti_clip
+        for ti_data in get_current_timeline_items():
+            ti_clip_item = ti_data["clip"]["item"]
+            ti_media_pool_item = ti_clip_item.GetMediaPoolItem()
+
+            # Skip items that do not have a media pool item, like for example
+            # an "Adjustment Clip" or a "Fusion Composition" from the effects
+            # toolbox
+            if not ti_media_pool_item:
+                continue
+
+            if clip_name in ti_media_pool_item.GetClipProperty("File Name"):
+                output_timeline_item = ti_clip_item
 
     return output_timeline_item
 

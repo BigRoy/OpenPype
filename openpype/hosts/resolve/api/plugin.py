@@ -405,10 +405,9 @@ class ClipLoader:
             files,
             self.active_bin
         )
-        _clip_property = media_pool_item.GetClipProperty
-        source_in = int(_clip_property("Start"))
-        source_out = int(_clip_property("End"))
-        source_duration = int(_clip_property("Frames"))
+        source_in = int(media_pool_item.GetClipProperty("Start"))
+        source_out = int(media_pool_item.GetClipProperty("End"))
+        source_duration = int(media_pool_item.GetClipProperty("Frames"))
 
         if not self.with_handles:
             # Load file without the handles of the source media
@@ -447,7 +446,10 @@ class ClipLoader:
         timeline_start = self.active_timeline.GetStartFrame()
         if self.sequential_load:
             # set timeline start frame
-            timeline_in = int(timeline_start)
+            # COLORBLEED EDIT: Set to None so load is added to end of timeline
+            #  instead of hitting errors when a file already exists at current
+            #  time in track
+            timeline_in = None
         else:
             # set timeline start frame + original clip in frame
             timeline_in = int(
@@ -462,7 +464,7 @@ class ClipLoader:
             source_out,
         )
 
-        print("Loading clips: `{}`".format(self.data["clip_name"]))
+        print("Loaded clip: `{}`".format(self.data["clip_name"]))
         return timeline_item
 
     def update(self, timeline_item, files):
@@ -475,10 +477,8 @@ class ClipLoader:
             files,
             self.active_bin
         )
-        _clip_property = media_pool_item.GetClipProperty
-
-        source_in = int(_clip_property("Start"))
-        source_out = int(_clip_property("End"))
+        source_in = int(media_pool_item.GetClipProperty("Start"))
+        source_out = int(media_pool_item.GetClipProperty("End"))
 
         lib.swap_clips(
             timeline_item,
@@ -487,7 +487,7 @@ class ClipLoader:
             source_out
         )
 
-        print("Loading clips: `{}`".format(self.data["clip_name"]))
+        print("Updated clip: `{}`".format(self.data["clip_name"]))
         return timeline_item
 
 

@@ -135,6 +135,8 @@ def frames_to_seconds(frames, framerate):
 
 
 def frames_to_timecode(frames, framerate):
+    frames = float(frames)
+    framerate = float(framerate)
     rt = _ot.from_frames(frames, framerate)
     return _ot.to_timecode(rt)
 

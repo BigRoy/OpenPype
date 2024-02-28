@@ -405,6 +405,8 @@ class ClipLoader:
             files,
             self.active_bin
         )
+        self._set_metadata(media_pool_item)
+
         source_in = int(media_pool_item.GetClipProperty("Start"))
         source_out = int(media_pool_item.GetClipProperty("End"))
         source_duration = int(media_pool_item.GetClipProperty("Frames"))
@@ -477,6 +479,8 @@ class ClipLoader:
             files,
             self.active_bin
         )
+        self._set_metadata(media_pool_item)
+
         source_in = int(media_pool_item.GetClipProperty("Start"))
         source_out = int(media_pool_item.GetClipProperty("End"))
 
@@ -489,6 +493,39 @@ class ClipLoader:
 
         print("Updated clip: `{}`".format(self.data["clip_name"]))
         return timeline_item
+
+    def _set_metadata(self, media_pool_item):
+        """Set Media Pool Item Clip Properties
+
+        This is currently a studio-specific Colorbleed tweak.
+        """
+        # COLORBLEED EDIT
+        # Set the timecode for the loaded clip if Resolve doesn't parse it
+        # correctly from the input. An image sequence will have timecode
+        # parsed from its frame range, we will want to preserve that.
+        start_tc = media_pool_item.GetClipProperty("Start TC")
+        if start_tc == "00:00:00:00":
+            from openpype.pipeline.editorial import frames_to_timecode
+            # Assume no timecode was detected from the source media
+
+            fps = float(media_pool_item.GetClipProperty("FPS"))
+            handle_start = self.data["versionData"].get("handleStart", 0)
+            frame_start = self.data["versionData"].get("frameStart", 0)
+            frame_start_handle = frame_start - handle_start
+            if frame_start_handle != 0:
+                timecode = frames_to_timecode(frame_start_handle, fps)
+                media_pool_item.SetClipProperty("Start TC", timecode)
+
+        # Set more clip metadata based on the loaded clip's context
+        metadata = {
+            "Clip Name": "{asset[name]} {subset[name]} v{version[name]:03d}",
+            "Shot": "{asset[name]}",
+            "Take": "{subset[name]} v{version[name]:03d}",
+            "Comments": "{version[data][comment]}"
+        }
+        for clip_property, value in metadata.items():
+            media_pool_item.SetClipProperty(clip_property,
+                                            value.format_map(self.context))
 
 
 class TimelineItemLoader(LoaderPlugin):

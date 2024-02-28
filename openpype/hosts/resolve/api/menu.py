@@ -42,7 +42,7 @@ class OpenPypeMenu(QtWidgets.QWidget):
     def __init__(self, *args, **kwargs):
         super(OpenPypeMenu, self).__init__(*args, **kwargs)
 
-        self.setObjectName(f"{MENU_LABEL}Menu")
+        self.setObjectName("OpenPypeMenu")
 
         self.setWindowFlags(
             QtCore.Qt.Window
@@ -54,15 +54,15 @@ class OpenPypeMenu(QtWidgets.QWidget):
 
         self.setWindowTitle(f"{MENU_LABEL}")
         save_current_btn = QtWidgets.QPushButton("Save current file", self)
-        workfiles_btn = QtWidgets.QPushButton("Workfiles ...", self)
-        create_btn = QtWidgets.QPushButton("Create ...", self)
-        publish_btn = QtWidgets.QPushButton("Publish ...", self)
-        load_btn = QtWidgets.QPushButton("Load ...", self)
-        inventory_btn = QtWidgets.QPushButton("Manager ...", self)
-        subsetm_btn = QtWidgets.QPushButton("Subset Manager ...", self)
-        libload_btn = QtWidgets.QPushButton("Library ...", self)
+        workfiles_btn = QtWidgets.QPushButton("Workfiles...", self)
+        create_btn = QtWidgets.QPushButton("Create...", self)
+        load_btn = QtWidgets.QPushButton("Load...", self)
+        publish_btn = QtWidgets.QPushButton("Publish...", self)
+        inventory_btn = QtWidgets.QPushButton("Manager...", self)
+        subsetm_btn = QtWidgets.QPushButton("Subset Manager...", self)
+        libload_btn = QtWidgets.QPushButton("Library...", self)
         experimental_btn = QtWidgets.QPushButton(
-            "Experimental tools ...", self
+            "Experimental tools...", self
         )
         # rename_btn = QtWidgets.QPushButton("Rename", self)
         # set_colorspace_btn = QtWidgets.QPushButton(
@@ -81,8 +81,8 @@ class OpenPypeMenu(QtWidgets.QWidget):
 
         layout.addWidget(workfiles_btn)
         layout.addWidget(create_btn)
-        layout.addWidget(publish_btn)
         layout.addWidget(load_btn)
+        layout.addWidget(publish_btn)
         layout.addWidget(inventory_btn)
         layout.addWidget(subsetm_btn)
 
@@ -103,8 +103,6 @@ class OpenPypeMenu(QtWidgets.QWidget):
 
         self.setLayout(layout)
 
-        save_current_btn.clicked.connect(self.on_save_current_clicked)
-        save_current_btn.setShortcut(QtGui.QKeySequence.Save)
         workfiles_btn.clicked.connect(self.on_workfile_clicked)
         create_btn.clicked.connect(self.on_create_clicked)
         publish_btn.clicked.connect(self.on_publish_clicked)

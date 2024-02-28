@@ -145,7 +145,9 @@ def get_new_timeline(timeline_name: str = None):
     return new_timeline
 
 
-def create_bin(name: str, root: object = None) -> object:
+def create_bin(name: str,
+               root: object = None,
+               set_as_current: bool = True) -> object:
     """
     Create media pool's folder.
 
@@ -156,6 +158,8 @@ def create_bin(name: str, root: object = None) -> object:
     Args:
         name (str): name of folder / bin, or hierarchycal name "parent/name"
         root (resolve.Folder)[optional]: root folder / bin object
+        set_as_current (resolve.Folder)[optional]: Whether to set the
+            resulting bin as current folder or not.
 
     Returns:
         object: resolve.Folder
@@ -168,22 +172,24 @@ def create_bin(name: str, root: object = None) -> object:
     if "/" in name.replace("\\", "/"):
         child_bin = None
         for bname in name.split("/"):
-            child_bin = create_bin(bname, child_bin or root_bin)
+            child_bin = create_bin(bname,
+                                   root=child_bin or root_bin,
+                                   set_as_current=set_as_current)
         if child_bin:
             return child_bin
     else:
-        created_bin = None
+        # Find existing folder or create it
         for subfolder in root_bin.GetSubFolderList():
-            if subfolder.GetName() in name:
+            if subfolder.GetName() == name:
                 created_bin = subfolder
-
-        if not created_bin:
-            new_folder = media_pool.AddSubFolder(root_bin, name)
-            media_pool.SetCurrentFolder(new_folder)
+                break
         else:
+            created_bin = media_pool.AddSubFolder(root_bin, name)
+
+        if set_as_current:
             media_pool.SetCurrentFolder(created_bin)
 
-        return media_pool.GetCurrentFolder()
+        return created_bin
 
 
 def remove_media_pool_item(media_pool_item: object) -> bool:
@@ -947,3 +953,13 @@ def get_reformated_path(path, padded=False, first=False):
         else:
             path = re.sub(num_pattern, "%d", path)
     return path
+
+
+def iter_all_media_pool_clips():
+    """Recursively iterate all media pool clips in current project"""
+    root = get_current_project().GetMediaPool().GetRootFolder()
+    queue = [root]
+    for folder in queue:
+        for clip in folder.GetClipList():
+            yield clip
+        queue.extend(folder.GetSubFolderList())

@@ -179,6 +179,7 @@ class ExtractMayaUsd(publish.Extractor,
             "convertMaterialsTo": str,
             "shadingMode": (str, None),  # optional str
             "jobContext": (list, None),  # optional list
+            "filterTypes": (list, None),  # optional list
             "staticSingleSample": bool
             # "worldspace": bool,
         }
@@ -204,6 +205,7 @@ class ExtractMayaUsd(publish.Extractor,
             "shadingMode": "none",
             "convertMaterialsTo": "none",
             "jobContext": None,
+            "filterTypes": None,
             "staticSingleSample": True
             # "worldspace": False
         }
@@ -287,6 +289,14 @@ class ExtractMayaUsd(publish.Extractor,
         options["stripNamespaces"] = attr_values.get("stripNamespaces", True)
         options["exportComponentTags"] = attr_values.get("exportComponentTags",
                                                          False)
+
+        # TODO: Remove hardcoded filterTypes
+        # We always filter constraint types because they serve no valuable
+        # data (it doesn't preserve the actual constraint) but it does
+        # introduce the problem that Shapes do not merge into the Transform
+        # on export anymore because they are usually parented under transforms
+        # See: https://github.com/Autodesk/maya-usd/issues/2070
+        options["filterTypes"] = ["constraint"]
 
         def parse_attr_str(attr_str):
             """Return list of strings from `a,b,c,,d` to `[a, b, c, d]`.

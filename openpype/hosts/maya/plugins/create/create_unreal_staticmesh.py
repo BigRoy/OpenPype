@@ -16,11 +16,6 @@ class CreateUnrealStaticMesh(plugin.MayaCreator):
     # Defined in settings
     collision_prefixes = []
 
-    def apply_settings(self, project_settings):
-        """Apply project settings to creator"""
-        settings = project_settings["maya"]["create"]["CreateUnrealStaticMesh"]
-        self.collision_prefixes = settings["collision_prefixes"]
-
     def get_dynamic_data(
         self, variant, task_name, asset_doc, project_name, host_name, instance
     ):

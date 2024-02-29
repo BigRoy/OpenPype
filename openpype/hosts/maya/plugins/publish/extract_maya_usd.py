@@ -289,6 +289,14 @@ class ExtractMayaUsd(publish.Extractor,
                                                          False)
 
         def parse_attr_str(attr_str):
+            """Return list of strings from `a,b,c,,d` to `[a, b, c, d]`.
+
+            Args:
+                attr_str (str): Concatenated attributes by comma
+
+            Returns:
+                List[str]: list of attributes
+            """
             result = list()
             for attr in attr_str.split(","):
                 attr = attr.strip()

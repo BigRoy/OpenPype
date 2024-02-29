@@ -28,6 +28,9 @@ class MultiverseUsdLoader(load.LoaderPlugin):
     icon = "code-fork"
     color = "orange"
 
+    # TODO: Set via settings
+    enabled = cmds.pluginInfo("MultiverseForMaya", query=True, loaded=True)
+
     def load(self, context, name=None, namespace=None, options=None):
         asset = context['asset']['name']
         namespace = namespace or unique_namespace(

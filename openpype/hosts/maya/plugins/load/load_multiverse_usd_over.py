@@ -35,6 +35,9 @@ class MultiverseUsdOverLoader(load.LoaderPlugin):
         )
     ]
 
+    # TODO: Set via settings
+    enabled = cmds.pluginInfo("MultiverseForMaya", query=True, loaded=True)
+
     def load(self, context, name=None, namespace=None, options=None):
         current_usd = cmds.ls(selection=True,
                               type="mvUsdCompoundShape",

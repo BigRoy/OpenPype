@@ -1,12 +1,14 @@
 import json
 import copy
+import contextlib
 from collections import defaultdict
-from typing import Union
+from typing import Union, Optional
 
 from openpype.client import (
     get_version_by_id,
     get_last_version_by_subset_id,
 )
+from openpype.pipeline.colorspace import get_remapped_colorspace_to_native
 from openpype.pipeline import (
     LoaderPlugin,
     get_representation_context,
@@ -21,6 +23,36 @@ from openpype.lib.transcoding import (
     IMAGE_EXTENSIONS
 )
 from openpype.lib import BoolDef
+
+
+@contextlib.contextmanager
+def project_color_science_mode(project=None, mode="davinciYRGBColorManagedv2"):
+    """Set project color science mode during context.
+
+    This is especially useful as context for setting the colorspace for media
+    pool items, because when Resolve is not set to `davinciYRGBColorManagedv2`
+    it fails to set its "Input Color Space" clip property even though it is
+    accessible and settabkle via the Resolve User Interface.
+
+    Args
+        project (Project): The active Resolve Project.
+        mode (str): The color science mode to apply during the context.
+
+    See Also:
+        https://forum.blackmagicdesign.com/viewtopic.php?f=21&t=197441
+    """
+
+    if project is None:
+        project = lib.get_current_project()
+
+    original_mode = project.GetSetting("colorScienceMode")
+    if original_mode != mode:
+        project.SetSetting("colorScienceMode", mode)
+    try:
+        yield
+    finally:
+        if project.GetSetting("colorScienceMode") != original_mode:
+            project.SetSetting("colorScienceMode", original_mode)
 
 
 def find_clip_usage(media_pool_item, project=None):
@@ -111,6 +143,13 @@ class LoadMedia(LoaderPlugin):
     clip_color = "Orange"
 
     bin_path = "Loader/{representation[context][hierarchy]}/{asset[name]}"
+
+    # cached on apply settings
+    _host_imageio_settings = None
+
+    @classmethod
+    def apply_settings(cls, project_settings, system_settings):
+        cls._host_imageio_settings = project_settings["resolve"]["imageio"]
 
     def load(self, context, name, namespace, options):
 
@@ -329,6 +368,17 @@ class LoadMedia(LoaderPlugin):
             media_pool_item.SetClipProperty(clip_property,
                                             value.format_map(context))
 
+        # Set the Resolve Input Color Space for the media.
+        colorspace = self._get_colorspace(context["representation"])
+        if colorspace:
+            with project_color_science_mode(mode="davinciYRGBColorManagedv2"):
+                result = media_pool_item.SetClipProperty("Input Color Space",
+                                                         colorspace)
+            if not result:
+                self.log.warning(
+                    "Failed to apply colorspace: %s.", colorspace
+                )
+
     def _get_filepath(self, representation: dict) -> Union[str, dict]:
 
         is_sequence = bool(representation["context"].get("frame"))
@@ -363,3 +413,30 @@ class LoadMedia(LoaderPlugin):
             "StartIndex": frame_start_handle,
             "EndIndex": frame_end_handle
         }
+
+    def _get_colorspace(self, representation: dict) -> Optional[str]:
+        """Return Resolve native colorspace from OCIO colorspace data.
+
+        Returns:
+            Optional[str]: The Resolve native colorspace name, if any mapped.
+        """
+
+        data = representation.get("data", {}).get("colorspaceData", {})
+        if not data:
+            return
+
+        ocio_colorspace = data["colorspace"]
+        if not ocio_colorspace:
+            return
+
+        resolve_colorspace = get_remapped_colorspace_to_native(
+            ocio_colorspace_name=ocio_colorspace,
+            host_name="resolve",
+            imageio_host_settings=self._host_imageio_settings
+        )
+        if resolve_colorspace:
+            return resolve_colorspace
+        else:
+            self.log.warning("No mapping from OCIO colorspace '%s' "
+                             "found to a Resolve colorspace. "
+                             "Ignoring colorspace.", ocio_colorspace)

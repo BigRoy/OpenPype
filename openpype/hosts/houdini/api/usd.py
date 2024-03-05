@@ -3,10 +3,11 @@
 import contextlib
 import logging
 import json
+import itertools
+from typing import List
 
 import hou
-from pxr import Sdf, Vt, UsdRender
-
+from pxr import Usd, Sdf, Tf, Vt, UsdRender
 
 log = logging.getLogger(__name__)
 
@@ -344,3 +345,35 @@ def get_usd_render_rop_rendersettings(rop_node, stage=None, logger=None):
         return
 
     return render_settings
+
+
+def get_schema_type_names(type_name: str) -> List[str]:
+    """Return schema type name for type name and its derived types
+
+    This can be useful for checking whether a `Sdf.PrimSpec`'s type name is of
+    a given type or any of its derived types.
+
+    Args:
+        type_name (str): The type name, like e.g. 'UsdGeomMesh'
+
+    Returns:
+        List[str]: List of schema type names and their derived types.
+
+    """
+    schema_registry = Usd.SchemaRegistry
+    type_ = Tf.Type.FindByName(type_name)
+
+    if type_ == Tf.Type.Unknown:
+        type_ = schema_registry.GetTypeFromSchemaTypeName(type_name)
+        if type_ == Tf.Type.Unknown:
+            # Type not found
+            return []
+
+    results = []
+    derived = type_.GetAllDerivedTypes()
+    for derived_type in itertools.chain([type_], derived):
+        schema_type_name = schema_registry.GetSchemaTypeName(derived_type)
+        if schema_type_name:
+            results.append(schema_type_name)
+
+    return results

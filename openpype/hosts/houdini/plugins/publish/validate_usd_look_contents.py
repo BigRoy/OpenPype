@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import inspect
-import itertools
 from typing import List, Union
 from functools import partial
 
@@ -8,30 +7,10 @@ import pyblish.api
 
 from openpype.pipeline.publish import PublishValidationError
 from openpype.hosts.houdini.api.action import SelectROPAction
+from openpype.hosts.houdini.api.usd import get_schema_type_names
 
 import hou
-from pxr import Usd, Sdf, Tf
-
-
-def get_schema_type_names(type_name: str) -> List[str]:
-    """Return schema type name for type name and its derived types"""
-    schema_registry = Usd.SchemaRegistry
-    type_ = Tf.Type.FindByName(type_name)
-
-    if type_ == Tf.Type.Unknown:
-        type_ = schema_registry.GetTypeFromSchemaTypeName(type_name)
-        if type_ == Tf.Type.Unknown:
-            # Type not found
-            return []
-
-    results = []
-    derived = type_.GetAllDerivedTypes()
-    for derived_type in itertools.chain([type_], derived):
-        schema_type_name = schema_registry.GetSchemaTypeName(derived_type)
-        if schema_type_name:
-            results.append(schema_type_name)
-
-    return results
+from pxr import Sdf
 
 
 def get_applied_items(list_proxy) -> List[Union[Sdf.Reference, Sdf.Payload]]:

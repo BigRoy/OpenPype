@@ -97,6 +97,9 @@ class FilePathLoader(load.LoaderPlugin):
                                     parm)
         node.setParmTemplateGroup(parm_template_group)
 
+    def switch(self, container, representation):
+        self.update(container, representation)
+
     def remove(self, container):
 
         node = container["node"]

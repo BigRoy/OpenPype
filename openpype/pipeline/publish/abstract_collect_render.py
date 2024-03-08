@@ -223,6 +223,14 @@ class AbstractCollectRender(pyblish.api.ContextPlugin):
             transfer_id = getattr(render_instance, "id")
             if transfer_id:
                 instance._id = transfer_id
+                # The `instance_id` data may be overridden on the Creator
+                # to e.g. maybe make unique by node name instead of uuid,
+                # like in Maya, Fusion, Houdini integration.
+                # This transfers that unique (named) instance id.
+                # This transfer logic is currently (only?) used in Fusion.
+                transfer_instance_id = getattr(render_instance, "instance_id")
+                if transfer_instance_id:
+                    instance.data["instance_id"] = transfer_instance_id
 
             instance.data["label"] = render_instance.label
             instance.data.update(render_instance_dict)

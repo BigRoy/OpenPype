@@ -3,8 +3,12 @@ import sys
 import re
 import contextlib
 
+from qtpy import QtCore
+
 from openpype.lib import Logger
 from openpype.pipeline.context_tools import get_current_project_asset
+from openpype.pipeline import registered_host
+from openpype.pipeline.create import CreateContext
 
 self = sys.modules[__name__]
 self._project = None
@@ -51,9 +55,11 @@ def update_frame_range(start, end, comp=None, set_render_range=True,
         comp.SetAttrs(attrs)
 
 
-def set_asset_framerange():
+def set_asset_framerange(asset_doc=None):
     """Set Comp's frame range based on current asset"""
-    asset_doc = get_current_project_asset()
+    if asset_doc is None:
+        asset_doc = get_current_project_asset()
+
     start = asset_doc["data"]["frameStart"]
     end = asset_doc["data"]["frameEnd"]
     handle_start = asset_doc["data"]["handleStart"]
@@ -63,9 +69,23 @@ def set_asset_framerange():
                        handle_end=handle_end)
 
 
-def set_asset_resolution():
+def set_asset_fps(asset_doc=None):
+    """Set Comp's frame rate (FPS) to based on current asset"""
+    if asset_doc is None:
+        asset_doc = get_current_project_asset()
+
+    fps = float(asset_doc["data"].get("fps", 24.0))
+    comp = get_current_comp()
+    comp.SetPrefs({
+        "Comp.FrameFormat.Rate": fps,
+    })
+
+
+def set_asset_resolution(asset_doc=None):
     """Set Comp's resolution width x height default based on current asset"""
-    asset_doc = get_current_project_asset()
+    if asset_doc is None:
+        asset_doc = get_current_project_asset()
+
     width = asset_doc["data"]["resolutionWidth"]
     height = asset_doc["data"]["resolutionHeight"]
     comp = get_current_comp()
@@ -288,3 +308,81 @@ def comp_lock_and_undo_chunk(
     finally:
         comp.Unlock()
         comp.EndUndo(keep_undo)
+
+
+def update_content_on_context_change():
+    """Update all Creator instances to current asset"""
+    host = registered_host()
+    context = host.get_current_context()
+    asset = context["asset_name"]
+    task = context["task_name"]
+
+    create_context = CreateContext(host, reset=True)
+
+    for instance in create_context.instances:
+        instance_asset = instance.get("asset")
+        if instance_asset and instance_asset != asset:
+            instance["asset"] = asset
+        instance_task = instance.get("task")
+        if instance_task and instance_task != task:
+            instance["task"] = task
+
+    create_context.save_changes()
+
+
+def prompt_reset_context():
+    """Prompt the user what context settings to reset.
+
+    This prompt is used on saving to a different task to allow the scene to
+    get matched to the new context.
+
+    """
+    # TODO: Cleanup this prototyped mess of imports and odd dialog
+    # TODO: Reduce code duplication with the implementation in Maya+Houdini
+    import openpype.tools.utils.widgets as widgets
+    from qtpy import QtWidgets
+    import qargparse  # noqa
+    from openpype.style import load_stylesheet
+
+    option_labels = {
+        "fps": "FPS",
+        "frame_range": "Frame Range",
+        "resolution": "Comp Resolution",
+        "instances": "Publish instances asset",
+    }
+    definitions = [
+        qargparse.Boolean(key, label=label, default=True)
+        for key, label in option_labels.items()
+    ]
+
+    dialog = widgets.OptionDialog()
+    dialog.setWindowFlags(
+        dialog.windowFlags() | QtCore.Qt.WindowStaysOnTopHint
+    )
+    dialog.create(definitions)
+    dialog.setWindowTitle("Saving to different context. Reset options")
+    dialog.setStyleSheet(load_stylesheet())
+
+    # Insert descriptive label into the pup-up
+    label = QtWidgets.QLabel("You are saving your scene into a different task."
+                             "\n\n"
+                             "Would you like to reset some settings for the "
+                             "for the new context?\n")
+    dialog.layout().insertWidget(0, label)
+
+    if not dialog.exec_():
+        return None
+
+    options = dialog.parse()
+    asset_doc = get_current_project_asset()
+    if options.get("frame_range", True):
+        set_asset_framerange(asset_doc)
+
+    if options.get("fps", True):
+        set_asset_fps(asset_doc)
+
+    if options.get("resolution", True):
+        set_asset_resolution(asset_doc)
+
+    if options.get("instances", True):
+        update_content_on_context_change()

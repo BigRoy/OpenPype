@@ -496,11 +496,13 @@ def reset_framerange(fps=True, frame_range=True):
             log.warning("No edit information found for %s" % asset_name)
             return
 
-        handle_start = asset_data.get("handleStart", 0)
-        handle_end = asset_data.get("handleEnd", 0)
-
-        frame_start -= int(handle_start)
-        frame_end += int(handle_end)
+        # COLORBLEED Edit: Do not include handles
+        # TODO(Colorbleed): Make this a project setting
+        # handle_start = asset_data.get("handleStart", 0)
+        # handle_end = asset_data.get("handleEnd", 0)
+        #
+        # frame_start -= int(handle_start)
+        # frame_end += int(handle_end)
 
         hou.playbar.setFrameRange(frame_start, frame_end)
         hou.playbar.setPlaybackRange(frame_start, frame_end)

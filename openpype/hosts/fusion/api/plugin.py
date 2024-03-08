@@ -114,17 +114,16 @@ class GenericCreateSaver(Creator):
         if "subset" not in data:
             return
 
-        original_subset = tool.GetData("openpype.subset")
         original_format = tool.GetData(
             "openpype.creator_attributes.image_format"
         )
-
-        subset = data["subset"]
         if (
-            original_subset != subset
+            tool.GetData("openpype.subset") != data["subset"]
+            or tool.GetData("openpype.task") != data["task"]
+            or tool.GetData("openpype.asset") != data["asset"]
             or original_format != data["creator_attributes"]["image_format"]
         ):
-            self._configure_saver_tool(data, tool, subset)
+            self._configure_saver_tool(data, tool, subset=data["subset"])
 
     def _configure_saver_tool(self, data, tool, subset):
         formatting_data = deepcopy(data)
@@ -149,9 +148,10 @@ class GenericCreateSaver(Creator):
 
         # build file path to render
         filepath = self.temp_rendering_path_template.format(**formatting_data)
-
         comp = get_current_comp()
-        tool["Clip"] = comp.ReverseMapPath(os.path.normpath(filepath))
+        filepath = comp.ReverseMapPath(os.path.normpath(filepath))
+        print(f"Setting {tool.Name} render path: {filepath}")
+        tool["Clip"] = filepath
 
         # Rename tool
         if tool.Name != subset:

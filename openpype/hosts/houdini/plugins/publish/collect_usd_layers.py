@@ -134,6 +134,7 @@ class CollectUsdLayers(pyblish.api.InstancePlugin):
             layer_inst.data["subset"] = subset
             layer_inst.data["label"] = label
             layer_inst.data["asset"] = instance.data["asset"]
+            layer_inst.data["task"] = instance.data.get("task")
             layer_inst.data["instance_node"] = instance.data["instance_node"]
             layer_inst.data["render"] = False
             layer_inst.data["output_node"] = creator_node

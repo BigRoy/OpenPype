@@ -11,6 +11,7 @@ from openpype.hosts.houdini.api.action import SelectROPAction
 from openpype.hosts.houdini.api.usd import get_schema_type_names
 
 import hou
+from pxr import Sdf, UsdShade
 
 
 class ValidateLookShaderDefs(pyblish.api.InstancePlugin,

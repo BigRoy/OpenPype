@@ -36,7 +36,8 @@ def project_color_science_mode(project=None, mode="davinciYRGBColorManagedv2"):
 
     Args
         project (Project): The active Resolve Project.
-        mode (str): The color science mode to apply during the context.
+        mode (Optional[str]): The color science mode to apply during the
+            context. Defaults to 'davinciYRGBColorManagedv2'
 
     See Also:
         https://forum.blackmagicdesign.com/viewtopic.php?f=21&t=197441
@@ -53,6 +54,30 @@ def project_color_science_mode(project=None, mode="davinciYRGBColorManagedv2"):
     finally:
         if project.GetSetting("colorScienceMode") != original_mode:
             project.SetSetting("colorScienceMode", original_mode)
+
+
+def set_colorspace(media_pool_item,
+                   colorspace,
+                   mode="davinciYRGBColorManagedv2"):
+    """Set MediaPoolItem colorspace.
+
+    This implements a workaround that you cannot set the input colorspace
+    unless the Resolve project's color science mode is set to
+    `davinciYRGBColorManagedv2`.
+
+    Args:
+        media_pool_item (MediaPoolItem): The media pool item.
+        colorspace (str): The colorspace to apply.
+        mode (Optional[str]): The Resolve project color science mode to be in
+            while setting the colorspace.
+            Defaults to 'davinciYRGBColorManagedv2'
+
+    Returns:
+        bool: Whether applying the colorspace succeeded.
+
+    """
+    with project_color_science_mode(mode=mode):
+        return media_pool_item.SetClipProperty("Input Color Space", colorspace)
 
 
 def find_clip_usage(media_pool_item, project=None):
@@ -235,9 +260,17 @@ class LoadMedia(LoaderPlugin):
         # metadata gets removed
         data = json.loads(item.GetMetadata(lib.pype_tag_name))
 
+        # Get metadata to preserve after the clip replacement
+        # TODO: Maybe preserve more, like LUT, Alpha Mode, Input Sizing Preset
+        colorspace_before = item.GetClipProperty("Input Color Space")
+
         # Update path
-        path = self._get_filepath(representation)
-        item.ReplaceClip(path)
+        path = get_representation_path(representation)
+        success = item.ReplaceClip(path)
+        if not success:
+            raise RuntimeError(
+                f"Failed to replace media pool item clip to filepath: {path}"
+            )
 
         # Update the metadata
         update_data = self._get_container_data(representation)
@@ -246,6 +279,18 @@ class LoadMedia(LoaderPlugin):
 
         context = get_representation_context(representation)
         self._set_metadata(media_pool_item=item, context=context)
+
+        # If no specific colorspace is set then we want to preserve the
+        # colorspace a user might have set before the clip replacement
+        if (
+                item.GetClipProperty("Input Color Space") == "Project"
+                and colorspace_before != "Project"
+        ):
+            result = set_colorspace(item, colorspace_before)
+            if not result:
+                self.log.warning(
+                    "Failed to re-apply colorspace: %s.", colorspace_before
+                )
 
         # Update the clip color
         color = self.get_item_color(representation)
@@ -371,9 +416,7 @@ class LoadMedia(LoaderPlugin):
         # Set the Resolve Input Color Space for the media.
         colorspace = self._get_colorspace(context["representation"])
         if colorspace:
-            with project_color_science_mode(mode="davinciYRGBColorManagedv2"):
-                result = media_pool_item.SetClipProperty("Input Color Space",
-                                                         colorspace)
+            result = set_colorspace(media_pool_item, colorspace)
             if not result:
                 self.log.warning(
                     "Failed to apply colorspace: %s.", colorspace

@@ -3,12 +3,11 @@
 import os
 import shutil
 
-import openpype.api
-from avalon import harmony
-import openpype.hosts.harmony
+from openpype.pipeline import publish
+import openpype.hosts.harmony.api as harmony
 
 
-class ExtractTemplate(openpype.api.Extractor):
+class ExtractTemplate(publish.Extractor):
     """Extract the connected nodes to the composite instance."""
 
     label = "Extract Template"
@@ -50,7 +49,7 @@ class ExtractTemplate(openpype.api.Extractor):
             dependencies.remove(instance.data["setMembers"][0])
 
         # Export template.
-        openpype.hosts.harmony.api.export_template(
+        harmony.export_template(
             unique_backdrops, dependencies, filepath
         )
 
@@ -76,7 +75,7 @@ class ExtractTemplate(openpype.api.Extractor):
             instance.data["representations"] = [representation]
 
         instance.data["version_name"] = "{}_{}".format(
-            instance.data["subset"], os.environ["AVALON_TASK"])
+            instance.data["subset"], instance.context.data["task"])
 
     def get_backdrops(self, node: str) -> list:
         """Get backdrops for the node.

@@ -17,13 +17,71 @@ SHAPE_ATTRS = ["castsShadows",
                "visibleInRefractions",
                "doubleSided",
                "opposite"]
+SHAPE_ATTRS = set(SHAPE_ATTRS)
 
-RENDERER_NODE_TYPES = [
+
+def get_pxr_multitexture_file_attrs(node):
+    attrs = []
+    for i in range(9):
+        if cmds.attributeQuery("filename{}".format(i), node=node, ex=True):
+            file = cmds.getAttr("{}.filename{}".format(node, i))
+            if file:
+                attrs.append("filename{}".format(i))
+    return attrs
+
+
+FILE_NODES = {
+    # maya
+    "file": "fileTextureName",
+    # arnold (mtoa)
+    "aiImage": "filename",
     # redshift
-    "RedshiftMeshParameters"
+    "RedshiftNormalMap": "tex0",
+    # renderman
+    "PxrBump": "filename",
+    "PxrNormalMap": "filename",
+    "PxrMultiTexture": get_pxr_multitexture_file_attrs,
+    "PxrPtexture": "filename",
+    "PxrTexture": "filename"
+}
+
+RENDER_SET_TYPES = [
+    "VRayDisplacement",
+    "VRayLightMesh",
+    "VRayObjectProperties",
+    "RedshiftObjectId",
+    "RedshiftMeshParameters",
 ]
 
-SHAPE_ATTRS = set(SHAPE_ATTRS)
+# Keep only node types that actually exist
+all_node_types = set(cmds.allNodeTypes())
+for node_type in list(FILE_NODES.keys()):
+    if node_type not in all_node_types:
+        FILE_NODES.pop(node_type)
+
+for node_type in RENDER_SET_TYPES:
+    if node_type not in all_node_types:
+        RENDER_SET_TYPES.remove(node_type)
+del all_node_types
+
+# Cache pixar dependency node types so we can perform a type lookup against it
+PXR_NODES = set()
+if cmds.pluginInfo("RenderMan_for_Maya", query=True, loaded=True):
+    PXR_NODES = set(
+        cmds.pluginInfo("RenderMan_for_Maya",
+                        query=True,
+                        dependNode=True)
+    )
+
+
+def get_attributes(dictionary, attr, node=None):
+    # type: (dict, str, str) -> list
+    if callable(dictionary[attr]):
+        val = dictionary[attr](node)
+    else:
+        val = dictionary.get(attr, [])
+
+    return val if isinstance(val, list) else [val]
 
 
 def get_look_attrs(node):
@@ -51,15 +109,14 @@ def get_look_attrs(node):
     if cmds.objectType(node, isAType="shape"):
         attrs = cmds.listAttr(node, changedSinceFileOpen=True) or []
         for attr in attrs:
-            if attr in SHAPE_ATTRS:
+            if attr in SHAPE_ATTRS or \
+                    attr not in SHAPE_ATTRS and attr.startswith('ai'):
                 result.append(attr)
-            elif attr.startswith('ai'):
-                result.append(attr)
-
     return result
 
 
-def node_uses_image_sequence(node):
+def node_uses_image_sequence(node, node_path):
+    # type: (str, str) -> bool
     """Return whether file node uses an image sequence or single image.
 
     Determine if a node uses an image sequence or just a single image,
@@ -67,6 +124,7 @@ def node_uses_image_sequence(node):
 
     Args:
         node (str): Name of the Maya node
+        node_path (str): The file path of the node
 
     Returns:
         bool: True if node uses an image sequence
@@ -74,13 +132,18 @@ def node_uses_image_sequence(node):
     """
 
     # useFrameExtension indicates an explicit image sequence
-    node_path = get_file_node_path(node).lower()
+    try:
+        use_frame_extension = cmds.getAttr('%s.useFrameExtension' % node)
+    except ValueError:
+        use_frame_extension = False
+    if use_frame_extension:
+        return True
 
     # The following tokens imply a sequence
-    patterns = ["<udim>", "<tile>", "<uvtile>", "u<u>_v<v>", "<frame0"]
-
-    return (cmds.getAttr('%s.useFrameExtension' % node) or
-            any(pattern in node_path for pattern in patterns))
+    patterns = ["<udim>", "<tile>", "<uvtile>",
+                "u<u>_v<v>", "<frame0", "<f4>"]
+    node_path_lowered = node_path.lower()
+    return any(pattern in node_path_lowered for pattern in patterns)
 
 
 def seq_to_glob(path):
@@ -137,14 +200,15 @@ def seq_to_glob(path):
         return path
 
 
-def get_file_node_path(node):
+def get_file_node_paths(node):
+    # type: (str) -> list
     """Get the file path used by a Maya file node.
 
     Args:
         node (str): Name of the Maya file node
 
     Returns:
-        str: the file path in use
+        list: the file paths in use
 
     """
     # if the path appears to be sequence, use computedFileTextureNamePattern,
@@ -163,15 +227,20 @@ def get_file_node_path(node):
                     "<uvtile>"]
         lower = texture_pattern.lower()
         if any(pattern in lower for pattern in patterns):
-            return texture_pattern
+            return [texture_pattern]
 
-    if cmds.nodeType(node) == 'aiImage':
-        return cmds.getAttr('{0}.filename'.format(node))
-    if cmds.nodeType(node) == 'RedshiftNormalMap':
-        return cmds.getAttr('{}.tex0'.format(node))
+    try:
+        file_attributes = get_attributes(
+            FILE_NODES, cmds.nodeType(node), node)
+    except AttributeError:
+        file_attributes = "fileTextureName"
 
-    # otherwise use fileTextureName
-    return cmds.getAttr('{0}.fileTextureName'.format(node))
+    files = []
+    for file_attr in file_attributes:
+        if cmds.attributeQuery(file_attr, node=node, exists=True):
+            files.append(cmds.getAttr("{}.{}".format(node, file_attr)))
+
+    return files
 
 
 def get_file_node_files(node):
@@ -185,16 +254,18 @@ def get_file_node_files(node):
         list: List of full file paths.
 
     """
+    paths = get_file_node_paths(node)
 
-    path = get_file_node_path(node)
-    path = cmds.workspace(expandName=path)
-    if node_uses_image_sequence(node):
-        glob_pattern = seq_to_glob(path)
-        return glob.glob(glob_pattern)
-    elif os.path.exists(path):
-        return [path]
-    else:
-        return []
+    # For sequences get all files and filter to only existing files
+    result = []
+    for path in paths:
+        if node_uses_image_sequence(node, path):
+            glob_pattern = seq_to_glob(path)
+            result.extend(glob.glob(glob_pattern))
+        elif os.path.exists(path):
+            result.append(path)
+
+    return result
 
 
 class CollectLook(pyblish.api.InstancePlugin):
@@ -209,7 +280,7 @@ class CollectLook(pyblish.api.InstancePlugin):
     membership relations.
 
     Collects:
-        lookAttribtutes (list): Nodes in instance with their altered attributes
+        lookAttributes (list): Nodes in instance with their altered attributes
         lookSetRelations (list): Sets and their memberships
         lookSets (list): List of set names included in the look
 
@@ -234,82 +305,41 @@ class CollectLook(pyblish.api.InstancePlugin):
             instance: Instance to collect.
 
         """
-        self.log.info("Looking for look associations "
-                      "for %s" % instance.data['name'])
+        self.log.debug("Looking for look associations "
+                       "for %s" % instance.data['name'])
+
+        # Lookup set (optimization)
+        instance_lookup = set(cmds.ls(instance, long=True))
 
         # Discover related object sets
-        self.log.info("Gathering sets..")
+        self.log.debug("Gathering sets ...")
         sets = self.collect_sets(instance)
 
         # Lookup set (optimization)
         instance_lookup = set(cmds.ls(instance, long=True))
 
-        self.log.info("Gathering set relations..")
-        # Ensure iteration happen in a list so we can remove keys from the
+        self.log.debug("Gathering set relations ...")
+        # Ensure iteration happen in a list to allow removing keys from the
         # dict within the loop
-
-        # skipped types of attribute on render specific nodes
-        disabled_types = ["message", "TdataCompound"]
-
         for obj_set in list(sets):
             self.log.debug("From {}".format(obj_set))
-
-            # if node is specified as renderer node type, it will be
-            # serialized with its attributes.
-            if cmds.nodeType(obj_set) in RENDERER_NODE_TYPES:
-                self.log.info("- {} is {}".format(
-                    obj_set, cmds.nodeType(obj_set)))
-
-                node_attrs = []
-
-                # serialize its attributes so they can be recreated on look
-                # load.
-                for attr in cmds.listAttr(obj_set):
-                    # skip publishedNodeInfo attributes as they break
-                    # getAttr() and we don't need them anyway
-                    if attr.startswith("publishedNodeInfo"):
-                        continue
-
-                    # skip attributes types defined in 'disabled_type' list
-                    if cmds.getAttr("{}.{}".format(obj_set, attr), type=True) in disabled_types:  # noqa
-                        continue
-
-                    node_attrs.append((
-                        attr,
-                        cmds.getAttr("{}.{}".format(obj_set, attr)),
-                        cmds.getAttr(
-                            "{}.{}".format(obj_set, attr), type=True)
-                    ))
-
-                for member in cmds.ls(
-                        cmds.sets(obj_set, query=True), long=True):
-                    member_data = self.collect_member_data(member,
-                                                           instance_lookup)
-                    if not member_data:
-                        continue
-
-                    # Add information of the node to the members list
-                    sets[obj_set]["members"].append(member_data)
-
             # Get all nodes of the current objectSet (shadingEngine)
             for member in cmds.ls(cmds.sets(obj_set, query=True), long=True):
                 member_data = self.collect_member_data(member,
                                                        instance_lookup)
-                if not member_data:
-                    continue
-
-                # Add information of the node to the members list
-                sets[obj_set]["members"].append(member_data)
+                if member_data:
+                    # Add information of the node to the members list
+                    sets[obj_set]["members"].append(member_data)
 
             # Remove sets that didn't have any members assigned in the end
             # Thus the data will be limited to only what we need.
-            self.log.info("obj_set {}".format(sets[obj_set]))
             if not sets[obj_set]["members"]:
-                self.log.info(
-                    "Removing redundant set information: {}".format(obj_set))
+                self.log.debug(
+                    "Removing redundant set information: {}".format(obj_set)
+                )
                 sets.pop(obj_set, None)
 
-        self.log.info("Gathering attribute changes to instance members..")
+        self.log.debug("Gathering attribute changes to instance members..")
         attributes = self.collect_attributes_changed(instance)
 
         # Store data on the instance
@@ -320,71 +350,79 @@ class CollectLook(pyblish.api.InstancePlugin):
 
         # Collect file nodes used by shading engines (if we have any)
         files = []
-        look_sets = sets.keys()
+        look_sets = list(sets.keys())
         shader_attrs = [
             "surfaceShader",
             "volumeShader",
             "displacementShader",
             "aiSurfaceShader",
-            "aiVolumeShader"]
+            "aiVolumeShader",
+            "rman__surface",
+            "rman__displacement"
+        ]
         if look_sets:
-            materials = []
+            self.log.debug("Found look sets: {}".format(look_sets))
 
+            # Get all material attrs for all look sets to retrieve their inputs
+            existing_attrs = []
             for look in look_sets:
-                for at in shader_attrs:
-                    try:
-                        con = cmds.listConnections("{}.{}".format(look, at))
-                    except ValueError:
-                        # skip attributes that are invalid in current
-                        # context. For example in the case where
-                        # Arnold is not enabled.
-                        continue
-                    if con:
-                        materials.extend(con)
+                for attr in shader_attrs:
+                    if cmds.attributeQuery(attr, node=look, exists=True):
+                        existing_attrs.append("{}.{}".format(look, attr))
 
-            self.log.info("Found materials:\n{}".format(materials))
+            materials = cmds.listConnections(existing_attrs,
+                                             source=True,
+                                             destination=False) or []
 
-            self.log.info("Found the following sets:\n{}".format(look_sets))
+            self.log.debug("Found materials:\n{}".format(materials))
+
+            self.log.debug("Found the following sets:\n{}".format(look_sets))
             # Get the entire node chain of the look sets
-            # history = cmds.listHistory(look_sets)
-            history = []
-            for material in materials:
-                history.extend(cmds.listHistory(material))
+            # history = cmds.listHistory(look_sets, allConnections=True)
+            # if materials list is empty, listHistory() will crash with
+            # RuntimeError
+            history = set()
+            if materials:
+                history = set(
+                    cmds.listHistory(materials, allConnections=True))
 
-            # handle VrayPluginNodeMtl node - see #1397
-            vray_plugin_nodes = cmds.ls(
-                history, type="VRayPluginNodeMtl", long=True)
-            for vray_node in vray_plugin_nodes:
-                history.extend(cmds.listHistory(vray_node))
-
+            # Since we retrieved history only of the connected materials
+            # connected to the look sets above we now add direct history
+            # for some of the look sets directly
             # handling render attribute sets
-            render_set_types = [
-                "VRayDisplacement",
-                "VRayLightMesh",
-                "VRayObjectProperties",
-                "RedshiftObjectId",
-                "RedshiftMeshParameters",
-            ]
-            render_sets = cmds.ls(look_sets, type=render_set_types)
-            if render_sets:
-                history.extend(
-                    cmds.listHistory(render_sets,
-                                     future=False,
-                                     pruneDagObjects=True)
-                    or []
-                )
 
-            files = cmds.ls(history, type="file", long=True)
-            files.extend(cmds.ls(history, type="aiImage", long=True))
-            files.extend(cmds.ls(history, type="RedshiftNormalMap", long=True))
+            # Maya (at least 2024) crashes with Warning when render set type
+            # isn't available. cmds.ls() will return empty list
+            if RENDER_SET_TYPES:
+                render_sets = cmds.ls(look_sets, type=RENDER_SET_TYPES)
+                if render_sets:
+                    history.update(
+                        cmds.listHistory(render_sets,
+                                         future=False,
+                                         pruneDagObjects=True)
+                        or []
+                    )
 
-        self.log.info("Collected file nodes:\n{}".format(files))
+            # Ensure unique entries only
+            history = list(history)
+
+            files = cmds.ls(history,
+                            # It's important only node types are passed that
+                            # exist (e.g. for loaded plugins) because otherwise
+                            # the result will turn back empty
+                            type=list(FILE_NODES.keys()),
+                            long=True)
+
+            # Sort for log readability
+            files.sort()
+
+        self.log.debug("Collected file nodes:\n{}".format(files))
         # Collect textures if any file nodes are found
-        instance.data["resources"] = []
-        for n in files:
-            instance.data["resources"].append(self.collect_resource(n))
-
-        self.log.info("Collected resources: {}".format(instance.data["resources"]))
+        resources = []
+        for node in files:  # sort for log readability
+            resources.extend(self.collect_resources(node))
+        instance.data["resources"] = resources
+        self.log.debug("Collected resources: {}".format(resources))
 
         # Log warning when no relevant sets were retrieved for the look.
         if (
@@ -399,7 +437,7 @@ class CollectLook(pyblish.api.InstancePlugin):
         instance.extend(shader for shader in look_sets if shader
                         not in instance_lookup)
 
-        self.log.info("Collected look for %s" % instance)
+        self.log.debug("Collected look for %s" % instance)
 
     def collect_sets(self, instance):
         """Collect all objectSets which are of importance for publishing
@@ -479,30 +517,37 @@ class CollectLook(pyblish.api.InstancePlugin):
             # Collect changes to "custom" attributes
             node_attrs = get_look_attrs(node)
 
-            self.log.info(
-                "Node \"{0}\" attributes: {1}".format(node, node_attrs)
-            )
-
             # Only include if there are any properties we care about
             if not node_attrs:
                 continue
+
+            self.log.debug(
+                "Node \"{0}\" attributes: {1}".format(node, node_attrs)
+            )
 
             node_attributes = {}
             for attr in node_attrs:
                 if not cmds.attributeQuery(attr, node=node, exists=True):
                     continue
                 attribute = "{}.{}".format(node, attr)
+                # We don't support mixed-type attributes yet.
+                if cmds.attributeQuery(attr, node=node, multi=True):
+                    self.log.warning("Attribute '{}' is mixed-type and is "
+                                     "not supported yet.".format(attribute))
+                    continue
                 if cmds.getAttr(attribute, type=True) == "message":
                     continue
-                node_attributes[attr] = cmds.getAttr(attribute)
-
+                node_attributes[attr] = cmds.getAttr(attribute, asString=True)
+            # Only include if there are any properties we care about
+            if not node_attributes:
+                continue
             attributes.append({"name": node,
                                "uuid": lib.get_id(node),
                                "attributes": node_attributes})
 
         return attributes
 
-    def collect_resource(self, node):
+    def collect_resources(self, node):
         """Collect the link to the file(s) used (resource)
         Args:
             node (str): name of the node
@@ -510,68 +555,76 @@ class CollectLook(pyblish.api.InstancePlugin):
         Returns:
             dict
         """
-
-        self.log.debug("processing: {}".format(node))
-        if cmds.nodeType(node) not in ["file", "aiImage", "RedshiftNormalMap"]:
+        if cmds.nodeType(node) not in FILE_NODES:
             self.log.error(
                 "Unsupported file node: {}".format(cmds.nodeType(node)))
             raise AssertionError("Unsupported file node")
 
-        if cmds.nodeType(node) == 'file':
-            self.log.debug("  - file node")
-            attribute = "{}.fileTextureName".format(node)
-            computed_attribute = "{}.computedFileTextureNamePattern".format(node)
-        elif cmds.nodeType(node) == 'aiImage':
-            self.log.debug("aiImage node")
-            attribute = "{}.filename".format(node)
-            computed_attribute = attribute
-        elif cmds.nodeType(node) == 'RedshiftNormalMap':
-            self.log.debug("RedshiftNormalMap node")
-            attribute = "{}.tex0".format(node)
-            computed_attribute = attribute
+        self.log.debug(
+            "Collecting resource: {} ({})".format(node, cmds.nodeType(node))
+        )
 
-        source = cmds.getAttr(attribute)
-        self.log.info("  - file source: {}".format(source))
-        color_space_attr = "{}.colorSpace".format(node)
-        try:
-            color_space = cmds.getAttr(color_space_attr)
-        except ValueError:
-            # node doesn't have colorspace attribute
-            color_space = "Raw"
-        # Compare with the computed file path, e.g. the one with the <UDIM>
-        # pattern in it, to generate some logging information about this
-        # difference
-        # computed_attribute = "{}.computedFileTextureNamePattern".format(node)
-        computed_source = cmds.getAttr(computed_attribute)
-        if source != computed_source:
-            self.log.debug("Detected computed file pattern difference "
-                           "from original pattern: {0} "
-                           "({1} -> {2})".format(node,
-                                                 source,
-                                                 computed_source))
+        attributes = get_attributes(FILE_NODES, cmds.nodeType(node), node)
+        for attribute in attributes:
+            source = cmds.getAttr("{}.{}".format(
+                node,
+                attribute
+            ))
 
-        # We replace backslashes with forward slashes because V-Ray
-        # can't handle the UDIM files with the backslashes in the
-        # paths as the computed patterns
-        source = source.replace("\\", "/")
+            self.log.debug("  - file source: {}".format(source))
+            color_space_attr = "{}.colorSpace".format(node)
+            try:
+                color_space = cmds.getAttr(color_space_attr)
+            except ValueError:
+                # node doesn't have colorspace attribute
+                color_space = "Raw"
 
-        files = get_file_node_files(node)
-        if len(files) == 0:
-            self.log.error("No valid files found from node `%s`" % node)
+            # Compare with the computed file path, e.g. the one with
+            # the <UDIM> pattern in it, to generate some logging information
+            # about this difference
+            # Only for file nodes with `fileTextureName` attribute
+            if attribute == "fileTextureName":
+                computed_source = cmds.getAttr(
+                    "{}.computedFileTextureNamePattern".format(node)
+                )
+                if source != computed_source:
+                    self.log.debug("Detected computed file pattern difference "
+                                   "from original pattern: {0} "
+                                   "({1} -> {2})".format(node,
+                                                         source,
+                                                         computed_source))
 
-        self.log.info("collection of resource done:")
-        self.log.info("  - node: {}".format(node))
-        self.log.info("  - attribute: {}".format(attribute))
-        self.log.info("  - source: {}".format(source))
-        self.log.info("  - file: {}".format(files))
-        self.log.info("  - color space: {}".format(color_space))
+            # renderman allows nodes to have filename attribute empty while
+            # you can have another incoming connection from different node.
+            if not source and cmds.nodeType(node) in PXR_NODES:
+                self.log.debug("Renderman: source is empty, skipping...")
+                continue
+            # We replace backslashes with forward slashes because V-Ray
+            # can't handle the UDIM files with the backslashes in the
+            # paths as the computed patterns
+            source = source.replace("\\", "/")
 
-        # Define the resource
-        return {"node": node,
-                "attribute": attribute,
+            files = get_file_node_files(node)
+            if len(files) == 0:
+                self.log.debug("No valid files found from node `%s`" % node)
+
+            self.log.debug("collection of resource done:")
+            self.log.debug("  - node: {}".format(node))
+            self.log.debug("  - attribute: {}".format(attribute))
+            self.log.debug("  - source: {}".format(source))
+            self.log.debug("  - file: {}".format(files))
+            self.log.debug("  - color space: {}".format(color_space))
+
+            # Define the resource
+            yield {
+                "node": node,
+                # here we are passing not only attribute, but with node again
+                # this should be simplified and changed extractor.
+                "attribute": "{}.{}".format(node, attribute),
                 "source": source,  # required for resources
                 "files": files,
-                "color_space": color_space}  # required for resources
+                "color_space": color_space
+            }  # required for resources
 
 
 class CollectModelRenderSets(CollectLook):

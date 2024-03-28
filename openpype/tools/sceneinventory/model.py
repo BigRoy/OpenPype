@@ -3,26 +3,35 @@ import logging
 
 from collections import defaultdict
 
-from Qt import QtCore, QtGui
-from avalon import api, io, style, schema
-from avalon.vendor import qtawesome
+from qtpy import QtCore, QtGui
+import qtawesome
 
-from avalon.lib import HeroVersionType
-from avalon.tools.models import TreeModel, Item
-
-from .lib import (
-    get_site_icons,
-    walk_hierarchy,
-    get_progress_for_repre
+from openpype.host import ILoadHost
+from openpype.client import (
+    get_asset_by_id,
+    get_subset_by_id,
+    get_version_by_id,
+    get_last_version_by_subset_id,
+    get_representation_by_id,
 )
-
+from openpype.pipeline import (
+    get_current_project_name,
+    schema,
+    HeroVersionType,
+    registered_host,
+)
+from openpype.style import get_default_entity_icon_color
+from openpype.tools.utils.models import TreeModel, Item
 from openpype.modules import ModulesManager
+
+from .lib import walk_hierarchy
 
 
 class InventoryModel(TreeModel):
     """The model for the inventory"""
 
-    Columns = ["Name", "version", "count", "family", "loader", "objectName"]
+    Columns = ["Name", "version", "count", "family",
+               "group", "loader", "objectName"]
 
     OUTDATED_COLOR = QtGui.QColor(235, 30, 30)
     CHILD_OUTDATED_COLOR = QtGui.QColor(200, 160, 30)
@@ -38,9 +47,13 @@ class InventoryModel(TreeModel):
 
         self._hierarchy_view = False
 
+        self._default_icon_color = get_default_entity_icon_color()
+
         manager = ModulesManager()
-        sync_server = manager.modules_by_name["sync_server"]
-        self.sync_enabled = sync_server.enabled
+        sync_server = manager.modules_by_name.get("sync_server")
+        self.sync_enabled = (
+            sync_server is not None and sync_server.enabled
+        )
         self._site_icons = {}
         self.active_site = self.remote_site = None
         self.active_provider = self.remote_provider = None
@@ -48,7 +61,7 @@ class InventoryModel(TreeModel):
         if not self.sync_enabled:
             return
 
-        project_name = io.Session["AVALON_PROJECT"]
+        project_name = get_current_project_name()
         active_site = sync_server.get_active_site(project_name)
         remote_site = sync_server.get_remote_site(project_name)
 
@@ -65,12 +78,15 @@ class InventoryModel(TreeModel):
                 project_name, remote_site
             )
 
-        # self.sync_server = sync_server
+        self.sync_server = sync_server
         self.active_site = active_site
         self.active_provider = active_provider
         self.remote_site = remote_site
         self.remote_provider = remote_provider
-        self._site_icons = get_site_icons()
+        self._site_icons = {
+            provider: QtGui.QIcon(icon_path)
+            for provider, icon_path in sync_server.get_site_icons().items()
+        }
         if "active_site" not in self.Columns:
             self.Columns.append("active_site")
         if "remote_site" not in self.Columns:
@@ -131,7 +147,7 @@ class InventoryModel(TreeModel):
         if role == QtCore.Qt.DecorationRole:
             if index.column() == 0:
                 # Override color
-                color = item.get("color", style.colors.default)
+                color = item.get("color", self._default_icon_color)
                 if item.get("isGroupNode"):  # group-item
                     return qtawesome.icon("fa.folder", color=color)
                 if item.get("isNotSet"):
@@ -143,8 +159,13 @@ class InventoryModel(TreeModel):
                 # Family icon
                 return item.get("familyIcon", None)
 
+            column_name = self.Columns[index.column()]
+
+            if column_name == "group" and item.get("group"):
+                return qtawesome.icon("fa.object-group",
+                                      color=get_default_entity_icon_color())
+
             if item.get("isGroupNode"):
-                column_name = self.Columns[index.column()]
                 if column_name == "active_site":
                     provider = item.get("active_site_provider")
                     return self._site_icons.get(provider)
@@ -178,88 +199,104 @@ class InventoryModel(TreeModel):
     def refresh(self, selected=None, items=None):
         """Refresh the model"""
 
-        host = api.registered_host()
-        if not items:  # for debugging or testing, injecting items from outside
-            items = host.ls()
+        host = registered_host()
+        # for debugging or testing, injecting items from outside
+        if items is None:
+            if isinstance(host, ILoadHost):
+                items = host.get_containers()
+            elif hasattr(host, "ls"):
+                items = host.ls()
+            else:
+                items = []
 
         self.clear()
-
-        if self._hierarchy_view and selected:
-
-            if not hasattr(host.pipeline, "update_hierarchy"):
-                # If host doesn't support hierarchical containers, then
-                # cherry-pick only.
-                self.add_items((item for item in items
-                                if item["objectName"] in selected))
-
-            # Update hierarchy info for all containers
-            items_by_name = {item["objectName"]: item
-                             for item in host.pipeline.update_hierarchy(items)}
-
-            selected_items = set()
-
-            def walk_children(names):
-                """Select containers and extend to chlid containers"""
-                for name in [n for n in names if n not in selected_items]:
-                    selected_items.add(name)
-                    item = items_by_name[name]
-                    yield item
-
-                    for child in walk_children(item["children"]):
-                        yield child
-
-            items = list(walk_children(selected))  # Cherry-picked and extended
-
-            # Cut unselected upstream containers
-            for item in items:
-                if not item.get("parent") in selected_items:
-                    # Parent not in selection, this is root item.
-                    item["parent"] = None
-
-            parents = [self._root_item]
-
-            # The length of `items` array is the maximum depth that a
-            # hierarchy could be.
-            # Take this as an easiest way to prevent looping forever.
-            maximum_loop = len(items)
-            count = 0
-            while items:
-                if count > maximum_loop:
-                    self.log.warning("Maximum loop count reached, possible "
-                                     "missing parent node.")
-                    break
-
-                _parents = list()
-                for parent in parents:
-                    _unparented = list()
-
-                    def _children():
-                        """Child item provider"""
-                        for item in items:
-                            if item.get("parent") == parent.get("objectName"):
-                                # (NOTE)
-                                # Since `self._root_node` has no "objectName"
-                                # entry, it will be paired with root item if
-                                # the value of key "parent" is None, or not
-                                # having the key.
-                                yield item
-                            else:
-                                # Not current parent's child, try next
-                                _unparented.append(item)
-
-                    self.add_items(_children(), parent)
-
-                    items[:] = _unparented
-
-                    # Parents of next level
-                    for group_node in parent.children():
-                        _parents += group_node.children()
-
-                parents[:] = _parents
-                count += 1
-
-        else:
+        if not selected or not self._hierarchy_view:
             self.add_items(items)
+            return
+
+        if (
+            not hasattr(host, "pipeline")
+            or not hasattr(host.pipeline, "update_hierarchy")
+        ):
+            # If host doesn't support hierarchical containers, then
+            # cherry-pick only.
+            self.add_items((
+                item
+                for item in items
+                if item["objectName"] in selected
+            ))
+            return
+
+        # TODO find out what this part does. Function 'update_hierarchy' is
+        #   available only in 'blender' at this moment.
+
+        # Update hierarchy info for all containers
+        items_by_name = {
+            item["objectName"]: item
+            for item in host.pipeline.update_hierarchy(items)
+        }
+
+        selected_items = set()
+
+        def walk_children(names):
+            """Select containers and extend to chlid containers"""
+            for name in [n for n in names if n not in selected_items]:
+                selected_items.add(name)
+                item = items_by_name[name]
+                yield item
+
+                for child in walk_children(item["children"]):
+                    yield child
+
+        items = list(walk_children(selected))  # Cherry-picked and extended
+
+        # Cut unselected upstream containers
+        for item in items:
+            if not item.get("parent") in selected_items:
+                # Parent not in selection, this is root item.
+                item["parent"] = None
+
+        parents = [self._root_item]
+
+        # The length of `items` array is the maximum depth that a
+        # hierarchy could be.
+        # Take this as an easiest way to prevent looping forever.
+        maximum_loop = len(items)
+        count = 0
+        while items:
+            if count > maximum_loop:
+                self.log.warning("Maximum loop count reached, possible "
+                                 "missing parent node.")
+                break
+
+            _parents = list()
+            for parent in parents:
+                _unparented = list()
+
+                def _children():
+                    """Child item provider"""
+                    for item in items:
+                        if item.get("parent") == parent.get("objectName"):
+                            # (NOTE)
+                            # Since `self._root_node` has no "objectName"
+                            # entry, it will be paired with root item if
+                            # the value of key "parent" is None, or not
+                            # having the key.
+                            yield item
+                        else:
+                            # Not current parent's child, try next
+                            _unparented.append(item)
+
+                self.add_items(_children(), parent)
+
+                items[:] = _unparented
+
+                # Parents of next level
+                for group_node in parent.children():
+                    _parents += group_node.children()
+
+            parents[:] = _parents
+            count += 1
 
     def add_items(self, items, parent=None):
         """Add the items to the model.
@@ -284,6 +321,9 @@ class InventoryModel(TreeModel):
             node.Item: root node which has children added based on the data
         """
 
+        # NOTE: @iLLiCiTiT this need refactor
+        project_name = get_current_project_name()
+
         self.beginResetModel()
 
         # Group by representation
@@ -297,34 +337,38 @@ class InventoryModel(TreeModel):
         for repre_id, group_dict in sorted(grouped.items()):
             group_items = group_dict["items"]
             # Get parenthood per group
-            representation = io.find_one({"_id": io.ObjectId(repre_id)})
+            representation = get_representation_by_id(
+                project_name, repre_id
+            )
             if not representation:
-                not_found["representation"].append(group_items)
+                not_found["representation"].extend(group_items)
                 not_found_ids.append(repre_id)
                 continue
 
-            version = io.find_one({"_id": representation["parent"]})
+            version = get_version_by_id(
+                project_name, representation["parent"]
+            )
             if not version:
-                not_found["version"].append(group_items)
+                not_found["version"].extend(group_items)
                 not_found_ids.append(repre_id)
                 continue
 
             elif version["type"] == "hero_version":
-                _version = io.find_one({
-                    "_id": version["version_id"]
-                })
+                _version = get_version_by_id(
+                    project_name, version["version_id"]
+                )
                 version["name"] = HeroVersionType(_version["name"])
                 version["data"] = _version["data"]
 
-            subset = io.find_one({"_id": version["parent"]})
+            subset = get_subset_by_id(project_name, version["parent"])
             if not subset:
-                not_found["subset"].append(group_items)
+                not_found["subset"].extend(group_items)
                 not_found_ids.append(repre_id)
                 continue
 
-            asset = io.find_one({"_id": subset["parent"]})
+            asset = get_asset_by_id(project_name, subset["parent"])
             if not asset:
-                not_found["asset"].append(group_items)
+                not_found["asset"].extend(group_items)
                 not_found_ids.append(repre_id)
                 continue
 
@@ -350,11 +394,11 @@ class InventoryModel(TreeModel):
 
             self.add_child(group_node, parent=parent)
 
-            for _group_items in group_items:
+            for item in group_items:
                 item_node = Item()
-                item_node["Name"] = ", ".join(
-                    [item["objectName"] for item in _group_items]
-                )
+                item_node.update(item)
+                item_node["Name"] = item.get("objectName", "NO NAME")
+                item_node["isNotFound"] = True
                 self.add_child(item_node, parent=group_node)
 
         for repre_id, group_dict in sorted(grouped.items()):
@@ -383,10 +427,9 @@ class InventoryModel(TreeModel):
 
             # Store the highest available version so the model can know
             # whether current version is currently up-to-date.
-            highest_version = io.find_one({
-                "type": "version",
-                "parent": version["parent"]
-            }, sort=[("name", -1)])
+            highest_version = get_last_version_by_subset_id(
+                project_name, version["parent"]
+            )
 
             # create the group header
             group_node = Item()
@@ -400,9 +443,10 @@ class InventoryModel(TreeModel):
             group_node["familyIcon"] = family_icon
             group_node["count"] = len(group_items)
             group_node["isGroupNode"] = True
+            group_node["group"] = subset["data"].get("subsetGroup")
 
             if self.sync_enabled:
-                progress = get_progress_for_repre(
+                progress = self.sync_server.get_progress_for_repre(
                     representation, self.active_site, self.remote_site
                 )
                 group_node["active_site"] = self.active_site
@@ -452,8 +496,13 @@ class FilterProxyModel(QtCore.QSortFilterProxyModel):
             return True
 
         # Filter by regex
-        if not self.filterRegExp().isEmpty():
-            pattern = re.escape(self.filterRegExp().pattern())
+        if hasattr(self, "filterRegExp"):
+            regex = self.filterRegExp()
+        else:
+            regex = self.filterRegularExpression()
+        pattern = regex.pattern()
+        if pattern:
+            pattern = re.escape(pattern)
 
             if not self._matches(row, parent, pattern):
                 return False

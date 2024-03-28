@@ -1,14 +1,14 @@
 """Host API required Work Files tool"""
 
 import os
-from openpype.api import Logger
+from openpype.lib import Logger
 # from .. import (
 #     get_project_manager,
 #     get_current_project
 # )
 
 
-log = Logger().get_logger(__name__)
+log = Logger.get_logger(__name__)
 
 exported_projet_ext = ".otoc"
 

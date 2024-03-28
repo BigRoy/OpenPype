@@ -3,11 +3,17 @@
 from maya import cmds
 
 import pyblish.api
-import openpype.api
+
 import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    OptionalPyblishPluginMixin,
+    PublishValidationError
+)
 
 
-class ValidateTransformNamingSuffix(pyblish.api.InstancePlugin):
+class ValidateTransformNamingSuffix(pyblish.api.InstancePlugin,
+                                    OptionalPyblishPluginMixin):
     """Validates transform suffix based on the type of its children shapes.
 
     Suffices must be:
@@ -20,6 +26,7 @@ class ValidateTransformNamingSuffix(pyblish.api.InstancePlugin):
         - nurbsSurface: _NRB
         - locator: _LOC
         - null/group: _GRP
+    Suffices can also be overridden by project settings.
 
     .. warning::
         This grabs the first child shape as a reference and doesn't use the
@@ -27,12 +34,10 @@ class ValidateTransformNamingSuffix(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ['maya']
     families = ['model']
-    category = 'cleanup'
     optional = True
-    version = (0, 1, 0)
     label = 'Suffix Naming Conventions'
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction]
     SUFFIX_NAMING_TABLE = {"mesh": ["_GEO", "_GES", "_GEP", "_OSD"],
@@ -42,6 +47,13 @@ class ValidateTransformNamingSuffix(pyblish.api.InstancePlugin):
                            "group": ["_GRP"]}
 
     ALLOW_IF_NOT_IN_SUFFIX_TABLE = True
+
+    @classmethod
+    def get_table_for_invalid(cls):
+        ss = []
+        for k, v in cls.SUFFIX_NAMING_TABLE.items():
+            ss.append(" - <b>{}</b>: {}".format(k, ", ".join(v)))
+        return "<br>".join(ss)
 
     @staticmethod
     def is_valid_name(node_name, shape_type,
@@ -103,7 +115,20 @@ class ValidateTransformNamingSuffix(pyblish.api.InstancePlugin):
             instance (:class:`pyblish.api.Instance`): published instance.
 
         """
+        if not self.is_active(instance.data):
+            return
+
         invalid = self.get_invalid(instance)
         if invalid:
-            raise ValueError("Incorrectly named geometry "
-                             "transforms: {0}".format(invalid))
+            valid = self.get_table_for_invalid()
+
+            names = "<br>".join(
+                " - {}".format(node) for node in invalid
+            )
+            valid = valid.replace("\n", "<br>")
+
+            raise PublishValidationError(
+                title="Invalid naming suffix",
+                message="Valid suffixes are:<br>{0}<br><br>"
+                        "Incorrectly named geometry transforms:<br>{1}"
+                        "".format(valid, names))

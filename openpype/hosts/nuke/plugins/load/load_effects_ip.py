@@ -1,20 +1,36 @@
-from avalon import api, style, io
-import nuke
 import json
 from collections import OrderedDict
+import six
+import nuke
+
+from openpype.client import (
+    get_version_by_id,
+    get_last_version_by_subset_id,
+)
+from openpype.pipeline import (
+    load,
+    get_current_project_name,
+    get_representation_path,
+)
 from openpype.hosts.nuke.api import lib
+from openpype.hosts.nuke.api import (
+    containerise,
+    update_container,
+    viewer_update_and_undo_stop
+)
 
 
-class LoadEffectsInputProcess(api.Loader):
+class LoadEffectsInputProcess(load.LoaderPlugin):
     """Loading colorspace soft effect exported from nukestudio"""
 
-    representations = ["effectJson"]
     families = ["effect"]
+    representations = ["*"]
+    extensions = {"json"}
 
     label = "Load Effects - Input Process"
     order = 0
     icon = "eye"
-    color = style.colors.alert
+    color = "#cc0000"
     ignore_attr = ["useLifetime"]
 
     def load(self, context, name, namespace, data):
@@ -30,8 +46,6 @@ class LoadEffectsInputProcess(api.Loader):
         Returns:
             nuke node: containerised nuke node object
         """
-        # import dependencies
-        from avalon.nuke import containerise
 
         # get main variables
         version = context['version']
@@ -49,22 +63,23 @@ class LoadEffectsInputProcess(api.Loader):
         add_keys = ["frameStart", "frameEnd", "handleStart", "handleEnd",
                     "source", "author", "fps"]
 
-        data_imprint = {"frameStart": first,
-                        "frameEnd": last,
-                        "version": vname,
-                        "colorspaceInput": colorspace,
-                        "objectName": object_name}
+        data_imprint = {
+            "frameStart": first,
+            "frameEnd": last,
+            "version": vname,
+            "colorspaceInput": colorspace,
+        }
 
         for k in add_keys:
             data_imprint.update({k: version_data[k]})
 
         # getting file path
-        file = self.fname.replace("\\", "/")
+        file = self.filepath_from_context(context).replace("\\", "/")
 
         # getting data from json file with unicode conversion
         with open(file, "r") as f:
             json_f = {self.byteify(key): self.byteify(value)
-                      for key, value in json.load(f).iteritems()}
+                      for key, value in json.load(f).items()}
 
         # get correct order of nodes by positions on track and subtrack
         nodes_order = self.reorder_nodes(json_f)
@@ -75,14 +90,16 @@ class LoadEffectsInputProcess(api.Loader):
 
         GN = nuke.createNode(
             "Group",
-            "name {}_1".format(object_name))
+            "name {}_1".format(object_name),
+            inpanel=False
+        )
 
         # adding content to the group node
         with GN:
             pre_node = nuke.createNode("Input")
             pre_node["name"].setValue("rgb")
 
-            for ef_name, ef_val in nodes_order.items():
+            for _, ef_val in nodes_order.items():
                 node = nuke.createNode(ef_val["class"])
                 for k, v in ef_val["node"].items():
                     if k in self.ignore_attr:
@@ -142,38 +159,32 @@ class LoadEffectsInputProcess(api.Loader):
 
         """
 
-        from avalon.nuke import (
-            update_container
-        )
         # get main variables
         # Get version from io
-        version = io.find_one({
-            "type": "version",
-            "_id": representation["parent"]
-        })
-        # get corresponding node
-        GN = nuke.toNode(container['objectName'])
+        project_name = get_current_project_name()
+        version_doc = get_version_by_id(project_name, representation["parent"])
 
-        file = api.get_representation_path(representation).replace("\\", "/")
-        name = container['name']
-        version_data = version.get("data", {})
-        vname = version.get("name", None)
+        # get corresponding node
+        GN = container["node"]
+
+        file = get_representation_path(representation).replace("\\", "/")
+        version_data = version_doc.get("data", {})
+        vname = version_doc.get("name", None)
         first = version_data.get("frameStart", None)
         last = version_data.get("frameEnd", None)
         workfile_first_frame = int(nuke.root()["first_frame"].getValue())
-        namespace = container['namespace']
         colorspace = version_data.get("colorspace", None)
-        object_name = "{}_{}".format(name, namespace)
 
         add_keys = ["frameStart", "frameEnd", "handleStart", "handleEnd",
                     "source", "author", "fps"]
 
-        data_imprint = {"representation": str(representation["_id"]),
-                        "frameStart": first,
-                        "frameEnd": last,
-                        "version": vname,
-                        "colorspaceInput": colorspace,
-                        "objectName": object_name}
+        data_imprint = {
+            "representation": str(representation["_id"]),
+            "frameStart": first,
+            "frameEnd": last,
+            "version": vname,
+            "colorspaceInput": colorspace,
+        }
 
         for k in add_keys:
             data_imprint.update({k: version_data[k]})
@@ -187,7 +198,7 @@ class LoadEffectsInputProcess(api.Loader):
         # getting data from json file with unicode conversion
         with open(file, "r") as f:
             json_f = {self.byteify(key): self.byteify(value)
-                      for key, value in json.load(f).iteritems()}
+                      for key, value in json.load(f).items()}
 
         # get correct order of nodes by positions on track and subtrack
         nodes_order = self.reorder_nodes(json_f)
@@ -205,7 +216,7 @@ class LoadEffectsInputProcess(api.Loader):
             pre_node = nuke.createNode("Input")
             pre_node["name"].setValue("rgb")
 
-            for ef_name, ef_val in nodes_order.items():
+            for _, ef_val in nodes_order.items():
                 node = nuke.createNode(ef_val["class"])
                 for k, v in ef_val["node"].items():
                     if k in self.ignore_attr:
@@ -239,26 +250,19 @@ class LoadEffectsInputProcess(api.Loader):
             output = nuke.createNode("Output")
             output.setInput(0, pre_node)
 
-        # # try to place it under Viewer1
-        # if not self.connect_active_viewer(GN):
-        #     nuke.delete(GN)
-        #     return
-
         # get all versions in list
-        versions = io.find({
-            "type": "version",
-            "parent": version["parent"]
-        }).distinct('name')
-
-        max_version = max(versions)
+        last_version_doc = get_last_version_by_subset_id(
+            project_name, version_doc["parent"], fields=["_id"]
+        )
 
         # change color of node
-        if version.get("name") not in [max_version]:
-            GN["tile_color"].setValue(int("0xd84f20ff", 16))
+        if version_doc["_id"] == last_version_doc["_id"]:
+            color_value = "0x3469ffff"
         else:
-            GN["tile_color"].setValue(int("0x3469ffff", 16))
+            color_value = "0xd84f20ff"
+        GN["tile_color"].setValue(int(color_value, 16))
 
-        self.log.info("udated to version: {}".format(version.get("name")))
+        self.log.info("updated to version: {}".format(version_doc.get("name")))
 
     def connect_active_viewer(self, group_node):
         """
@@ -331,7 +335,7 @@ class LoadEffectsInputProcess(api.Loader):
     def byteify(self, input):
         """
         Converts unicode strings to strings
-        It goes trought all dictionary
+        It goes through all dictionary
 
         Arguments:
             input (dict/str): input
@@ -343,11 +347,11 @@ class LoadEffectsInputProcess(api.Loader):
 
         if isinstance(input, dict):
             return {self.byteify(key): self.byteify(value)
-                    for key, value in input.iteritems()}
+                    for key, value in input.items()}
         elif isinstance(input, list):
             return [self.byteify(element) for element in input]
-        elif isinstance(input, unicode):
-            return input.encode('utf-8')
+        elif isinstance(input, six.text_type):
+            return str(input)
         else:
             return input
 
@@ -355,7 +359,6 @@ class LoadEffectsInputProcess(api.Loader):
         self.update(container, representation)
 
     def remove(self, container):
-        from avalon.nuke import viewer_update_and_undo_stop
-        node = nuke.toNode(container['objectName'])
+        node = container["node"]
         with viewer_update_and_undo_stop():
             nuke.delete(node)

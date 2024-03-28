@@ -3,17 +3,25 @@ from typing import List
 import bpy
 
 import pyblish.api
+
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    OptionalPyblishPluginMixin,
+    PublishValidationError
+)
 import openpype.hosts.blender.api.action
 
 
-class ValidateMeshHasUvs(pyblish.api.InstancePlugin):
+class ValidateMeshHasUvs(
+        pyblish.api.InstancePlugin,
+        OptionalPyblishPluginMixin,
+):
     """Validate that the current mesh has UV's."""
 
-    order = pyblish.api.ValidatorOrder
+    order = ValidateContentsOrder
     hosts = ["blender"]
     families = ["model"]
-    category = "geometry"
-    label = "Mesh Has UV's"
+    label = "Mesh Has UVs"
     actions = [openpype.hosts.blender.api.action.SelectInvalidAction]
     optional = True
 
@@ -25,7 +33,10 @@ class ValidateMeshHasUvs(pyblish.api.InstancePlugin):
         for uv_layer in obj.data.uv_layers:
             for polygon in obj.data.polygons:
                 for loop_index in polygon.loop_indices:
-                    if not uv_layer.data[loop_index].uv:
+                    if (
+                        loop_index >= len(uv_layer.data)
+                        or not uv_layer.data[loop_index].uv
+                    ):
                         return False
 
         return True
@@ -33,20 +44,23 @@ class ValidateMeshHasUvs(pyblish.api.InstancePlugin):
     @classmethod
     def get_invalid(cls, instance) -> List:
         invalid = []
-        # TODO (jasper): only check objects in the collection that will be published?
-        for obj in [
-            obj for obj in instance]:
-            try:
-                if obj.type == 'MESH':
-                    # Make sure we are in object mode.
-                    bpy.ops.object.mode_set(mode='OBJECT')
-                    if not cls.has_uvs(obj):
-                        invalid.append(obj)
-            except:
-                continue
+        for obj in instance:
+            if isinstance(obj, bpy.types.Object) and obj.type == 'MESH':
+                if obj.mode != "OBJECT":
+                    cls.log.warning(
+                        f"Mesh object {obj.name} should be in 'OBJECT' mode"
+                        " to be properly checked."
+                    )
+                if not cls.has_uvs(obj):
+                    invalid.append(obj)
         return invalid
 
     def process(self, instance):
+        if not self.is_active(instance.data):
+            return
+
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError(f"Meshes found in instance without valid UV's: {invalid}")
+            raise PublishValidationError(
+                f"Meshes found in instance without valid UV's: {invalid}"
+            )

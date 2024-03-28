@@ -1,9 +1,10 @@
+import pyblish.api
 from maya import cmds
 
-import pyblish.api
-import openpype.api
 import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api import lib
+from openpype.pipeline.publish import (
+    PublishValidationError, RepairAction, ValidateContentsOrder)
 
 
 class ValidateNodeIdsDeformedShape(pyblish.api.InstancePlugin):
@@ -16,13 +17,13 @@ class ValidateNodeIdsDeformedShape(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     families = ['look']
     hosts = ['maya']
     label = 'Deformed shape ids'
     actions = [
         openpype.hosts.maya.api.action.SelectInvalidAction,
-        openpype.api.RepairAction
+        RepairAction
     ]
 
     def process(self, instance):
@@ -32,8 +33,9 @@ class ValidateNodeIdsDeformedShape(pyblish.api.InstancePlugin):
         # if a deformer has been created on the shape
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Shapes found that are considered 'Deformed'"
-                               "without object ids: {0}".format(invalid))
+            raise PublishValidationError(
+                ("Shapes found that are considered 'Deformed'"
+                 "without object ids: {0}").format(invalid))
 
     @classmethod
     def get_invalid(cls, instance):
@@ -48,7 +50,7 @@ class ValidateNodeIdsDeformedShape(pyblish.api.InstancePlugin):
 
         invalid = []
         for shape in shapes:
-            history_id = lib.get_id_from_history(shape)
+            history_id = lib.get_id_from_sibling(shape)
             if history_id:
                 current_id = lib.get_id(shape)
                 if current_id != history_id:
@@ -61,7 +63,7 @@ class ValidateNodeIdsDeformedShape(pyblish.api.InstancePlugin):
 
         for node in cls.get_invalid(instance):
             # Get the original id from history
-            history_id = lib.get_id_from_history(node)
+            history_id = lib.get_id_from_sibling(node)
             if not history_id:
                 cls.log.error("Could not find ID in history for '%s'", node)
                 continue

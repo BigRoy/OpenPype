@@ -1,9 +1,12 @@
 import pyblish
-import openpype
+
+from openpype import AYON_SERVER_ENABLED
+from openpype.pipeline.editorial import is_overlapping_otio_ranges
+
 from openpype.hosts.hiero import api as phiero
 from openpype.hosts.hiero.api.otio import hiero_export
-import hiero
 
+import hiero
 # # developer reload modules
 from pprint import pformat
 
@@ -19,9 +22,12 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
 
     def process(self, context):
         self.otio_timeline = context.data["otioTimeline"]
-
+        timeline_selection = phiero.get_timeline_selection()
         selected_timeline_items = phiero.get_track_items(
-            selected=True, check_tagged=True, check_enabled=True)
+            selection=timeline_selection,
+            check_tagged=True,
+            check_enabled=True
+        )
 
         # only return enabled track items
         if not selected_timeline_items:
@@ -45,7 +51,7 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
             self.log.debug("clip_name: {}".format(clip_name))
 
             # get openpype tag data
-            tag_data = phiero.get_track_item_pype_data(track_item)
+            tag_data = phiero.get_trackitem_openpype_data(track_item)
             self.log.debug("__ tag_data: {}".format(pformat(tag_data)))
 
             if not tag_data:
@@ -77,25 +83,24 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
                 if k not in ("id", "applieswhole", "label")
             })
 
-            asset = tag_data["asset"]
+            asset, asset_name = self._get_asset_data(tag_data)
+
             subset = tag_data["subset"]
 
             # insert family into families
-            family = tag_data["family"]
             families = [str(f) for f in tag_data["families"]]
-            families.insert(0, str(family))
 
             # form label
-            label = asset
-            if asset != clip_name:
+            label = "{} -".format(asset)
+            if asset_name != clip_name:
                 label += " ({})".format(clip_name)
             label += " {}".format(subset)
-            label += " {}".format("[" + ", ".join(families) + "]")
 
             data.update({
                 "name": "{}_{}".format(asset, subset),
                 "label": label,
                 "asset": asset,
+                "asset_name": asset_name,
                 "item": track_item,
                 "families": families,
                 "publish": tag_data["publish"],
@@ -103,7 +108,11 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
 
                 # clip's effect
                 "clipEffectItems": subtracks,
-                "clipAnnotations": annotations
+                "clipAnnotations": annotations,
+
+                # add all additional tags
+                "tags": phiero.get_track_item_tags(track_item),
+                "newAssetPublishing": True
             })
 
             # otio clip data
@@ -169,9 +178,9 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
             })
 
     def create_shot_instance(self, context, **data):
+        subset = "shotMain"
         master_layer = data.get("heroTrack")
         hierarchy_data = data.get("hierarchyData")
-        asset = data.get("asset")
         item = data.get("item")
         clip_name = item.name()
 
@@ -182,23 +191,21 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
             return
 
         asset = data["asset"]
-        subset = "shotMain"
+        asset_name = data["asset_name"]
 
         # insert family into families
         family = "shot"
 
         # form label
-        label = asset
-        if asset != clip_name:
+        label = "{} -".format(asset)
+        if asset_name != clip_name:
             label += " ({}) ".format(clip_name)
         label += " {}".format(subset)
-        label += " [{}]".format(family)
 
         data.update({
             "name": "{}_{}".format(asset, subset),
             "label": label,
             "subset": subset,
-            "asset": asset,
             "family": family,
             "families": []
         })
@@ -208,7 +215,33 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
         self.log.debug(
             "_ instance.data: {}".format(pformat(instance.data)))
 
+    def _get_asset_data(self, data):
+        folder_path = data.pop("folderPath", None)
+
+        if data.get("asset_name"):
+            asset_name = data["asset_name"]
+        else:
+            asset_name = data["asset"]
+
+        # backward compatibility for clip tags
+        # which are missing folderPath key
+        # TODO remove this in future versions
+        if not folder_path:
+            hierarchy_path = data["hierarchy"]
+            folder_path = "/{}/{}".format(
+                hierarchy_path,
+                asset_name
+            )
+
+        if AYON_SERVER_ENABLED:
+            asset = folder_path
+        else:
+            asset = asset_name
+
+        return asset, asset_name
+
     def create_audio_instance(self, context, **data):
+        subset = "audioMain"
         master_layer = data.get("heroTrack")
 
         if not master_layer:
@@ -223,23 +256,21 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
             return
 
         asset = data["asset"]
-        subset = "audioMain"
+        asset_name = data["asset_name"]
 
         # insert family into families
         family = "audio"
 
         # form label
-        label = asset
-        if asset != clip_name:
+        label = "{} -".format(asset)
+        if asset_name != clip_name:
             label += " ({}) ".format(clip_name)
         label += " {}".format(subset)
-        label += " [{}]".format(family)
 
         data.update({
             "name": "{}_{}".format(asset, subset),
             "label": label,
             "subset": subset,
-            "asset": asset,
             "family": family,
             "families": ["clip"]
         })
@@ -264,12 +295,12 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
         timeline_range = self.create_otio_time_range_from_timeline_item_data(
             track_item)
 
-        # loop trough audio track items and search for overlaping clip
+        # loop through audio track items and search for overlapping clip
         for otio_audio in self.audio_track_items:
             parent_range = otio_audio.range_in_parent()
 
             # if any overaling clip found then return True
-            if openpype.lib.is_overlapping_otio_ranges(
+            if is_overlapping_otio_ranges(
                     parent_range, timeline_range, strict=False):
                 return True
 
@@ -292,16 +323,18 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
         for otio_clip in self.otio_timeline.each_clip():
             track_name = otio_clip.parent().name
             parent_range = otio_clip.range_in_parent()
-            if ti_track_name not in track_name:
+            if ti_track_name != track_name:
                 continue
-            if otio_clip.name not in track_item.name():
+            if otio_clip.name != track_item.name():
                 continue
-            if openpype.lib.is_overlapping_otio_ranges(
+            self.log.debug("__ parent_range: {}".format(parent_range))
+            self.log.debug("__ timeline_range: {}".format(timeline_range))
+            if is_overlapping_otio_ranges(
                     parent_range, timeline_range, strict=True):
 
                 # add pypedata marker to otio_clip metadata
                 for marker in otio_clip.markers:
-                    if phiero.pype_tag_name in marker.name:
+                    if phiero.OPENPYPE_TAG_NAME in marker.name:
                         otio_clip.metadata.update(marker.metadata)
                 return {"otioClip": otio_clip}
 
@@ -309,17 +342,15 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
 
     @staticmethod
     def create_otio_time_range_from_timeline_item_data(track_item):
-        speed = track_item.playbackSpeed()
         timeline = phiero.get_current_sequence()
         frame_start = int(track_item.timelineIn())
-        frame_duration = int(track_item.sourceDuration() / speed)
+        frame_duration = int(track_item.duration())
         fps = timeline.framerate().toFloat()
 
         return hiero_export.create_otio_time_range(
             frame_start, frame_duration, fps)
 
-    @staticmethod
-    def collect_sub_track_items(tracks):
+    def collect_sub_track_items(self, tracks):
         """
         Returns dictionary with track index as key and list of subtracks
         """
@@ -328,8 +359,10 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
         for track in tracks:
             items = track.items()
 
+            effet_items = track.subTrackItems()
+
             # skip if no clips on track > need track with effect only
-            if items:
+            if not effet_items:
                 continue
 
             # skip all disabled tracks
@@ -337,10 +370,11 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
                 continue
 
             track_index = track.trackIndex()
-            _sub_track_items = phiero.flatten(track.subTrackItems())
+            _sub_track_items = phiero.flatten(effet_items)
 
+            _sub_track_items = list(_sub_track_items)
             # continue only if any subtrack items are collected
-            if not list(_sub_track_items):
+            if not _sub_track_items:
                 continue
 
             enabled_sti = []

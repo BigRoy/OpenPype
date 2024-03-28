@@ -258,7 +258,7 @@ class ListEntity(EndpointEntity):
                 break
 
         if result_idx is None:
-            raise ValueError("Didn't found child {}".format(child_obj))
+            raise ValueError("Didn't find child {}".format(child_obj))
 
         return "/".join([self.path, str(result_idx)])
 
@@ -325,16 +325,24 @@ class ListEntity(EndpointEntity):
 
         for item in value:
             child_obj = self._add_new_item()
-            child_obj.update_default_value(item)
+            child_obj.update_default_value(
+                item, self._default_log_invalid_types
+            )
             if self._override_state is OverrideState.PROJECT:
                 if self.had_project_override:
-                    child_obj.update_project_value(item)
+                    child_obj.update_project_value(
+                        item, self._project_log_invalid_types
+                    )
                 elif self.had_studio_override:
-                    child_obj.update_studio_value(item)
+                    child_obj.update_studio_value(
+                        item, self._studio_log_invalid_types
+                    )
 
             elif self._override_state is OverrideState.STUDIO:
                 if self.had_studio_override:
-                    child_obj.update_studio_value(item)
+                    child_obj.update_studio_value(
+                        item, self._studio_log_invalid_types
+                    )
 
         for child_obj in self.children:
             child_obj.set_override_state(
@@ -466,16 +474,24 @@ class ListEntity(EndpointEntity):
 
         for item in value:
             child_obj = self._add_new_item()
-            child_obj.update_default_value(item)
+            child_obj.update_default_value(
+                item, self._default_log_invalid_types
+            )
             if self._override_state is OverrideState.PROJECT:
                 if self.had_project_override:
-                    child_obj.update_project_value(item)
+                    child_obj.update_project_value(
+                        item, self._project_log_invalid_types
+                    )
                 elif self.had_studio_override:
-                    child_obj.update_studio_value(item)
+                    child_obj.update_studio_value(
+                        item, self._studio_log_invalid_types
+                    )
 
             elif self._override_state is OverrideState.STUDIO:
                 if self.had_studio_override:
-                    child_obj.update_studio_value(item)
+                    child_obj.update_studio_value(
+                        item, self._studio_log_invalid_types
+                    )
 
             child_obj.set_override_state(
                 self._override_state, self._ignore_missing_defaults

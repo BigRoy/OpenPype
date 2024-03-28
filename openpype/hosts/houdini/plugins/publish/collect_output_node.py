@@ -1,5 +1,7 @@
 import pyblish.api
 
+from openpype.pipeline.publish import KnownPublishError
+
 
 class CollectOutputSOPPath(pyblish.api.InstancePlugin):
     """Collect the out node's SOP/COP Path value."""
@@ -12,6 +14,8 @@ class CollectOutputSOPPath(pyblish.api.InstancePlugin):
         "imagesequence",
         "usd",
         "usdrender",
+        "redshiftproxy",
+        "staticMesh"
     ]
 
     hosts = ["houdini"]
@@ -21,7 +25,7 @@ class CollectOutputSOPPath(pyblish.api.InstancePlugin):
 
         import hou
 
-        node = instance[0]
+        node = hou.node(instance.data["instance_node"])
 
         # Get sop path
         node_type = node.type().name()
@@ -54,9 +58,15 @@ class CollectOutputSOPPath(pyblish.api.InstancePlugin):
             else:
                 out_node = node.parm("loppath").evalAsNode()
 
+        elif node_type == "Redshift_Proxy_Output":
+            out_node = node.parm("RS_archive_sopPath").evalAsNode()
+
+        elif node_type == "filmboxfbx":
+            out_node = node.parm("startnode").evalAsNode()
+
         else:
-            raise ValueError(
-                "ROP node type '%s' is" " not supported." % node_type
+            raise KnownPublishError(
+                "ROP node type '{}' is not supported.".format(node_type)
             )
 
         if not out_node:

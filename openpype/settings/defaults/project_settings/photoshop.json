@@ -1,21 +1,56 @@
 {
+    "imageio": {
+        "activate_host_color_management": true,
+        "remapping": {
+            "rules": []
+        },
+        "ocio_config": {
+            "override_global_config": false,
+            "filepath": []
+        },
+        "file_rules": {
+            "activate_host_rules": false,
+            "rules": {}
+        }
+    },
     "create": {
-        "CreateImage": {
-            "defaults": [
+        "ImageCreator": {
+            "enabled": true,
+            "active_on_create": true,
+            "mark_for_review": false,
+            "default_variants": [
                 "Main"
             ]
+        },
+        "AutoImageCreator": {
+            "enabled": false,
+            "active_on_create": true,
+            "mark_for_review": false,
+            "default_variant": ""
+        },
+        "ReviewCreator": {
+            "enabled": true,
+            "active_on_create": true,
+            "default_variant": ""
+        },
+        "WorkfileCreator": {
+            "enabled": true,
+            "active_on_create": true,
+            "default_variant": "Main"
         }
     },
     "publish": {
-        "CollectRemoteInstances": {
-            "color_code_mapping": [
-                {
-                    "color_code": [],
-                    "layer_name_regex": [],
-                    "family": "",
-                    "subset_template_name": ""
-                }
-            ]
+        "CollectColorCodedInstances": {
+            "enabled": true,
+            "create_flatten_image": "no",
+            "flatten_subset_template": "",
+            "color_code_mapping": []
+        },
+        "CollectReview": {
+            "enabled": true
+        },
+        "CollectVersion": {
+            "enabled": false
         },
         "ValidateContainers": {
             "enabled": true,
@@ -23,7 +58,7 @@
             "active": true
         },
         "ValidateNaming": {
-            "invalid_chars": "[ \\\\/+\\*\\?\\(\\)\\[\\]\\{\\}:,]",
+            "invalid_chars": "[ \\\\/+\\*\\?\\(\\)\\[\\]\\{\\}:,;]",
             "replace_char": "_"
         },
         "ExtractImage": {
@@ -33,8 +68,13 @@
             ]
         },
         "ExtractReview": {
+            "make_image_sequence": false,
+            "max_downscale_size": 8192,
             "jpg_options": {
-                "tags": []
+                "tags": [
+                    "review",
+                    "ftrackreview"
+                ]
             },
             "mov_options": {
                 "tags": [

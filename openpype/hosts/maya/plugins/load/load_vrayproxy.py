@@ -9,16 +9,26 @@ import os
 
 import maya.cmds as cmds
 
-from avalon.maya import lib
-from avalon import api, io
-from openpype.api import get_project_settings
+from openpype.client import get_representation_by_name
+from openpype.settings import get_project_settings
+from openpype.pipeline import (
+    load,
+    get_current_project_name,
+    get_representation_path,
+)
+from openpype.hosts.maya.api.lib import (
+    maintained_selection,
+    namespaced,
+    unique_namespace
+)
+from openpype.hosts.maya.api.pipeline import containerise
 
 
-class VRayProxyLoader(api.Loader):
+class VRayProxyLoader(load.LoaderPlugin):
     """Load VRay Proxy with Alembic or VrayMesh."""
 
-    families = ["vrayproxy"]
-    representations = ["vrmesh"]
+    families = ["vrayproxy", "model", "pointcache", "animation"]
+    representations = ["vrmesh", "abc"]
 
     label = "Import VRay Proxy"
     order = -10
@@ -36,8 +46,6 @@ class VRayProxyLoader(api.Loader):
             options (dict): Optional loader options.
 
         """
-        from avalon.maya.pipeline import containerise
-        from openpype.hosts.maya.api.lib import namespaced
 
         try:
             family = context["representation"]["context"]["family"]
@@ -45,10 +53,12 @@ class VRayProxyLoader(api.Loader):
             family = "vrayproxy"
 
         #  get all representations for this version
-        self.fname = self._get_abc(context["version"]["_id"]) or self.fname
+        filename = self._get_abc(context["version"]["_id"])
+        if not filename:
+            filename = self.filepath_from_context(context)
 
         asset_name = context['asset']["name"]
-        namespace = namespace or lib.unique_namespace(
+        namespace = namespace or unique_namespace(
             asset_name + "_",
             prefix="_" if asset_name[0].isdigit() else "",
             suffix="_",
@@ -57,26 +67,28 @@ class VRayProxyLoader(api.Loader):
         # Ensure V-Ray for Maya is loaded.
         cmds.loadPlugin("vrayformaya", quiet=True)
 
-        with lib.maintained_selection():
+        with maintained_selection():
             cmds.namespace(addNamespace=namespace)
             with namespaced(namespace, new=False):
                 nodes, group_node = self.create_vray_proxy(
-                    name, filename=self.fname)
+                    name, filename=filename)
 
         self[:] = nodes
         if not nodes:
             return
 
         # colour the group node
-        settings = get_project_settings(os.environ['AVALON_PROJECT'])
+        project_name = context["project"]["name"]
+        settings = get_project_settings(project_name)
         colors = settings['maya']['load']['colors']
         c = colors.get(family)
         if c is not None:
             cmds.setAttr("{0}.useOutlinerColor".format(group_node), 1)
-            cmds.setAttr("{0}.outlinerColor".format(group_node),
-                (float(c[0])/255),
-                (float(c[1])/255),
-                (float(c[2])/255)
+            cmds.setAttr(
+                "{0}.outlinerColor".format(group_node),
+                (float(c[0]) / 255),
+                (float(c[1]) / 255),
+                (float(c[2]) / 255)
             )
 
         return containerise(
@@ -93,11 +105,14 @@ class VRayProxyLoader(api.Loader):
         assert cmds.objExists(node), "Missing container"
 
         members = cmds.sets(node, query=True) or []
-        vraymeshes = cmds.ls(members, type="VRayMesh")
+        vraymeshes = cmds.ls(members, type="VRayProxy")
         assert vraymeshes, "Cannot find VRayMesh in container"
 
         #  get all representations for this version
-        filename = self._get_abc(representation["parent"]) or api.get_representation_path(representation)  # noqa: E501
+        filename = (
+            self._get_abc(representation["parent"])
+            or get_representation_path(representation)
+        )
 
         for vray_mesh in vraymeshes:
             cmds.setAttr("{}.fileName".format(vray_mesh),
@@ -173,17 +188,12 @@ class VRayProxyLoader(api.Loader):
         """
         self.log.debug(
             "Looking for abc in published representations of this version.")
-        abc_rep = io.find_one(
-            {
-                "type": "representation",
-                "parent": io.ObjectId(version_id),
-                "name": "abc"
-            })
-
+        project_name = get_current_project_name()
+        abc_rep = get_representation_by_name(project_name, "abc", version_id)
         if abc_rep:
             self.log.debug("Found, we'll link alembic to vray proxy.")
-            file_name = api.get_representation_path(abc_rep)
-            self.log.debug("File: {}".format(self.fname))
+            file_name = get_representation_path(abc_rep)
+            self.log.debug("File: {}".format(file_name))
             return file_name
 
         return ""

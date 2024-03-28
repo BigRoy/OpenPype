@@ -78,9 +78,9 @@ detect_python () {
   IFS=.
   set -- $python_version
   IFS="$oIFS"
-  if [ "$1" -ge "3" ] && [ "$2" -ge "6" ] ; then
-    if [ "$2" -gt "7" ] ; then
-      echo -e "${BIWhite}[${RST} ${BIRed}$1.$2 ${BIWhite}]${RST} - ${BIRed}FAILED${RST} ${BIYellow}Version is new and unsupported, use${RST} ${BIPurple}3.7.x${RST}"; return 1;
+  if [ "$1" -ge "3" ] && [ "$2" -ge "9" ] ; then
+    if [ "$2" -gt "9" ] ; then
+      echo -e "${BIWhite}[${RST} ${BIRed}$1.$2 ${BIWhite}]${RST} - ${BIRed}FAILED${RST} ${BIYellow}Version is new and unsupported, use${RST} ${BIPurple}3.9.x${RST}"; return 1;
     else
       echo -e "${BIWhite}[${RST} ${BIGreen}$1.$2${RST} ${BIWhite}]${RST}"
     fi
@@ -130,8 +130,8 @@ main () {
   fi
 
   echo -e "${BIGreen}>>>${RST} Generating zip from current sources ..."
-  PYTHONPATH="$openpype_root:$PYTHONPATH"
-  OPENPYPE_ROOT="$openpype_root"
+  export PYTHONPATH="$openpype_root:$PYTHONPATH"
+  export OPENPYPE_ROOT="$openpype_root"
   "$POETRY_HOME/bin/poetry" run python3 "$openpype_root/tools/create_zip.py" "$@"
 }
 

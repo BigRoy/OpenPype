@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import json
 import math
@@ -6,11 +7,11 @@ import unreal
 from unreal import EditorLevelLibrary as ell
 from unreal import EditorAssetLibrary as eal
 
-import openpype.api
-from avalon import io
+from openpype.client import get_representation_by_name
+from openpype.pipeline import publish
 
 
-class ExtractLayout(openpype.api.Extractor):
+class ExtractLayout(publish.Extractor):
     """Extract a layout."""
 
     label = "Extract Layout"
@@ -20,7 +21,7 @@ class ExtractLayout(openpype.api.Extractor):
 
     def process(self, instance):
         # Define extract output file path
-        stagingdir = self.staging_dir(instance)
+        staging_dir = self.staging_dir(instance)
 
         # Perform extraction
         self.log.info("Performing extraction..")
@@ -31,6 +32,7 @@ class ExtractLayout(openpype.api.Extractor):
             "Wrong level loaded"
 
         json_data = []
+        project_name = instance.context.data["projectName"]
 
         for member in instance[:]:
             actor = ell.get_actor_reference(member)
@@ -46,7 +48,7 @@ class ExtractLayout(openpype.api.Extractor):
                 # Search the reference to the Asset Container for the object
                 path = unreal.Paths.get_path(mesh.get_path_name())
                 filter = unreal.ARFilter(
-                    class_names=["AssetContainer"], package_paths=[path])
+                    class_names=["AyonAssetContainer"], package_paths=[path])
                 ar = unreal.AssetRegistryHelpers.get_asset_registry()
                 try:
                     asset_container = ar.get_assets(filter)[0].get_asset()
@@ -54,17 +56,13 @@ class ExtractLayout(openpype.api.Extractor):
                     self.log.error("AssetContainer not found.")
                     return
 
-                parent = eal.get_metadata_tag(asset_container, "parent")
+                parent_id = eal.get_metadata_tag(asset_container, "parent")
                 family = eal.get_metadata_tag(asset_container, "family")
 
-                self.log.info("Parent: {}".format(parent))
-                blend = io.find_one(
-                    {
-                        "type": "representation",
-                        "parent": io.ObjectId(parent),
-                        "name": "blend"
-                    },
-                    projection={"_id": True})
+                self.log.info("Parent: {}".format(parent_id))
+                blend = get_representation_by_name(
+                    project_name, "blend", parent_id, fields=["_id"]
+                )
                 blend_id = blend["_id"]
 
                 json_element = {}
@@ -96,7 +94,7 @@ class ExtractLayout(openpype.api.Extractor):
                 json_data.append(json_element)
 
         json_filename = "{}.json".format(instance.name)
-        json_path = os.path.join(stagingdir, json_filename)
+        json_path = os.path.join(staging_dir, json_filename)
 
         with open(json_path, "w+") as file:
             json.dump(json_data, fp=file, indent=2)
@@ -108,6 +106,6 @@ class ExtractLayout(openpype.api.Extractor):
             'name': 'json',
             'ext': 'json',
             'files': json_filename,
-            "stagingDir": stagingdir,
+            "stagingDir": staging_dir,
         }
         instance.data["representations"].append(json_representation)

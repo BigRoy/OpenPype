@@ -16,6 +16,16 @@ from pymongo.errors import (
 )
 
 
+class OpenPypeVersionNotFound(Exception):
+    """OpenPype version was not found in remote and local repository."""
+    pass
+
+
+class OpenPypeVersionIncompatible(Exception):
+    """OpenPype version is not compatible with the installed one (build)."""
+    pass
+
+
 def should_add_certificate_path_to_mongo_url(mongo_url):
     """Check if should add ca certificate to mongo url.
 
@@ -30,7 +40,7 @@ def should_add_certificate_path_to_mongo_url(mongo_url):
     add_certificate = False
     # Check if url 'ssl' or 'tls' are set to 'true'
     for key in ("ssl", "tls"):
-        if key in query and "true" in query["ssl"]:
+        if key in query and "true" in query[key]:
             add_certificate = True
             break
 
@@ -63,7 +73,7 @@ def validate_mongo_connection(cnx: str) -> (bool, str):
     }
     # Add certificate path if should be required
     if should_add_certificate_path_to_mongo_url(cnx):
-        kwargs["ssl_ca_certs"] = certifi.where()
+        kwargs["tlsCAFile"] = certifi.where()
 
     try:
         client = MongoClient(cnx, **kwargs)
@@ -137,13 +147,14 @@ def get_openpype_global_settings(url: str) -> dict:
     """
     kwargs = {}
     if should_add_certificate_path_to_mongo_url(url):
-        kwargs["ssl_ca_certs"] = certifi.where()
+        kwargs["tlsCAFile"] = certifi.where()
 
     try:
         # Create mongo connection
         client = MongoClient(url, **kwargs)
         # Access settings collection
-        col = client["openpype"]["settings"]
+        openpype_db = os.environ.get("OPENPYPE_DATABASE_NAME") or "openpype"
+        col = client[openpype_db]["settings"]
         # Query global settings
         global_settings = col.find_one({"type": "global_settings"}) or {}
         # Close Mongo connection
@@ -156,18 +167,17 @@ def get_openpype_global_settings(url: str) -> dict:
     return global_settings.get("data") or {}
 
 
-def get_openpype_path_from_db(url: str) -> Union[str, None]:
+def get_openpype_path_from_settings(settings: dict) -> Union[str, None]:
     """Get OpenPype path from global settings.
 
     Args:
-        url (str): mongodb url.
+        settings (dict): mongodb url.
 
     Returns:
         path to OpenPype or None if not found
     """
-    global_settings = get_openpype_global_settings(url)
     paths = (
-        global_settings
+        settings
         .get("openpype_path", {})
         .get(platform.system().lower())
     ) or []
@@ -175,11 +185,46 @@ def get_openpype_path_from_db(url: str) -> Union[str, None]:
     if paths and isinstance(paths, str):
         paths = [paths]
 
-    # Loop over paths and return only existing
-    for path in paths:
-        if os.path.exists(path):
-            return path
+    return next((path for path in paths if os.path.exists(path)), None)
+
+
+def get_local_openpype_path_from_settings(settings: dict) -> Union[str, None]:
+    """Get OpenPype local path from global settings.
+
+    Used to download and unzip OP versions.
+    Args:
+        settings (dict): settings from DB.
+
+    Returns:
+        path to OpenPype or None if not found
+    """
+    path = (
+        settings
+        .get("local_openpype_path", {})
+        .get(platform.system().lower())
+    )
+    if path:
+        return Path(path)
     return None
+
+
+def get_expected_studio_version_str(
+    staging=False, global_settings=None
+) -> str:
+    """Version that should be currently used in studio.
+
+    Args:
+        staging (bool): Get current version for staging.
+        global_settings (dict): Optional precached global settings.
+
+    Returns:
+        str: OpenPype version which should be used. Empty string means latest.
+    """
+    mongo_url = os.environ.get("OPENPYPE_MONGO")
+    if global_settings is None:
+        global_settings = get_openpype_global_settings(mongo_url)
+    key = "staging_version" if staging else "production_version"
+    return global_settings.get(key) or ""
 
 
 def load_stylesheet() -> str:
@@ -192,3 +237,11 @@ def load_stylesheet() -> str:
     stylesheet_path = Path(__file__).parent.resolve() / "stylesheet.css"
 
     return stylesheet_path.read_text()
+
+
+def get_openpype_icon_path() -> str:
+    """Path to OpenPype icon png file."""
+    return os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "openpype_icon.png"
+    )

@@ -77,13 +77,15 @@ def _calculate_pre_behavior_copy(
         for frame_idx in range(range_start, layer_frame_start):
             output_idx_by_frame_idx[frame_idx] = first_exposure_frame
 
-    elif pre_beh in ("loop", "repeat"):
+    elif pre_beh == "repeat":
         # Loop backwards from last frame of layer
         for frame_idx in reversed(range(range_start, layer_frame_start)):
             eq_frame_idx_offset = (
                 (layer_frame_end - frame_idx) % frame_count
             )
-            eq_frame_idx = layer_frame_end - eq_frame_idx_offset
+            eq_frame_idx = layer_frame_start + (
+                layer_frame_end - eq_frame_idx_offset
+            )
             output_idx_by_frame_idx[frame_idx] = eq_frame_idx
 
     elif pre_beh == "pingpong":
@@ -139,10 +141,10 @@ def _calculate_post_behavior_copy(
         for frame_idx in range(layer_frame_end + 1, range_end + 1):
             output_idx_by_frame_idx[frame_idx] = last_exposure_frame
 
-    elif post_beh in ("loop", "repeat"):
+    elif post_beh == "repeat":
         # Loop backwards from last frame of layer
         for frame_idx in range(layer_frame_end + 1, range_end + 1):
-            eq_frame_idx = frame_idx % frame_count
+            eq_frame_idx = layer_frame_start + (frame_idx % frame_count)
             output_idx_by_frame_idx[frame_idx] = eq_frame_idx
 
     elif post_beh == "pingpong":
@@ -278,7 +280,7 @@ def _cleanup_out_range_frames(output_idx_by_frame_idx, range_start, range_end):
     }
     // Result
     {
-        2: 2, // Redirect to self as is first that refence out range
+        2: 2, // Redirect to self as is first that reference out range
         3: 2 // Redirect to first redirected frame
     }
     ```
@@ -573,7 +575,7 @@ def composite_rendered_layers(
         layer_ids_by_position[layer_position] = layer["layer_id"]
 
     # Sort layer positions
-    sorted_positions = tuple(sorted(layer_ids_by_position.keys()))
+    sorted_positions = tuple(reversed(sorted(layer_ids_by_position.keys())))
     # Prepare variable where filepaths without any rendered content
     #   - transparent will be created
     transparent_filepaths = set()
@@ -593,7 +595,7 @@ def composite_rendered_layers(
             transparent_filepaths.add(dst_filepath)
             continue
 
-        # Store first destionation filepath to be used for transparent images
+        # Store first destination filepath to be used for transparent images
         if first_dst_filepath is None:
             first_dst_filepath = dst_filepath
 
@@ -646,9 +648,6 @@ def rename_filepaths_by_frame_start(
     filepaths_by_frame, range_start, range_end, new_frame_start
 ):
     """Change frames in filenames of finished images to new frame start."""
-    # Skip if source first frame is same as destination first frame
-    if range_start == new_frame_start:
-        return
 
     # Calculate frame end
     new_frame_end = range_end + (new_frame_start - range_start)
@@ -657,7 +656,7 @@ def rename_filepaths_by_frame_start(
         max(range_end, new_frame_end)
     )
 
-    # Use differnet ranges based on Mark In and output Frame Start values
+    # Use different ranges based on Mark In and output Frame Start values
     # - this is to make sure that filename renaming won't affect files that
     #   are not renamed yet
     if range_start < new_frame_start:
@@ -669,14 +668,17 @@ def rename_filepaths_by_frame_start(
         source_range = range(range_start, range_end + 1)
         output_range = range(new_frame_start, new_frame_end + 1)
 
+    # Skip if source first frame is same as destination first frame
     new_dst_filepaths = {}
     for src_frame, dst_frame in zip(source_range, output_range):
-        src_filepath = filepaths_by_frame[src_frame]
-        src_dirpath = os.path.dirname(src_filepath)
+        src_filepath = os.path.normpath(filepaths_by_frame[src_frame])
+        dirpath, src_filename = os.path.split(src_filepath)
         dst_filename = filename_template.format(frame=dst_frame)
-        dst_filepath = os.path.join(src_dirpath, dst_filename)
+        dst_filepath = os.path.join(dirpath, dst_filename)
 
-        os.rename(src_filepath, dst_filepath)
+        if src_filename != dst_filename:
+            os.rename(src_filepath, dst_filepath)
 
         new_dst_filepaths[dst_frame] = dst_filepath
+
     return new_dst_filepaths

@@ -1,14 +1,20 @@
-import re
 import os
-import hiero
-from Qt import QtWidgets, QtCore
-from avalon.vendor import qargparse
-import avalon.api as avalon
-import openpype.api as openpype
-from . import lib
+from pprint import pformat
+import re
 from copy import deepcopy
 
-log = openpype.Logger().get_logger(__name__)
+import hiero
+
+from qtpy import QtWidgets, QtCore
+import qargparse
+
+from openpype.settings import get_current_project_settings
+from openpype.lib import Logger
+from openpype.pipeline import LoaderPlugin, LegacyCreator
+from openpype.pipeline.load import get_representation_path_from_context
+from . import lib
+
+log = Logger.get_logger(__name__)
 
 
 def load_stylesheet():
@@ -25,7 +31,7 @@ def load_stylesheet():
 class CreatorWidget(QtWidgets.QDialog):
 
     # output items
-    items = dict()
+    items = {}
 
     def __init__(self, name, info, ui_inputs, parent=None):
         super(CreatorWidget, self).__init__(parent)
@@ -140,13 +146,15 @@ class CreatorWidget(QtWidgets.QDialog):
         return " ".join([str(m.group(0)).capitalize() for m in matches])
 
     def create_row(self, layout, type, text, **kwargs):
+        value_keys = ["setText", "setCheckState", "setValue", "setChecked"]
+
         # get type attribute from qwidgets
         attr = getattr(QtWidgets, type)
 
         # convert label text to normal capitalized text with spaces
         label_text = self.camel_case_split(text)
 
-        # assign the new text to lable widget
+        # assign the new text to label widget
         label = QtWidgets.QLabel(label_text)
         label.setObjectName("LineLabel")
 
@@ -161,10 +169,26 @@ class CreatorWidget(QtWidgets.QDialog):
 
         # assign the created attribute to variable
         item = getattr(self, attr_name)
+
+        # set attributes to item which are not values
         for func, val in kwargs.items():
+            if func in value_keys:
+                continue
+
             if getattr(item, func):
+                log.debug("Setting {} to {}".format(func, val))
                 func_attr = getattr(item, func)
-                func_attr(val)
+                if isinstance(val, tuple):
+                    func_attr(*val)
+                else:
+                    func_attr(val)
+
+        # set values to item
+        for value_item in value_keys:
+            if value_item not in kwargs:
+                continue
+            if getattr(item, value_item):
+                getattr(item, value_item)(kwargs[value_item])
 
         # add to layout
         layout.addRow(label, item)
@@ -267,8 +291,11 @@ class CreatorWidget(QtWidgets.QDialog):
             elif v["type"] == "QSpinBox":
                 data[k]["value"] = self.create_row(
                     content_layout, "QSpinBox", v["label"],
-                    setValue=v["value"], setMinimum=0,
+                    setValue=v["value"],
+                    setDisplayIntegerBase=10000,
+                    setRange=(0, 99999), setMinimum=0,
                     setMaximum=100000, setToolTip=tool_tip)
+
         return data
 
 
@@ -289,21 +316,7 @@ class Spacer(QtWidgets.QWidget):
         self.setLayout(layout)
 
 
-def get_reference_node_parents(ref):
-    """Return all parent reference nodes of reference node
-
-    Args:
-        ref (str): reference node.
-
-    Returns:
-        list: The upstream parent reference nodes.
-
-    """
-    parents = []
-    return parents
-
-
-class SequenceLoader(avalon.Loader):
+class SequenceLoader(LoaderPlugin):
     """A basic SequenceLoader for Resolve
 
     This will implement the basic behavior for a loader to inherit from that
@@ -337,7 +350,7 @@ class SequenceLoader(avalon.Loader):
                 "Sequentially in order"
             ],
             default="Original timing",
-            help="Would you like to place it at orignal timing?"
+            help="Would you like to place it at original timing?"
         )
     ]
 
@@ -366,7 +379,7 @@ class ClipLoader:
     active_bin = None
     data = dict()
 
-    def __init__(self, cls, context, **options):
+    def __init__(self, cls, context, path, **options):
         """ Initialize object
 
         Arguments:
@@ -379,12 +392,13 @@ class ClipLoader:
         self.__dict__.update(cls.__dict__)
         self.context = context
         self.active_project = lib.get_current_project()
+        self.fname = path
 
         # try to get value from options or evaluate key value for `handles`
         self.with_handles = options.get("handles") or bool(
             options.get("handles") is True)
         # try to get value from options or evaluate key value for `load_how`
-        self.sequencial_load = options.get("sequencially") or bool(
+        self.sequencial_load = options.get("sequentially") or bool(
             "Sequentially in order" in options.get("load_how", ""))
         # try to get value from options or evaluate key value for `load_to`
         self.new_sequence = options.get("newSequence") or bool(
@@ -397,7 +411,8 @@ class ClipLoader:
 
         # inject asset data to representation dict
         self._get_asset_data()
-        log.debug("__init__ self.data: `{}`".format(self.data))
+        log.info("__init__ self.data: `{}`".format(pformat(self.data)))
+        log.info("__init__ options: `{}`".format(pformat(options)))
 
         # add active components to class
         if self.new_sequence:
@@ -439,7 +454,7 @@ class ClipLoader:
         self.data["track_name"] = "_".join([subset, representation])
         self.data["versionData"] = self.context["version"]["data"]
         # gets file path
-        file = self.fname
+        file = get_representation_path_from_context(self.context)
         if not file:
             repr_id = repr["_id"]
             log.warning(
@@ -475,11 +490,12 @@ class ClipLoader:
     def _get_asset_data(self):
         """ Get all available asset data
 
-        joint `data` key with asset.data dict into the representaion
+        joint `data` key with asset.data dict into the representation
 
         """
-        asset_name = self.context["representation"]["context"]["asset"]
-        self.data["assetData"] = openpype.get_asset(asset_name)["data"]
+
+        asset_doc = self.context["asset"]
+        self.data["assetData"] = asset_doc["data"]
 
     def _make_track_item(self, source_bin_item, audio=False):
         """ Create track item with """
@@ -497,7 +513,7 @@ class ClipLoader:
         track_item.setSource(clip)
         track_item.setSourceIn(self.handle_start)
         track_item.setTimelineIn(self.timeline_in)
-        track_item.setSourceOut(self.media_duration - self.handle_end)
+        track_item.setSourceOut((self.media_duration) - self.handle_end)
         track_item.setTimelineOut(self.timeline_out)
         track_item.setPlaybackSpeed(1)
         self.active_track.addTrackItem(track_item)
@@ -517,14 +533,18 @@ class ClipLoader:
         self.handle_start = self.data["versionData"].get("handleStart")
         self.handle_end = self.data["versionData"].get("handleEnd")
         if self.handle_start is None:
-            self.handle_start = int(self.data["assetData"]["handleStart"])
+            self.handle_start = self.data["assetData"]["handleStart"]
         if self.handle_end is None:
-            self.handle_end = int(self.data["assetData"]["handleEnd"])
+            self.handle_end = self.data["assetData"]["handleEnd"]
+
+        self.handle_start = int(self.handle_start)
+        self.handle_end = int(self.handle_end)
 
         if self.sequencial_load:
             last_track_item = lib.get_track_items(
                 sequence_name=self.active_sequence.name(),
-                track_name=self.active_track.name())
+                track_name=self.active_track.name()
+            )
             if len(last_track_item) == 0:
                 last_timeline_out = 0
             else:
@@ -538,19 +558,14 @@ class ClipLoader:
             self.timeline_in = int(self.data["assetData"]["clipIn"])
             self.timeline_out = int(self.data["assetData"]["clipOut"])
 
-        # check if slate is included
-        # either in version data families or by calculating frame diff
-        slate_on = next(
-            # check iterate if slate is in families
-            (f for f in self.context["version"]["data"]["families"]
-             if "slate" in f),
-            # if nothing was found then use default None
-            # so other bool could be used
-            None) or bool(int(
-                (self.timeline_out - self.timeline_in + 1)
-                + self.handle_start + self.handle_end) < self.media_duration)
+        log.debug("__ self.timeline_in: {}".format(self.timeline_in))
+        log.debug("__ self.timeline_out: {}".format(self.timeline_out))
 
-        # if slate is on then remove the slate frame from begining
+        # check if slate is included
+        slate_on = "slate" in self.context["version"]["data"]["families"]
+        log.debug("__ slate_on: {}".format(slate_on))
+
+        # if slate is on then remove the slate frame from beginning
         if slate_on:
             self.media_duration -= 1
             self.handle_start += 1
@@ -569,7 +584,7 @@ class ClipLoader:
         # there were some cases were hiero was not creating it
         source_bin_item = None
         for item in self.active_bin.items():
-            if self.data["clip_name"] in item.name():
+            if self.data["clip_name"] == item.name():
                 source_bin_item = item
         if not source_bin_item:
             log.warning("Problem with created Source clip: `{}`".format(
@@ -589,16 +604,16 @@ class ClipLoader:
         return track_item
 
 
-class Creator(openpype.Creator):
+class Creator(LegacyCreator):
     """Creator class wrapper
     """
     clip_color = "Purple"
     rename_index = None
 
     def __init__(self, *args, **kwargs):
-        import openpype.hosts.hiero.api as phiero
         super(Creator, self).__init__(*args, **kwargs)
-        self.presets = openpype.get_current_project_settings()[
+        import openpype.hosts.hiero.api as phiero
+        self.presets = get_current_project_settings()[
             "hiero"]["create"].get(self.__class__.__name__, {})
 
         # adding basic current context resolve objects
@@ -606,7 +621,10 @@ class Creator(openpype.Creator):
         self.sequence = phiero.get_current_sequence()
 
         if (self.options or {}).get("useSelection"):
-            self.selected = phiero.get_track_items(selected=True)
+            timeline_selection = phiero.get_timeline_selection()
+            self.selected = phiero.get_track_items(
+                selection=timeline_selection
+            )
         else:
             self.selected = phiero.get_track_items()
 
@@ -624,8 +642,8 @@ class PublishClip:
     Returns:
         hiero.core.TrackItem: hiero track item object with pype tag
     """
-    vertical_clip_match = dict()
-    tag_data = dict()
+    vertical_clip_match = {}
+    tag_data = {}
     types = {
         "shot": "shot",
         "folder": "folder",
@@ -634,8 +652,8 @@ class PublishClip:
         "track": "sequence",
     }
 
-    # parents search patern
-    parents_search_patern = r"\{([a-z]*?)\}"
+    # parents search pattern
+    parents_search_pattern = r"\{([a-z]*?)\}"
 
     # default templates for non-ui use
     rename_default = False
@@ -687,9 +705,10 @@ class PublishClip:
         self._create_parents()
 
     def convert(self):
-
         # solve track item data and add them to tag data
-        self._convert_to_tag_data()
+        tag_hierarchy_data = self._convert_to_tag_data()
+
+        self.tag_data.update(tag_hierarchy_data)
 
         # if track name is in review track name and also if driving track name
         # is not in review track name: skip tag creation
@@ -703,15 +722,26 @@ class PublishClip:
         if self.rename:
             # rename track item
             self.track_item.setName(new_name)
-            self.tag_data["asset"] = new_name
+            self.tag_data["asset_name"] = new_name
         else:
-            self.tag_data["asset"] = self.ti_name
+            self.tag_data["asset_name"] = self.ti_name
             self.tag_data["hierarchyData"]["shot"] = self.ti_name
 
+        # AYON unique identifier
+        folder_path = "/{}/{}".format(
+            tag_hierarchy_data["hierarchy"],
+            self.tag_data["asset_name"]
+        )
+        self.tag_data["folderPath"] = folder_path
         if self.tag_data["heroTrack"] and self.review_layer:
             self.tag_data.update({"reviewTrack": self.review_layer})
         else:
             self.tag_data.update({"reviewTrack": None})
+
+        # TODO: remove debug print
+        log.debug("___ self.tag_data: {}".format(
+            pformat(self.tag_data)
+        ))
 
         # create pype tag on track_item and add data
         lib.imprint(self.track_item, self.tag_data)
@@ -719,7 +749,7 @@ class PublishClip:
         return self.track_item
 
     def _populate_track_item_default_data(self):
-        """ Populate default formating data from track item. """
+        """ Populate default formatting data from track item. """
 
         self.track_item_default_data = {
             "_folder_": "shots",
@@ -800,7 +830,7 @@ class PublishClip:
         # increasing steps by index of rename iteration
         self.count_steps *= self.rename_index
 
-        hierarchy_formating_data = {}
+        hierarchy_formatting_data = {}
         hierarchy_data = deepcopy(self.hierarchy_data)
         _data = self.track_item_default_data.copy()
         if self.ui_inputs:
@@ -814,7 +844,7 @@ class PublishClip:
                 # mark review layer
                 if self.review_track and (
                         self.review_track not in self.review_track_default):
-                    # if review layer is defined and not the same as defalut
+                    # if review layer is defined and not the same as default
                     self.review_layer = self.review_track
                 # shot num calculate
                 if self.rename_index == 0:
@@ -835,13 +865,13 @@ class PublishClip:
 
             # fill up pythonic expresisons in hierarchy data
             for k, _v in hierarchy_data.items():
-                hierarchy_formating_data[k] = _v["value"].format(**_data)
+                hierarchy_formatting_data[k] = _v["value"].format(**_data)
         else:
             # if no gui mode then just pass default data
-            hierarchy_formating_data = hierarchy_data
+            hierarchy_formatting_data = hierarchy_data
 
         tag_hierarchy_data = self._solve_tag_hierarchy_data(
-            hierarchy_formating_data
+            hierarchy_formatting_data
         )
 
         tag_hierarchy_data.update({"heroTrack": True})
@@ -863,26 +893,26 @@ class PublishClip:
                     # in case track name and subset name is the same then add
                     if self.subset_name == self.track_name:
                         hero_data["subset"] = self.subset
-                    # assing data to return hierarchy data to tag
+                    # assign data to return hierarchy data to tag
                     tag_hierarchy_data = hero_data
 
         # add data to return data dict
-        self.tag_data.update(tag_hierarchy_data)
+        return tag_hierarchy_data
 
-    def _solve_tag_hierarchy_data(self, hierarchy_formating_data):
+    def _solve_tag_hierarchy_data(self, hierarchy_formatting_data):
         """ Solve tag data from hierarchy data and templates. """
         # fill up clip name and hierarchy keys
-        hierarchy_filled = self.hierarchy.format(**hierarchy_formating_data)
-        clip_name_filled = self.clip_name.format(**hierarchy_formating_data)
+        hierarchy_filled = self.hierarchy.format(**hierarchy_formatting_data)
+        clip_name_filled = self.clip_name.format(**hierarchy_formatting_data)
 
         # remove shot from hierarchy data: is not needed anymore
-        hierarchy_formating_data.pop("shot")
+        hierarchy_formatting_data.pop("shot")
 
         return {
             "newClipName": clip_name_filled,
             "hierarchy": hierarchy_filled,
             "parents": self.parents,
-            "hierarchyData": hierarchy_formating_data,
+            "hierarchyData": hierarchy_formatting_data,
             "subset": self.subset,
             "family": self.subset_family,
             "families": [self.data["family"]]
@@ -897,17 +927,17 @@ class PublishClip:
             type
         )
 
-        # first collect formating data to use for formating template
-        formating_data = {}
+        # first collect formatting data to use for formatting template
+        formatting_data = {}
         for _k, _v in self.hierarchy_data.items():
             value = _v["value"].format(
                 **self.track_item_default_data)
-            formating_data[_k] = value
+            formatting_data[_k] = value
 
         return {
             "entity_type": entity_type,
             "entity_name": template.format(
-                **formating_data
+                **formatting_data
             )
         }
 
@@ -915,9 +945,9 @@ class PublishClip:
         """ Create parents and return it in list. """
         self.parents = []
 
-        patern = re.compile(self.parents_search_patern)
+        pattern = re.compile(self.parents_search_pattern)
 
-        par_split = [(patern.findall(t).pop(), t)
+        par_split = [(pattern.findall(t).pop(), t)
                      for t in self.hierarchy.split("/")]
 
         for type, template in par_split:

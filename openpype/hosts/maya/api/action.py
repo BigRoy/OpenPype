@@ -3,8 +3,8 @@ from __future__ import absolute_import
 
 import pyblish.api
 
-
-from openpype.api import get_errored_instances_from_context
+from openpype.client import get_asset_by_name
+from openpype.pipeline.publish import get_errored_instances_from_context
 
 
 class GenerateUUIDsOnInvalidAction(pyblish.api.Action):
@@ -72,13 +72,23 @@ class GenerateUUIDsOnInvalidAction(pyblish.api.Action):
             nodes (list): all nodes to regenerate ids on
         """
 
-        from openpype.hosts.maya.api import lib
-        import avalon.io as io
+        from . import lib
 
-        asset = instance.data['asset']
-        asset_id = io.find_one({"name": asset, "type": "asset"},
-                               projection={"_id": True})['_id']
-        for node, _id in lib.generate_ids(nodes, asset_id=asset_id):
+        # Expecting this is called on validators in which case 'assetEntity'
+        #   should be always available, but kept a way to query it by name.
+        asset_doc = instance.data.get("assetEntity")
+        if not asset_doc:
+            asset_name = instance.data["asset"]
+            project_name = instance.context.data["projectName"]
+            self.log.info((
+                "Asset is not stored on instance."
+                " Querying by name \"{}\" from project \"{}\""
+            ).format(asset_name, project_name))
+            asset_doc = get_asset_by_name(
+                project_name, asset_name, fields=["_id"]
+            )
+
+        for node, _id in lib.generate_ids(nodes, asset_id=asset_doc["_id"]):
             lib.set_id(node, _id, overwrite=True)
 
 
@@ -100,15 +110,13 @@ class SelectInvalidAction(pyblish.api.Action):
         except ImportError:
             raise ImportError("Current host is not Maya")
 
-        errored_instances = get_errored_instances_from_context(context)
-
-        # Apply pyblish.logic to get the instances for the plug-in
-        instances = pyblish.api.instances_by_plugin(errored_instances, plugin)
+        errored_instances = get_errored_instances_from_context(context,
+                                                               plugin=plugin)
 
         # Get the invalid nodes for the plug-ins
         self.log.info("Finding invalid nodes..")
         invalid = list()
-        for instance in instances:
+        for instance in errored_instances:
             invalid_nodes = plugin.get_invalid(instance)
             if invalid_nodes:
                 if isinstance(invalid_nodes, (list, tuple)):

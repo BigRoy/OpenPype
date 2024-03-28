@@ -1,12 +1,20 @@
 from typing import List
 
 import mathutils
+import bpy
 
 import pyblish.api
+
 import openpype.hosts.blender.api.action
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    OptionalPyblishPluginMixin,
+    PublishValidationError
+)
 
 
-class ValidateTransformZero(pyblish.api.InstancePlugin):
+class ValidateTransformZero(pyblish.api.InstancePlugin,
+                            OptionalPyblishPluginMixin):
     """Transforms can't have any values
 
     To solve this issue, try freezing the transforms. So long
@@ -15,11 +23,9 @@ class ValidateTransformZero(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ["blender"]
     families = ["model"]
-    category = "geometry"
-    version = (0, 1, 0)
     label = "Transform Zero"
     actions = [openpype.hosts.blender.api.action.SelectInvalidAction]
 
@@ -28,13 +34,22 @@ class ValidateTransformZero(pyblish.api.InstancePlugin):
     @classmethod
     def get_invalid(cls, instance) -> List:
         invalid = []
-        for obj in [obj for obj in instance]:
-            if obj.matrix_basis != cls._identity:
+        for obj in instance:
+            if (
+                isinstance(obj, bpy.types.Object)
+                and obj.matrix_basis != cls._identity
+            ):
                 invalid.append(obj)
         return invalid
 
     def process(self, instance):
+        if not self.is_active(instance.data):
+            return
+
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError(
-                f"Object found in instance is not in Object Mode: {invalid}")
+            names = ", ".join(obj.name for obj in invalid)
+            raise PublishValidationError(
+                "Objects found in instance which do not"
+                f" have transform set to zero: {names}"
+            )

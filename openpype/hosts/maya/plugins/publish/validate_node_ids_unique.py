@@ -1,7 +1,10 @@
 from collections import defaultdict
 
 import pyblish.api
-import openpype.api
+from openpype.pipeline.publish import (
+    ValidatePipelineOrder,
+    PublishValidationError
+)
 import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api import lib
 
@@ -12,7 +15,7 @@ class ValidateNodeIdsUnique(pyblish.api.InstancePlugin):
     Here we ensure that what has been added to the instance is unique
     """
 
-    order = openpype.api.ValidatePipelineOrder
+    order = ValidatePipelineOrder
     label = 'Non Duplicate Instance Members (ID)'
     hosts = ['maya']
     families = ["model",
@@ -29,8 +32,13 @@ class ValidateNodeIdsUnique(pyblish.api.InstancePlugin):
         # Ensure all nodes have a cbId
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Nodes found with non-unique "
-                               "asset IDs: {0}".format(invalid))
+            label = "Nodes found with non-unique asset IDs"
+            raise PublishValidationError(
+                message="{}: {}".format(label, invalid),
+                title="Non-unique asset ids on nodes",
+                description="{}\n- {}".format(label,
+                                              "\n- ".join(sorted(invalid)))
+            )
 
     @classmethod
     def get_invalid(cls, instance):

@@ -21,16 +21,29 @@ from .pipeline import (
     reset_selection
 )
 
+from .constants import (
+    OPENPYPE_TAG_NAME,
+    DEFAULT_SEQUENCE_NAME,
+    DEFAULT_BIN_NAME
+)
+
 from .lib import (
-    pype_tag_name,
     flatten,
     get_track_items,
     get_current_project,
     get_current_sequence,
+    get_timeline_selection,
     get_current_track,
+    get_track_item_tags,
+    get_track_openpype_tag,
+    set_track_openpype_tag,
+    get_track_openpype_data,
     get_track_item_pype_tag,
     set_track_item_pype_tag,
     get_track_item_pype_data,
+    get_trackitem_openpype_tag,
+    set_trackitem_openpype_tag,
+    get_trackitem_openpype_data,
     set_publish_attribute,
     get_publish_attribute,
     imprint,
@@ -74,16 +87,25 @@ __all__ = [
     "file_extensions",
     "work_root",
 
+    # Constants
+    "OPENPYPE_TAG_NAME",
+    "DEFAULT_SEQUENCE_NAME",
+    "DEFAULT_BIN_NAME",
+
     # Lib functions
-    "pype_tag_name",
     "flatten",
     "get_track_items",
     "get_current_project",
     "get_current_sequence",
+    "get_timeline_selection",
     "get_current_track",
-    "get_track_item_pype_tag",
-    "set_track_item_pype_tag",
-    "get_track_item_pype_data",
+    "get_track_item_tags",
+    "get_track_openpype_tag",
+    "set_track_openpype_tag",
+    "get_track_openpype_data",
+    "get_trackitem_openpype_tag",
+    "set_trackitem_openpype_tag",
+    "get_trackitem_openpype_data",
     "set_publish_attribute",
     "get_publish_attribute",
     "imprint",
@@ -95,6 +117,10 @@ __all__ = [
     "apply_colorspace_project",
     "apply_colorspace_clips",
     "get_sequence_pattern_and_padding",
+    # deprecated
+    "get_track_item_pype_tag",
+    "set_track_item_pype_tag",
+    "get_track_item_pype_data",
 
     # plugins
     "CreatorWidget",

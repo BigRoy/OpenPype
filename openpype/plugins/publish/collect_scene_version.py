@@ -1,6 +1,9 @@
 import os
 import pyblish.api
-import openpype.api as pype
+
+from openpype.lib import get_version_from_path
+from openpype.tests.lib import is_in_tests
+from openpype.pipeline import KnownPublishError
 
 
 class CollectSceneVersion(pyblish.api.ContextPlugin):
@@ -11,6 +14,7 @@ class CollectSceneVersion(pyblish.api.ContextPlugin):
 
     order = pyblish.api.CollectorOrder
     label = 'Collect Scene Version'
+    # configurable in Settings
     hosts = [
         "aftereffects",
         "blender",
@@ -20,23 +24,46 @@ class CollectSceneVersion(pyblish.api.ContextPlugin):
         "hiero",
         "houdini",
         "maya",
+        "max",
         "nuke",
         "photoshop",
         "resolve",
         "tvpaint"
     ]
 
+    # in some cases of headless publishing (for example webpublisher using PS)
+    # you want to ignore version from name and let integrate use next version
+    skip_hosts_headless_publish = []
+
     def process(self, context):
-        assert context.data.get('currentFile'), "Cannot get current file"
+        # tests should be close to regular publish as possible
+        if (
+            os.environ.get("HEADLESS_PUBLISH")
+            and not is_in_tests()
+            and context.data["hostName"] in self.skip_hosts_headless_publish
+        ):
+            self.log.debug("Skipping for headless publishing")
+            return
+
+        if not context.data.get('currentFile'):
+            raise KnownPublishError("Cannot get current workfile path. "
+                                    "Make sure your scene is saved.")
+
         filename = os.path.basename(context.data.get('currentFile'))
 
         if '<shell>' in filename:
             return
 
-        version = pype.get_version_from_path(filename)
-        assert version, "Cannot determine version"
+        self.log.debug(
+            "Collecting scene version from filename: {}".format(filename)
+        )
 
-        rootVersion = int(version)
-        context.data['version'] = rootVersion
-        self.log.info("{}".format(type(rootVersion)))
-        self.log.info('Scene Version: %s' % context.data.get('version'))
+        version = get_version_from_path(filename)
+        if version is None:
+            raise KnownPublishError("Unable to retrieve version number from "
+                                    "filename: {}".format(filename))
+
+        context.data['version'] = int(version)
+        self.log.debug(
+            "Collected scene version: {}".format(context.data.get('version'))
+        )

@@ -64,11 +64,31 @@
                 },
                 {
                     "type": "schema",
+                    "name": "schema_project_shotgrid"
+                },
+                {
+                    "type": "schema",
+                    "name": "schema_project_kitsu"
+                },
+                {
+                    "type": "schema",
                     "name": "schema_project_deadline"
                 },
                 {
                     "type": "schema",
+                    "name": "schema_project_royalrender"
+                },
+                {
+                    "type": "schema",
                     "name": "schema_project_slack"
+                },
+                {
+                    "type": "schema",
+                    "name": "schema_project_applications"
+                },
+                {
+                    "type": "schema",
+                    "name": "schema_project_max"
                 },
                 {
                     "type": "schema",
@@ -77,6 +97,10 @@
                 {
                     "type": "schema",
                     "name": "schema_project_nuke"
+                },
+                {
+                    "type": "schema",
+                    "name": "schema_project_fusion"
                 },
                 {
                     "type": "schema",
@@ -100,6 +124,10 @@
                 },
                 {
                     "type": "schema",
+                    "name": "schema_project_substancepainter"
+                },
+                {
+                    "type": "schema",
                     "name": "schema_project_harmony"
                 },
                 {
@@ -112,11 +140,19 @@
                 },
                 {
                     "type": "schema",
+                    "name": "schema_project_flame"
+                },
+                {
+                    "type": "schema",
                     "name": "schema_project_resolve"
                 },
                 {
                     "type": "schema",
                     "name": "schema_project_standalonepublisher"
+                },
+                {
+                    "type": "schema",
+                    "name": "schema_project_traypublisher"
                 },
                 {
                     "type": "schema",

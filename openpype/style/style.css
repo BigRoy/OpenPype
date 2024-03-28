@@ -35,6 +35,11 @@ QWidget:disabled {
     color: {color:font-disabled};
 }
 
+/* Some DCCs have set borders to solid color */
+QScrollArea {
+    border: none;
+}
+
 QLabel {
     background: transparent;
 }
@@ -42,7 +47,7 @@ QLabel {
 /* Inputs */
 QAbstractSpinBox, QLineEdit, QPlainTextEdit, QTextEdit {
     border: 1px solid {color:border};
-    border-radius: 0.3em;
+    border-radius: 0.2em;
     background: {color:bg-inputs};
     padding: 0.1em;
 }
@@ -127,10 +132,11 @@ QPushButton {
     border-radius: 0.2em;
     padding: 3px 5px 3px 5px;
     background: {color:bg-buttons};
+    min-width: 0px; /* Substance Painter fix */
 }
 
 QPushButton:hover {
-    background: {color:bg-button-hover};
+    background: {color:bg-buttons-hover};
     color: {color:font-hover};
 }
 
@@ -148,6 +154,10 @@ QPushButton::menu-indicator  {
     padding-right: 5px;
 }
 
+QPushButton[state="error"] {
+    background: {color:publisher:error};
+}
+
 QToolButton {
     border: 0px solid transparent;
     background: {color:bg-buttons};
@@ -156,7 +166,7 @@ QToolButton {
 }
 
 QToolButton:hover {
-    background: {color:bg-button-hover};
+    background: {color:bg-buttons-hover};
     color: {color:font-hover};
 }
 
@@ -222,7 +232,7 @@ QMenu::separator {
 /* Combobox */
 QComboBox {
     border: 1px solid {color:border};
-    border-radius: 3px;
+    border-radius: 0.2em;
     padding: 1px 3px 1px 3px;
     background: {color:bg-inputs};
 }
@@ -328,7 +338,15 @@ QTabWidget::tab-bar {
     alignment: left;
 }
 
+/* avoid QTabBar overrides in Substance Painter */
+QTabBar {
+    text-transform: none;
+    font-weight: normal;
+}
+
 QTabBar::tab {
+    text-transform: none;
+    font-weight: normal;
     border-top: 1px solid {color:border};
     border-left: 1px solid {color:border};
     border-right: 1px solid {color:border};
@@ -368,6 +386,7 @@ QHeaderView {
 QHeaderView::section  {
     background: {color:bg-view-header};
     padding: 4px;
+    border-top: 0px; /* Substance Painter fix */
     border-right: 1px solid {color:bg-view};
     border-radius: 0px;
     text-align: center;
@@ -387,10 +406,16 @@ QHeaderView::section:only-one {
 
 QHeaderView::down-arrow {
     image: url(:/openpype/images/down_arrow.png);
+    padding-right: 4px;
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
 }
 
 QHeaderView::up-arrow {
     image: url(:/openpype/images/up_arrow.png);
+    padding-right: 4px;
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
 }
 
 /* Checkboxes */
@@ -464,7 +489,6 @@ QAbstractItemView:disabled{
 }
 
 QAbstractItemView::item:hover {
-    /* color: {color:bg-view-hover}; */
     background: {color:bg-view-hover};
 }
 
@@ -488,54 +512,81 @@ QAbstractItemView::item:selected:hover {
 }
 
 /* Row colors (alternate colors) are from left - right */
-QAbstractItemView:branch {
-    background: transparent;
+QTreeView::branch {
+    background: {color:bg-view};
+}
+QTreeView::branch:hover {
+    background: {color:bg-view};
+}
+QTreeView::branch:selected {
+    background: {color:bg-view};
 }
 
 QAbstractItemView::branch:open:has-children:!has-siblings,
 QAbstractItemView::branch:open:has-children:has-siblings {
     border-image: none;
     image: url(:/openpype/images/branch_open.png);
-    background: transparent;
+    background: {color:bg-view};
 }
 QAbstractItemView::branch:open:has-children:!has-siblings:hover,
 QAbstractItemView::branch:open:has-children:has-siblings:hover {
     border-image: none;
     image: url(:/openpype/images/branch_open_on.png);
-    background: transparent;
+    background: {color:bg-view};
 }
 
 QAbstractItemView::branch:has-children:!has-siblings:closed,
 QAbstractItemView::branch:closed:has-children:has-siblings {
     border-image: none;
     image: url(:/openpype/images/branch_closed.png);
-    background: transparent;
+    background: {color:bg-view};
 }
 QAbstractItemView::branch:has-children:!has-siblings:closed:hover,
 QAbstractItemView::branch:closed:has-children:has-siblings:hover {
     border-image: none;
     image: url(:/openpype/images/branch_closed_on.png);
-    background: transparent;
+    background: {color:bg-view};
 }
 
 QAbstractItemView::branch:has-siblings:!adjoins-item {
     border-image: none;
     image: url(:/openpype/images/transparent.png);
-    background: transparent;
+    background: {color:bg-view};
 }
 
 QAbstractItemView::branch:has-siblings:adjoins-item {
     border-image: none;
     image: url(:/openpype/images/transparent.png);
-    background: transparent;
+    background: {color:bg-view};
 }
 
 QAbstractItemView::branch:!has-children:!has-siblings:adjoins-item {
     border-image: none;
     image: url(:/openpype/images/transparent.png);
-    background: transparent;
+    background: {color:bg-view};
 }
 
+CompleterView {
+    border: 1px solid #555555;
+    background: {color:bg-inputs};
+}
+
+CompleterView::item:selected {
+    background: {color:bg-view-hover};
+}
+
+CompleterView::item:selected:hover {
+    background: {color:bg-view-hover};
+}
+
+CompleterView::right-arrow {
+    min-width: 10px;
+}
+CompleterView::separator {
+    background: {color:bg-menu-separator};
+    height: 2px;
+    margin-right: 5px;
+}
 
 /* Progress bar */
 QProgressBar {
@@ -660,6 +711,34 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     background: none;
 }
 
+/* Messages overlay */
+OverlayMessageWidget {
+    border-radius: 0.2em;
+    background: {color:overlay-messages:bg-success};
+}
+
+OverlayMessageWidget:hover {
+    background: {color:overlay-messages:bg-success-hover};
+}
+
+OverlayMessageWidget[type="error"] {
+    background: {color:overlay-messages:bg-error};
+}
+OverlayMessageWidget[type="error"]:hover {
+    background: {color:overlay-messages:bg-error-hover};
+}
+
+OverlayMessageWidget[type="info"] {
+    background: {color:overlay-messages:bg-info};
+}
+OverlayMessageWidget[type="info"]:hover {
+    background: {color:overlay-messages:bg-info-hover};
+}
+
+OverlayMessageWidget QWidget {
+    background: transparent;
+}
+
 /* Password dialog*/
 #PasswordBtn {
     border: none;
@@ -683,15 +762,16 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 }
 
 #InfoText {
-    padding-left: 30px;
-    padding-top: 20px;
+    padding-left: 0px;
+    padding-top: 0px;
+    padding-right: 20px;
     background: transparent;
-    border: 1px solid {color:border};
+    border: none;
 }
 
 #TypeEditor, #ToolEditor, #NameEditor, #NumberEditor {
     background: transparent;
-    border-radius: 0.3em;
+    border-radius: 0.2em;
 }
 
 #TypeEditor:focus, #ToolEditor:focus, #NameEditor:focus, #NumberEditor:focus {
@@ -711,6 +791,13 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 
 #CompleterView::item:hover {
     background: {color:bg-view-hover};
+}
+
+#DeleteButton {
+    background: {color:delete-btn-bg};
+}
+#DeleteButton:disabled {
+    background: {color:delete-btn-bg-disabled};
 }
 
 /* Launcher specific stylesheets */
@@ -801,11 +888,98 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     background: {color:bg-view-hover};
 }
 
-/* New Create/Publish UI */
+/* Publisher UI (Create/Publish) */
+#PublishWindow QAbstractSpinBox, QLineEdit, QPlainTextEdit, QTextEdit {
+    padding: 1px;
+}
+#PublishWindow QComboBox {
+    padding: 1px 1px 1px 0.2em;
+}
+PublisherTabsWidget {
+    background: {color:publisher:tab-bg};
+}
+
+PublisherTabBtn {
+    border-radius: 0px;
+    background: {color:bg-inputs};
+    font-size: 9pt;
+    font-weight: regular;
+    padding: 0.5em 1em 0.5em 1em;
+}
+
+PublisherTabBtn:disabled {
+    background: {color:bg-inputs};
+}
+
+PublisherTabBtn:hover {
+    background: {color:bg-buttons};
+}
+
+PublisherTabBtn[active="1"] {
+    background: {color:bg};
+}
+PublisherTabBtn[active="1"]:hover {
+    background: {color:bg};
+}
+
+PixmapButton{
+    border: 0px solid transparent;
+    border-radius: 0.2em;
+    background: {color:bg-buttons};
+}
+PixmapButton:hover {
+    background: {color:bg-buttons-hover};
+}
+PixmapButton:disabled {
+    background: {color:bg-buttons-disabled};
+}
+
+#ThumbnailPixmapHoverButton {
+    font-size: 11pt;
+    background: {color:bg-view};
+}
+#ThumbnailPixmapHoverButton:hover {
+    background: {color:bg-buttons-hover};
+}
+
+#CreatorDetailedDescription {
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 5px;
+    background: transparent;
+    border: 1px solid {color:border};
+}
+
+#CreateDialogHelpButton {
+    background: {color:bg-buttons};
+    border-top-left-radius: 0.2em;
+    border-bottom-left-radius: 0.2em;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    font-weight: bold;
+}
+
+#CreateDialogHelpButton:hover {
+    background: {color:bg-buttons-hover};
+}
+#CreateDialogHelpButton QWidget {
+    background: transparent;
+}
+
 #PublishLogConsole {
     font-family: "Noto Sans Mono";
 }
-
+#VariantInputsWidget QLineEdit {
+    border-bottom-right-radius: 0px;
+    border-top-right-radius: 0px;
+}
+#VariantInputsWidget QToolButton {
+    border-bottom-left-radius: 0px;
+    border-top-left-radius: 0px;
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
+    width: 0.5em;
+}
 #VariantInput[state="new"], #VariantInput[state="new"]:focus, #VariantInput[state="new"]:hover {
     border-color: {color:publisher:success};
 }
@@ -845,7 +1019,7 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     border-radius: 0.2em;
 }
 #CardViewWidget:hover {
-    background: {color:bg-button-hover};
+    background: {color:bg-buttons-hover};
 }
 #CardViewWidget[state="selected"] {
     background: {color:bg-view-selection};
@@ -855,41 +1029,34 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     color: {color:publisher:error};
 }
 
-#PublishFrame {
-    background: rgba(0, 0, 0, 127);
-}
-#PublishFrame[state="1"] {
-    background: rgb(22, 25, 29);
-}
-#PublishFrame[state="2"] {
-    background: {color:bg};
-}
-
 #PublishInfoFrame {
     background: {color:bg};
-    border: 2px solid black;
     border-radius: 0.3em;
 }
-
-#PublishInfoFrame[state="-1"] {
-    background: rgb(194, 226, 236);
-}
-
 #PublishInfoFrame[state="0"] {
-	background: {color:publisher:error};
+  background: {color:publisher:success};
 }
 
 #PublishInfoFrame[state="1"] {
-	background: {color:publisher:success};
+	background: {color:publisher:crash};
 }
 
 #PublishInfoFrame[state="2"] {
 	background: {color:publisher:warning};
 }
 
+#PublishInfoFrame[state="3"], #PublishInfoFrame[state="4"] {
+    background: {color:publisher:progress};
+}
+
 #PublishInfoFrame QLabel {
     color: black;
     font-style: bold;
+}
+
+#PublishReportHeader {
+    font-size: 14pt;
+    font-weight: bold;
 }
 
 #PublishInfoMainLabel {
@@ -900,6 +1067,11 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     font-size: 13pt;
 }
 
+ValidationArtistMessage QLabel {
+    font-size: 20pt;
+    font-weight: bold;
+}
+
 #ValidationActionButton {
     border-radius: 0.2em;
     padding: 4px 6px 4px 6px;
@@ -907,7 +1079,7 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 }
 
 #ValidationActionButton:hover {
-    background: {color:bg-button-hover};
+    background: {color:bg-buttons-hover};
     color: {color:font-hover};
 }
 
@@ -916,17 +1088,16 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 }
 
 #ValidationErrorTitleFrame {
-    background: {color:bg-inputs};
-    border-left: 4px solid transparent;
+    border-radius: 0.2em;
+    background: {color:bg-buttons};
 }
 
 #ValidationErrorTitleFrame:hover {
-    border-left-color: {color:border};
+    background: {color:bg-buttons-hover};
 }
 
 #ValidationErrorTitleFrame[selected="1"] {
-    background: {color:bg};
-    border-left-color: {palette:blue-light};
+    background: {color:bg-view-selection};
 }
 
 #ValidationErrorInstanceList {
@@ -938,11 +1109,77 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     border-left: 1px solid {color:border};
 }
 
-#TasksCombobox[state="invalid"], #AssetNameInput[state="invalid"] {
+#PublishInstancesDetails {
+    border: 1px solid {color:border};
+    border-radius: 0.3em;
+}
+
+#InstancesLogsView {
+    border: 1px solid {color:border};
+    background: {color:bg-view};
+    border-radius: 0.3em;
+}
+
+#PublishLogMessage {
+    font-family: "Noto Sans Mono";
+}
+
+#PublishInstanceLogsLabel {
+    font-weight: bold;
+}
+
+#PublishCrashMainLabel{
+    font-weight: bold;
+    font-size: 16pt;
+}
+
+#PublishCrashReportLabel {
+    font-weight: bold;
+    font-size: 13pt;
+}
+
+#AssetNameInputWidget {
+    background: {color:bg-inputs};
+    border: 1px solid {color:border};
+    border-radius: 0.2em;
+}
+
+#AssetNameInputWidget QWidget {
+    background: transparent;
+}
+
+#AssetNameInputButton {
+    border-bottom-left-radius: 0px;
+    border-top-left-radius: 0px;
+    padding: 0px;
+    qproperty-iconSize: 11px 11px;
+    border-left: 1px solid {color:border};
+    border-right: none;
+    border-top: none;
+    border-bottom: none;
+}
+
+#AssetNameInput {
+    border-bottom-right-radius: 0px;
+    border-top-right-radius: 0px;
+    border: none;
+}
+
+#AssetNameInputWidget:hover {
+    border-color: {color:border-hover};
+}
+#AssetNameInputWidget:focus{
+    border-color: {color:border-focus};
+}
+#AssetNameInputWidget:disabled {
+    background: {color:bg-inputs-disabled};
+}
+
+#TasksCombobox[state="invalid"], #AssetNameInputWidget[state="invalid"], #AssetNameInputButton[state="invalid"] {
     border-color: {color:publisher:error};
 }
 
-#PublishProgressBar[state="0"]::chunk {
+#PublishProgressBar[state="1"]::chunk, #PublishProgressBar[state="4"]::chunk {
     background: {color:bg-buttons};
 }
 
@@ -960,6 +1197,10 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 }
 #ArrowBtn, #ArrowBtn:disabled, #ArrowBtn:hover {
     background: transparent;
+}
+
+CreateNextPageOverlay {
+    font-size: 32pt;
 }
 
 /* Settings - NOT USED YET
@@ -1065,16 +1306,16 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 #ExpandLabel[state="modified"]:hover, #SettingsLabel[state="modified"]:hover {
     color: {color:settings:modified-light};
 }
-#ExpandLabel[state="overriden-modified"], #SettingsLabel[state="overriden-modified"] {
+#ExpandLabel[state="overridden-modified"], #SettingsLabel[state="overridden-modified"] {
     color: {color:settings:modified-mid};
 }
-#ExpandLabel[state="overriden-modified"]:hover, #SettingsLabel[state="overriden-modified"]:hover {
+#ExpandLabel[state="overridden-modified"]:hover, #SettingsLabel[state="overridden-modified"]:hover {
     color: {color:settings:modified-light};
 }
-#ExpandLabel[state="overriden"], #SettingsLabel[state="overriden"] {
+#ExpandLabel[state="overridden"], #SettingsLabel[state="overridden"] {
     color: {color:settings:project-mid};
 }
-#ExpandLabel[state="overriden"]:hover, #SettingsLabel[state="overriden"]:hover {
+#ExpandLabel[state="overridden"]:hover, #SettingsLabel[state="overridden"]:hover {
     color: {color:settings:project-light};
 }
 #ExpandLabel[state="invalid"], #SettingsLabel[state="invalid"] {
@@ -1083,28 +1324,46 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 #ExpandLabel[state="invalid"]:hover, #SettingsLabel[state="invalid"]:hover {
     color: {color:settings:invalid-dark};
 }
+#SettingsOutdatedSourceVersion {
+    color: {color:settings:source-version-outdated};
+}
+#SourceVersionLabel {
+    padding-left: 3px;
+    padding-right: 3px;
+}
+
+#SourceVersionLabel[state="same"] {
+    color: {color:settings:source-version};
+}
+#SourceVersionLabel[state="different"] {
+    color: {color:settings:source-version-outdated};
+}
 
 /* TODO Replace these with explicit widget types if possible */
 #SettingsMainWidget QWidget[input-state="modified"] {
     border-color: {color:settings:modified-mid};
 }
-#SettingsMainWidget QWidget[input-state="overriden-modified"] {
+#SettingsMainWidget QWidget[input-state="overridden-modified"] {
     border-color: {color:settings:modified-mid};
 }
-#SettingsMainWidget QWidget[input-state="overriden"] {
+#SettingsMainWidget QWidget[input-state="overridden"] {
     border-color: {color:settings:project-mid};
 }
 #SettingsMainWidget QWidget[input-state="invalid"] {
     border-color: {color:settings:invalid-dark};
 }
 
-#GroupWidget {
-    border-bottom: 1px solid #21252B;
+#SettingsFooter {
+    border-top: 1px solid #21252B;
 }
 
 #ProjectListWidget QLabel {
     background: transparent;
     font-weight: bold;
+}
+
+#ProjectListContentWidget {
+    background: {color:bg-view};
 }
 
 #MultiSelectionComboBox {
@@ -1117,8 +1376,8 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 #ContentWidget {
     background-color: transparent;
 }
-#ContentWidget[content_state="hightlighted"] {
-    background-color: {color:settings:content-hightlighted};
+#ContentWidget[content_state="highlighted"] {
+    background-color: {color:settings:content-highlighted};
 }
 
 #SideLineWidget {
@@ -1144,11 +1403,11 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 #SideLineWidget[state="child-invalid"] {border-color: {color:settings:invalid-dark};}
 #SideLineWidget[state="child-invalid"]:hover {border-color: {color:settings:invalid-light};}
 
-#SideLineWidget[state="child-overriden"] {border-color: {color:settings:project-dark};}
-#SideLineWidget[state="child-overriden"]:hover {border-color: {color:settings:project-mid};}
+#SideLineWidget[state="child-overridden"] {border-color: {color:settings:project-dark};}
+#SideLineWidget[state="child-overridden"]:hover {border-color: {color:settings:project-mid};}
 
-#SideLineWidget[state="child-overriden-modified"] {border-color: {color:settings:modified-dark};}
-#SideLineWidget[state="child-overriden-modified"]:hover {border-color: {color:settings:modified-mid};}
+#SideLineWidget[state="child-overridden-modified"] {border-color: {color:settings:modified-dark};}
+#SideLineWidget[state="child-overridden-modified"]:hover {border-color: {color:settings:modified-mid};}
 
 #DictAsWidgetBody {
     background: transparent;
@@ -1158,8 +1417,24 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     border-radius: 5px;
 }
 
+#OpenPypeVersionLabel[state="success"] {
+    color: {color:settings:version-exists};
+}
+
+#OpenPypeVersionLabel[state="warning"] {
+    color: {color:settings:version-not-found};
+}
+
 #ShadowWidget {
     font-size: 36pt;
+}
+
+#OverlayFrame {
+    background: rgba(0, 0, 0, 127);
+}
+
+#OverlayFrameLabel {
+    font-size: 15pt;
 }
 
 #BreadcrumbsPathInput {
@@ -1192,7 +1467,39 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     background: #21252B;
 }
 
+/* Workfiles */
+#WorkfilesPublishedContextSelect {
+    background: rgba(0, 0, 0, 127);
+}
+#WorkfilesPublishedContextSelect QLabel {
+    font-size: 17pt;
+}
+
+/* Tray */
+#TrayRestartButton {
+    background: {color:restart-btn-bg};
+}
+
+/* Tray publisher */
+#ChooseProjectLabel {
+    font-size: 15pt;
+    font-weight: 750;
+}
+#ChooseProjectFrame {
+    border-radius: 10px;
+}
+#ChooseProjectView {
+    background: transparent;
+}
+
 /* Globally used names */
+#ValidatedLineEdit[state="valid"], #ValidatedLineEdit[state="valid"]:focus, #ValidatedLineEdit[state="valid"]:hover {
+    border-color: {color:publisher:success};
+}
+#ValidatedLineEdit[state="invalid"], #ValidatedLineEdit[state="invalid"]:focus, #ValidatedLineEdit[state="invalid"]:hover {
+    border-color: {color:publisher:error};
+}
+
 #Separator {
     background: {color:bg-menu-separator};
 }
@@ -1228,4 +1535,21 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 }
 #LikeDisabledInput:focus {
     border-color: {color:border};
+}
+
+/* Attribute Definition widgets */
+AttributeDefinitionsWidget QAbstractSpinBox, QLineEdit, QPlainTextEdit, QTextEdit {
+    padding: 1px;
+}
+AttributeDefinitionsWidget QComboBox {
+    padding: 1px 1px 1px 0.2em;
+}
+InViewButton, InViewButton:disabled {
+    background: transparent;
+}
+InViewButton:hover {
+    background: rgba(255, 255, 255, 37);
+}
+SupportLabel {
+    color: {color:font-disabled};
 }

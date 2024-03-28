@@ -1,6 +1,6 @@
 import platform
 import copy
-from Qt import QtWidgets, QtCore, QtGui
+from qtpy import QtWidgets, QtCore, QtGui
 from openpype.tools.settings.settings import ProjectListWidget
 from openpype.tools.utils import PlaceholderLineEdit
 from openpype.settings.constants import (
@@ -126,7 +126,7 @@ class DynamicInputItem(QtCore.QObject):
                 return "studio"
         else:
             if current_value:
-                return "overriden"
+                return "overridden"
 
             if self.value_item.default_value:
                 return "studio"
@@ -248,6 +248,9 @@ class SitesWidget(QtWidgets.QWidget):
         main_layout.addWidget(comboboxes_widget, 0)
         main_layout.addWidget(content_widget, 1)
 
+        active_site_widget.value_changed.connect(self.refresh)
+        remote_site_widget.value_changed.connect(self.refresh)
+
         self.active_site_widget = active_site_widget
         self.remote_site_widget = remote_site_widget
 
@@ -264,29 +267,34 @@ class SitesWidget(QtWidgets.QWidget):
         self.input_objects = {}
 
     def _get_sites_inputs(self):
-        sync_server_module = (
-            self.modules_manager.modules_by_name["sync_server"]
-        )
-
-        # This is temporary modification
-        # - whole logic here should be in sync module's providers
-        site_names = sync_server_module.get_active_sites_from_settings(
-            self.project_settings["project_settings"].value
-        )
-
-        roots_entity = (
-            self.project_settings[PROJECT_ANATOMY_KEY][LOCAL_ROOTS_KEY]
-        )
-
         output = []
+        if self._project_name is None:
+            return output
+
+        sync_server_module = self.modules_manager.modules_by_name.get(
+            "sync_server")
+        if sync_server_module is None or not sync_server_module.enabled:
+            return output
+
+        site_configs = sync_server_module.get_all_site_configs(
+            self._project_name, local_editable_only=True)
+
+        site_names = [self.active_site_widget.current_text(),
+                      self.remote_site_widget.current_text()]
         for site_name in site_names:
+            if not site_name:
+                continue
+
             site_inputs = []
-            for root_name, path_entity in roots_entity.items():
-                platform_entity = path_entity[platform.system().lower()]
+            site_config = site_configs.get(site_name, {})
+            for root_name, path_entity in site_config.get("root", {}).items():
+                if not path_entity:
+                    continue
+                platform_value = path_entity[platform.system().lower()]
                 site_inputs.append({
                     "label": root_name,
                     "key": root_name,
-                    "value": platform_entity.value
+                    "value": platform_value
                 })
 
             output.append(
@@ -342,9 +350,6 @@ class SitesWidget(QtWidgets.QWidget):
 
     def refresh(self):
         self._clear_widgets()
-
-        if self._project_name is None:
-            return
 
         # Site label
         for site_name, site_inputs in self._get_sites_inputs():
@@ -436,6 +441,7 @@ class SitesWidget(QtWidgets.QWidget):
 
 class _SiteCombobox(QtWidgets.QWidget):
     input_label = None
+    value_changed = QtCore.Signal()
 
     def __init__(self, modules_manager, project_settings, parent):
         super(_SiteCombobox, self).__init__(parent)
@@ -512,7 +518,7 @@ class _SiteCombobox(QtWidgets.QWidget):
                 return "studio"
         else:
             if current_value:
-                return "overriden"
+                return "overridden"
 
             studio_value = self._get_local_settings_item(DEFAULT_PROJECT_KEY)
             if studio_value:
@@ -661,6 +667,7 @@ class _SiteCombobox(QtWidgets.QWidget):
 
         self._set_local_settings_value(self.current_text())
         self._update_style()
+        self.value_changed.emit()
 
     def _set_local_settings_value(self, value):
         raise NotImplementedError(

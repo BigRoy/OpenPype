@@ -15,13 +15,18 @@ Provides:
 """
 
 import os
+
 import clique
-import opentimelineio as otio
 from pyblish import api
-import openpype
+
+from openpype.lib import (
+    get_ffmpeg_tool_args,
+    run_subprocess,
+)
+from openpype.pipeline import publish
 
 
-class ExtractOTIOReview(openpype.api.Extractor):
+class ExtractOTIOReview(publish.Extractor):
     """
     Extract OTIO timeline into one concuted image sequence file.
 
@@ -41,7 +46,7 @@ class ExtractOTIOReview(openpype.api.Extractor):
     order = api.ExtractorOrder - 0.45
     label = "Extract OTIO review"
     families = ["review"]
-    hosts = ["resolve", "hiero"]
+    hosts = ["resolve", "hiero", "flame"]
 
     # plugin default attributes
     temp_file_head = "tempFile."
@@ -50,6 +55,13 @@ class ExtractOTIOReview(openpype.api.Extractor):
     output_ext = ".jpg"
 
     def process(self, instance):
+        # Not all hosts can import these modules.
+        import opentimelineio as otio
+        from openpype.pipeline.editorial import (
+            otio_range_to_frame_range,
+            make_sequence_collection
+        )
+
         # TODO: convert resulting image sequence to mp4
 
         # get otio clip and other time info from instance clip
@@ -84,6 +96,28 @@ class ExtractOTIOReview(openpype.api.Extractor):
         # loop available clips in otio track
         for index, r_otio_cl in enumerate(otio_review_clips):
             # QUESTION: what if transition on clip?
+
+            # check if resolution is the same
+            width = self.to_width
+            height = self.to_height
+            otio_media = r_otio_cl.media_reference
+            media_metadata = otio_media.metadata
+
+            # get from media reference metadata source
+            if media_metadata.get("openpype.source.width"):
+                width = int(media_metadata.get("openpype.source.width"))
+            if media_metadata.get("openpype.source.height"):
+                height = int(media_metadata.get("openpype.source.height"))
+
+            # compare and reset
+            if width != self.to_width:
+                self.to_width = width
+            if height != self.to_height:
+                self.to_height = height
+
+            self.log.debug("> self.to_width x self.to_height: {} x {}".format(
+                self.to_width, self.to_height
+            ))
 
             # get frame range values
             src_range = r_otio_cl.source_range
@@ -139,7 +173,7 @@ class ExtractOTIOReview(openpype.api.Extractor):
                         dirname = media_ref.target_url_base
                         head = media_ref.name_prefix
                         tail = media_ref.name_suffix
-                        first, last = openpype.lib.otio_range_to_frame_range(
+                        first, last = otio_range_to_frame_range(
                             available_range)
                         collection = clique.Collection(
                             head=head,
@@ -158,7 +192,7 @@ class ExtractOTIOReview(openpype.api.Extractor):
                         # in case it is file sequence but not new OTIO schema
                         # `ImageSequenceReference`
                         path = media_ref.target_url
-                        collection_data = openpype.lib.make_sequence_collection(
+                        collection_data = make_sequence_collection(
                             path, available_range, metadata)
                         dir_path, collection = collection_data
 
@@ -247,9 +281,17 @@ class ExtractOTIOReview(openpype.api.Extractor):
         Returns:
             otio.time.TimeRange: trimmed available range
         """
+        # Not all hosts can import these modules.
+        from openpype.pipeline.editorial import (
+            trim_media_range,
+            range_from_frames
+        )
+
         avl_start = int(avl_range.start_time.value)
         src_start = int(avl_start + start)
         avl_durtation = int(avl_range.duration.value)
+
+        self.need_offset = bool(avl_start != 0 and src_start != 0)
 
         # if media start is les then clip requires
         if src_start < avl_start:
@@ -281,8 +323,8 @@ class ExtractOTIOReview(openpype.api.Extractor):
             duration = avl_durtation
 
         # return correct trimmed range
-        return openpype.lib.trim_media_range(
-            avl_range, openpype.lib.range_from_frames(start, duration, fps)
+        return trim_media_range(
+            avl_range, range_from_frames(start, duration, fps)
         )
 
     def _render_seqment(self, sequence=None,
@@ -302,8 +344,8 @@ class ExtractOTIOReview(openpype.api.Extractor):
         Returns:
             otio.time.TimeRange: trimmed available range
         """
-        # get rendering app path
-        ffmpeg_path = openpype.lib.get_ffmpeg_tool_path("ffmpeg")
+        # Not all hosts can import this module.
+        from openpype.pipeline.editorial import frames_to_seconds
 
         # create path  and frame start to destination
         output_path, out_frame_start = self._get_ffmpeg_output()
@@ -312,8 +354,9 @@ class ExtractOTIOReview(openpype.api.Extractor):
             out_frame_start += end_offset
 
         # start command list
-        command = [ffmpeg_path]
+        command = get_ffmpeg_tool_args("ffmpeg")
 
+        input_extension = None
         if sequence:
             input_dir, collection = sequence
             in_frame_start = min(collection.indexes)
@@ -321,6 +364,7 @@ class ExtractOTIOReview(openpype.api.Extractor):
             # converting image sequence to image sequence
             input_file = collection.format("{head}{padding}{tail}")
             input_path = os.path.join(input_dir, input_file)
+            input_extension = os.path.splitext(input_path)[-1]
 
             # form command for rendering gap files
             command.extend([
@@ -333,10 +377,11 @@ class ExtractOTIOReview(openpype.api.Extractor):
             frame_start = otio_range.start_time.value
             input_fps = otio_range.start_time.rate
             frame_duration = otio_range.duration.value
-            sec_start = openpype.lib.frames_to_secons(frame_start, input_fps)
-            sec_duration = openpype.lib.frames_to_secons(
+            sec_start = frames_to_seconds(frame_start, input_fps)
+            sec_duration = frames_to_seconds(
                 frame_duration, input_fps
             )
+            input_extension = os.path.splitext(video_path)[-1]
 
             # form command for rendering gap files
             command.extend([
@@ -346,8 +391,7 @@ class ExtractOTIOReview(openpype.api.Extractor):
             ])
 
         elif gap:
-            sec_duration = openpype.lib.frames_to_secons(
-                gap, self.actual_fps)
+            sec_duration = frames_to_seconds(gap, self.actual_fps)
 
             # form command for rendering gap files
             command.extend([
@@ -362,12 +406,24 @@ class ExtractOTIOReview(openpype.api.Extractor):
 
         # add output attributes
         command.extend([
-            "-start_number", str(out_frame_start),
-            output_path
+            "-start_number", str(out_frame_start)
         ])
+
+        # add copying if extensions are matching
+        if (
+            input_extension
+            and self.output_ext == input_extension
+        ):
+            command.extend([
+                "-c", "copy"
+            ])
+
+        # add output path at the end
+        command.append(output_path)
+
         # execute
         self.log.debug("Executing: {}".format(" ".join(command)))
-        output = openpype.api.run_subprocess(
+        output = run_subprocess(
             command, logger=self.log
         )
         self.log.debug("Output: {}".format(output))
@@ -386,11 +442,17 @@ class ExtractOTIOReview(openpype.api.Extractor):
         """
 
         padding = "{{:0{}d}}".format(self.padding)
+
+        # create frame offset
+        offset = 0
+        if self.need_offset:
+            offset = 1
+
         if end_offset:
             new_frames = list()
             start_frame = self.used_frames[-1]
-            for index in range((end_offset + 1),
-                               (int(end_offset + duration) + 1)):
+            for index in range((end_offset + offset),
+                               (int(end_offset + duration) + offset)):
                 seq_number = padding.format(start_frame + index)
                 self.log.debug(
                     "index: `{}` | seq_number: `{}`".format(index, seq_number))

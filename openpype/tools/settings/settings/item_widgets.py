@@ -1,6 +1,11 @@
 import json
 
-from Qt import QtWidgets, QtCore, QtGui
+from qtpy import QtWidgets, QtCore, QtGui
+
+from openpype.widgets.sliders import NiceSlider
+from openpype.tools.settings import CHILD_OFFSET
+from openpype.tools.utils import MultiSelectionComboBox
+from openpype.settings.entities.exceptions import BaseInvalidValue
 
 from .widgets import (
     ExpandingWidget,
@@ -11,7 +16,6 @@ from .widgets import (
     SettingsNiceCheckbox,
     SettingsLineEdit
 )
-from .multiselection_combobox import MultiSelectionComboBox
 from .wrapper_widgets import (
     WrapperWidget,
     CollapsibleWrapper,
@@ -21,9 +25,6 @@ from .base import (
     BaseWidget,
     InputWidget
 )
-
-from openpype.widgets.sliders import NiceSlider
-from openpype.tools.settings import CHILD_OFFSET
 
 
 class DictImmutableKeysWidget(BaseWidget):
@@ -149,7 +150,7 @@ class DictImmutableKeysWidget(BaseWidget):
         content_widget.setObjectName("ContentWidget")
 
         if self.entity.highlight_content:
-            content_state = "hightlighted"
+            content_state = "highlighted"
             bottom_margin = 5
         else:
             content_state = ""
@@ -359,14 +360,16 @@ class TextWidget(InputWidget):
     def _add_inputs_to_layout(self):
         multiline = self.entity.multiline
         if multiline:
-            self.input_field = SettingsPlainTextEdit(self.content_widget)
+            input_field = SettingsPlainTextEdit(self.content_widget)
+            if self.entity.minimum_lines_count:
+                input_field.set_minimum_lines(self.entity.minimum_lines_count)
         else:
-            self.input_field = SettingsLineEdit(self.content_widget)
-
+            input_field = SettingsLineEdit(self.content_widget)
         placeholder_text = self.entity.placeholder_text
         if placeholder_text:
-            self.input_field.setPlaceholderText(placeholder_text)
+            input_field.setPlaceholderText(placeholder_text)
 
+        self.input_field = input_field
         self.setFocusProxy(self.input_field)
 
         layout_kwargs = {}
@@ -377,6 +380,16 @@ class TextWidget(InputWidget):
 
         self.input_field.focused_in.connect(self._on_input_focus)
         self.input_field.textChanged.connect(self._on_value_change)
+
+        self._refresh_completer()
+
+    def _refresh_completer(self):
+        # Multiline entity can't have completer
+        #   - there is not space for this UI component
+        if self.entity.multiline:
+            return
+
+        self.input_field.update_completer_values(self.entity.value_hints)
 
     def _on_input_focus(self):
         self.focused_in()
@@ -404,6 +417,86 @@ class TextWidget(InputWidget):
 
     def _on_value_change_timer(self):
         self.entity.set(self.input_value())
+
+
+class OpenPypeVersionText(TextWidget):
+    def __init__(self, *args, **kwargs):
+        self._info_widget = None
+        super(OpenPypeVersionText, self).__init__(*args, **kwargs)
+
+    def create_ui(self):
+        super(OpenPypeVersionText, self).create_ui()
+        info_widget = QtWidgets.QLabel(self)
+        info_widget.setObjectName("OpenPypeVersionLabel")
+        self.content_layout.addWidget(info_widget, 1)
+
+        self._info_widget = info_widget
+
+    def _update_info_widget(self):
+        value = self.input_value()
+
+        message = ""
+        tooltip = ""
+        state = None
+        if self._is_invalid:
+            message = "Invalid OpenPype version format"
+
+        elif value == "":
+            message = "Use latest available version"
+            tooltip = (
+                "Latest version from OpenPype zip repository will be used"
+            )
+
+        elif value in self.entity.value_hints:
+            state = "success"
+            message = "Version {} will be used".format(value)
+
+        else:
+            state = "warning"
+            message = (
+                "Version {} not found in listed versions".format(value)
+            )
+            if self.entity.value_hints:
+                tooltip = "Listed versions: {}".format(", ".join(
+                    ['"{}"'.format(hint) for hint in self.entity.value_hints]
+                ))
+            else:
+                tooltip = "No versions were listed"
+
+        self._info_widget.setText(message)
+        self._info_widget.setToolTip(tooltip)
+        self.set_style_property(self._info_widget, "state", state)
+
+    def set_entity_value(self):
+        super(OpenPypeVersionText, self).set_entity_value()
+        self._invalidate()
+        self._update_info_widget()
+
+    def _on_value_change_timer(self):
+        value = self.input_value()
+        self._invalidate()
+        if not self.is_invalid:
+            self.entity.set(value)
+            self.update_style()
+        else:
+            # Manually trigger hierarchical style update
+            self.ignore_input_changes.set_ignore(True)
+            self.ignore_input_changes.set_ignore(False)
+
+        self._update_info_widget()
+
+    def _invalidate(self):
+        value = self.input_value()
+        try:
+            self.entity.convert_to_valid_type(value)
+            is_invalid = False
+        except BaseInvalidValue:
+            is_invalid = True
+        self._is_invalid = is_invalid
+
+    def _on_entity_change(self):
+        super(OpenPypeVersionText, self)._on_entity_change()
+        self._refresh_completer()
 
 
 class NumberWidget(InputWidget):
@@ -584,7 +677,7 @@ class RawJsonWidget(InputWidget):
             self.entity.set(self.input_field.json_value())
             self.update_style()
         else:
-            # Manually trigger hierachical style update
+            # Manually trigger hierarchical style update
             self.ignore_input_changes.set_ignore(True)
             self.ignore_input_changes.set_ignore(False)
 
@@ -701,7 +794,7 @@ class PathWidget(BaseWidget):
         self.input_field.hierarchical_style_update()
 
     def _on_entity_change(self):
-        # No need to do anything. Styles will be updated from top hierachy.
+        # No need to do anything. Styles will be updated from top hierarchy.
         pass
 
     def update_style(self):

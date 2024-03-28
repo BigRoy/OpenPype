@@ -1,5 +1,5 @@
 import pyblish.api
-import openpype.api
+from openpype.pipeline.publish import ValidateContentsOrder
 
 
 class ValidateSingleAssembly(pyblish.api.InstancePlugin):
@@ -17,9 +17,9 @@ class ValidateSingleAssembly(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ['maya']
-    families = ['rig', 'animation']
+    families = ['rig']
     label = 'Single Assembly'
 
     def process(self, instance):

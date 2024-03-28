@@ -9,26 +9,14 @@ import json
 import xml.dom.minidom as minidom
 from copy import deepcopy
 import datetime
-
-try:
-    from libwiretapPythonClientAPI import (
-        WireTapClientInit)
-except ImportError:
-    flame_python_path = "/opt/Autodesk/flame_2021/python"
-    flame_exe_path = (
-        "/opt/Autodesk/flame_2021/bin/flame.app"
-        "/Contents/MacOS/startApp")
-
-    sys.path.append(flame_python_path)
-
-    from libwiretapPythonClientAPI import (
-        WireTapClientInit,
-        WireTapClientUninit,
-        WireTapNodeHandle,
-        WireTapServerHandle,
-        WireTapInt,
-        WireTapStr
-    )
+from libwiretapPythonClientAPI import (  # noqa
+    WireTapClientInit,
+    WireTapClientUninit,
+    WireTapNodeHandle,
+    WireTapServerHandle,
+    WireTapInt,
+    WireTapStr
+)
 
 
 class WireTapCom(object):
@@ -37,7 +25,7 @@ class WireTapCom(object):
 
     This way we are able to set new project with settings and
     correct colorspace policy. Also we are able to create new user
-    or get actuall user with similar name (users are usually cloning
+    or get actual user with similar name (users are usually cloning
     their profiles and adding date stamp into suffix).
     """
 
@@ -54,6 +42,9 @@ class WireTapCom(object):
         self.host_name = host_name or "localhost"
         self.volume_name = volume_name or "stonefs"
         self.group_name = group_name or "staff"
+
+        # wiretap tools dir path
+        self.wiretap_tools_dir = os.getenv("OPENPYPE_WIRETAP_TOOLS")
 
         # initialize WireTap client
         WireTapClientInit()
@@ -84,9 +75,11 @@ class WireTapCom(object):
         workspace_name = kwargs.get("workspace_name")
         color_policy = kwargs.get("color_policy")
 
-        self._project_prep(project_name)
-        self._set_project_settings(project_name, project_data)
-        self._set_project_colorspace(project_name, color_policy)
+        project_exists = self._project_prep(project_name)
+        if not project_exists:
+            self._set_project_settings(project_name, project_data)
+            self._set_project_colorspace(project_name, color_policy)
+
         user_name = self._user_prep(user_name)
 
         if workspace_name is None:
@@ -169,18 +162,15 @@ class WireTapCom(object):
             # check if volumes exists
             if self.volume_name not in volumes:
                 raise AttributeError(
-                    ("Volume '{}' does not exist '{}'").format(
+                    ("Volume '{}' does not exist in '{}'").format(
                         self.volume_name, volumes)
                 )
 
             # form cmd arguments
             project_create_cmd = [
                 os.path.join(
-                    "/opt/Autodesk/",
-                    "wiretap",
-                    "tools",
-                    "2021",
-                    "wiretap_create_node",
+                    self.wiretap_tools_dir,
+                    "wiretap_create_node"
                 ),
                 '-n',
                 os.path.join("/volumes", self.volume_name),
@@ -195,13 +185,16 @@ class WireTapCom(object):
 
             exit_code = subprocess.call(
                 project_create_cmd,
-                cwd=os.path.expanduser('~'))
+                cwd=os.path.expanduser('~'),
+                preexec_fn=_subprocess_preexec_fn
+            )
 
             if exit_code != 0:
                 RuntimeError("Cannot create project in flame db")
 
             print(
                 "A new project '{}' is created.".format(project_name))
+        return project_exists
 
     def _get_all_volumes(self):
         """Request all available volumens from WireTap
@@ -210,7 +203,7 @@ class WireTapCom(object):
             list: all available volumes in server
 
         Rises:
-            AttributeError: unable to get any volumes childs from server
+            AttributeError: unable to get any volumes children from server
         """
         root = WireTapNodeHandle(self._server, "/volumes")
         children_num = WireTapInt(0)
@@ -223,7 +216,7 @@ class WireTapCom(object):
 
         volumes = []
 
-        # go trough all children and get volume names
+        # go through all children and get volume names
         child_obj = WireTapNodeHandle()
         for child_idx in range(children_num):
 
@@ -263,7 +256,7 @@ class WireTapCom(object):
         filtered_users = [user for user in used_names if user_name in user]
 
         if filtered_users:
-            # todo: need to find lastly created following regex patern for
+            # TODO: need to find lastly created following regex pattern for
             # date used in name
             return filtered_users.pop()
 
@@ -308,7 +301,7 @@ class WireTapCom(object):
 
         usernames = []
 
-        # go trough all children and get volume names
+        # go through all children and get volume names
         child_obj = WireTapNodeHandle()
         for child_idx in range(children_num):
 
@@ -355,7 +348,7 @@ class WireTapCom(object):
         if not requested:
             raise AttributeError((
                 "Error: Cannot request number of "
-                "childrens from the node {}. Make sure your "
+                "children from the node {}. Make sure your "
                 "wiretap service is running: {}").format(
                     parent_path, parent.lastError())
             )
@@ -429,16 +422,26 @@ class WireTapCom(object):
             RuntimeError: Not able to set colorspace policy
         """
         color_policy = color_policy or "Legacy"
+
+        # check if the colour policy in custom dir
+        if "/" in color_policy:
+            # if unlikelly full path was used make it redundant
+            color_policy = color_policy.replace("/syncolor/policies/", "")
+            # expecting input is `Shared/NameOfPolicy`
+            color_policy = "/syncolor/policies/{}".format(
+                color_policy)
+        else:
+            color_policy = "/syncolor/policies/Autodesk/{}".format(
+                color_policy)
+
+        # create arguments
         project_colorspace_cmd = [
             os.path.join(
-                "/opt/Autodesk/",
-                "wiretap",
-                "tools",
-                "2021",
-                "wiretap_duplicate_node",
+                self.wiretap_tools_dir,
+                "wiretap_duplicate_node"
             ),
             "-s",
-            "/syncolor/policies/Autodesk/{}".format(color_policy),
+            color_policy,
             "-n",
             "/projects/{}/syncolor".format(project_name)
         ]
@@ -447,12 +450,23 @@ class WireTapCom(object):
 
         exit_code = subprocess.call(
             project_colorspace_cmd,
-            cwd=os.path.expanduser('~'))
+            cwd=os.path.expanduser('~'),
+            preexec_fn=_subprocess_preexec_fn
+        )
 
         if exit_code != 0:
             RuntimeError("Cannot set colorspace {} on project {}".format(
                 color_policy, project_name
             ))
+
+
+def _subprocess_preexec_fn():
+    """ Helper function
+
+    Setting permission mask to 0777
+    """
+    os.setpgrp()
+    os.umask(0o000)
 
 
 if __name__ == "__main__":

@@ -2,20 +2,30 @@
 
 from maya import cmds
 import pyblish.api
-import openpype.api
+
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    RepairAction,
+    OptionalPyblishPluginMixin
+)
 
 
-class ValidateUnrealUpAxis(pyblish.api.ContextPlugin):
+class ValidateUnrealUpAxis(pyblish.api.ContextPlugin,
+                           OptionalPyblishPluginMixin):
     """Validate if Z is set as up axis in Maya"""
 
     optional = True
-    order = openpype.api.ValidateContentsOrder
+    active = False
+    order = ValidateContentsOrder
     hosts = ["maya"]
-    families = ["unrealStaticMesh"]
+    families = ["staticMesh"]
     label = "Unreal Up-Axis check"
-    actions = [openpype.api.RepairAction]
+    actions = [RepairAction]
 
     def process(self, context):
+        if not self.is_active(context.data):
+            return
+
         assert cmds.upAxis(q=True, axis=True) == "z", (
             "Invalid axis set as up axis"
         )

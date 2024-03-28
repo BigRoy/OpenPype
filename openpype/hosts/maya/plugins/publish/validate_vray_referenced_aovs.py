@@ -4,7 +4,7 @@ import pyblish.api
 import types
 from maya import cmds
 
-import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import RepairContextAction
 
 
 class ValidateVrayReferencedAOVs(pyblish.api.InstancePlugin):
@@ -20,7 +20,7 @@ class ValidateVrayReferencedAOVs(pyblish.api.InstancePlugin):
     label = 'VRay Referenced AOVs'
     hosts = ['maya']
     families = ['renderlayer']
-    actions = [openpype.api.RepairContextAction]
+    actions = [RepairContextAction]
 
     def process(self, instance):
         """Plugin main entry point."""
@@ -82,9 +82,9 @@ class ValidateVrayReferencedAOVs(pyblish.api.InstancePlugin):
             bool: cast Maya attribute to Pythons boolean value.
 
         """
-        if isinstance(attr_val, types.BooleanType):
+        if isinstance(attr_val, bool):
             return attr_val
-        elif isinstance(attr_val, (types.ListType, types.GeneratorType)):
+        elif isinstance(attr_val, (list, types.GeneratorType)):
             return any(attr_val)
         else:
             return bool(attr_val)

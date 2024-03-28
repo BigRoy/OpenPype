@@ -27,5 +27,41 @@
         "path": "{@folder}/{@file}"
     },
     "delivery": {},
-    "others": {}
+    "unreal": {
+        "folder": "{root[work]}/{project[name]}/unreal/{task[name]}",
+        "file": "{project[code]}_{asset}.{ext}",
+        "path": "{@folder}/{@file}"
+    },
+    "others": {
+        "maya2unreal": {
+            "folder": "{root[work]}/{project[name]}/{hierarchy}/{asset}/publish/{family}",
+            "file": "{subset}_{@version}<_{output}><.{@frame}>.{ext}",
+            "path": "{@folder}/{@file}"
+        },
+        "online": {
+            "folder": "{root[work]}/{project[name]}/{hierarchy}/{asset}/publish/{family}/{subset}/{@version}",
+            "file": "{originalBasename}<.{@frame}><_{udim}>.{ext}",
+            "path": "{@folder}/{@file}"
+        },
+        "tycache": {
+            "folder": "{root[work]}/{project[name]}/{hierarchy}/{asset}/publish/{family}/{subset}/{@version}",
+            "file": "{originalBasename}.{ext}",
+            "path": "{@folder}/{@file}"
+        },
+        "source": {
+            "folder": "{root[work]}/{originalDirname}",
+            "file": "{originalBasename}.{ext}",
+            "path": "{@folder}/{@file}"
+        },
+        "transient": {
+            "folder": "{root[work]}/{project[name]}/{hierarchy}/{asset}/work/{family}/{subset}"
+        },
+        "__dynamic_keys_labels__": {
+            "maya2unreal": "Maya to Unreal",
+            "online": "online",
+            "tycache": "tycache",
+            "source": "source",
+            "transient": "transient"
+        }
+    }
 }

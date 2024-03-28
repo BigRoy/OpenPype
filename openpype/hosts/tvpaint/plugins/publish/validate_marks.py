@@ -1,7 +1,11 @@
 import json
 
 import pyblish.api
-from avalon.tvpaint import lib
+from openpype.pipeline import (
+    PublishXmlValidationError,
+    OptionalPyblishPluginMixin,
+)
+from openpype.hosts.tvpaint.api.lib import execute_george
 
 
 class ValidateMarksRepair(pyblish.api.Action):
@@ -14,15 +18,18 @@ class ValidateMarksRepair(pyblish.api.Action):
     def process(self, context, plugin):
         expected_data = ValidateMarks.get_expected_data(context)
 
-        lib.execute_george(
+        execute_george(
             "tv_markin {} set".format(expected_data["markIn"])
         )
-        lib.execute_george(
+        execute_george(
             "tv_markout {} set".format(expected_data["markOut"])
         )
 
 
-class ValidateMarks(pyblish.api.ContextPlugin):
+class ValidateMarks(
+    OptionalPyblishPluginMixin,
+    pyblish.api.ContextPlugin
+):
     """Validate mark in and out are enabled and it's duration.
 
     Mark In/Out does not have to match frameStart and frameEnd but duration is
@@ -38,13 +45,13 @@ class ValidateMarks(pyblish.api.ContextPlugin):
     def get_expected_data(context):
         scene_mark_in = context.data["sceneMarkIn"]
 
-        # Data collected in `CollectAvalonEntities`
+        # Data collected in `CollectContextEntities`
         frame_end = context.data["frameEnd"]
         frame_start = context.data["frameStart"]
         handle_start = context.data["handleStart"]
         handle_end = context.data["handleEnd"]
 
-        # Calculate expeted Mark out (Mark In + duration - 1)
+        # Calculate expected Mark out (Mark In + duration - 1)
         expected_mark_out = (
             scene_mark_in
             + (frame_end - frame_start)
@@ -58,6 +65,9 @@ class ValidateMarks(pyblish.api.ContextPlugin):
         }
 
     def process(self, context):
+        if not self.is_active(context.data):
+            return
+
         current_data = {
             "markIn": context.data["sceneMarkIn"],
             "markInState": context.data["sceneMarkInState"],
@@ -73,9 +83,34 @@ class ValidateMarks(pyblish.api.ContextPlugin):
                     "expected": expected_data[k]
                 }
 
-        if invalid:
-            raise AssertionError(
-                "Marks does not match database:\n{}".format(
-                    json.dumps(invalid, sort_keys=True, indent=4)
-                )
-            )
+        # Validation ends
+        if not invalid:
+            return
+
+        current_frame_range = (
+            (current_data["markOut"] - current_data["markIn"]) + 1
+        )
+        expected_frame_range = (
+            (expected_data["markOut"] - expected_data["markIn"]) + 1
+        )
+        mark_in_enable_state = "disabled"
+        if current_data["markInState"]:
+            mark_in_enable_state = "enabled"
+
+        mark_out_enable_state = "disabled"
+        if current_data["markOutState"]:
+            mark_out_enable_state = "enabled"
+
+        raise PublishXmlValidationError(
+            self,
+            "Marks does not match database:\n{}".format(
+                json.dumps(invalid, sort_keys=True, indent=4)
+            ),
+            formatting_data={
+                "current_frame_range": str(current_frame_range),
+                "expected_frame_range": str(expected_frame_range),
+                "mark_in_enable_state": mark_in_enable_state,
+                "mark_out_enable_state": mark_out_enable_state,
+                "expected_mark_out": expected_data["markOut"]
+            }
+        )

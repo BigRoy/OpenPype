@@ -1,7 +1,11 @@
 import os
 
-from avalon import api
-from avalon.houdini import pipeline, lib
+from openpype.pipeline import (
+    load,
+    get_representation_path,
+    AVALON_CONTAINER_ID,
+)
+from openpype.hosts.houdini.api import lib, pipeline
 
 import hou
 
@@ -37,10 +41,10 @@ def get_image_avalon_container():
     return image_container
 
 
-class ImageLoader(api.Loader):
-    """Specific loader of Alembic for the avalon.animation family"""
+class ImageLoader(load.LoaderPlugin):
+    """Load images into COP2"""
 
-    families = ["colorbleed.imagesequence"]
+    families = ["imagesequence"]
     label = "Load Image (COP2)"
     representations = ["*"]
     order = -10
@@ -51,7 +55,8 @@ class ImageLoader(api.Loader):
     def load(self, context, name=None, namespace=None, data=None):
 
         # Format file name, Houdini only wants forward slashes
-        file_path = os.path.normpath(self.fname)
+        file_path = self.filepath_from_context(context)
+        file_path = os.path.normpath(file_path)
         file_path = file_path.replace("\\", "/")
         file_path = self._get_file_sequence(file_path)
 
@@ -69,8 +74,8 @@ class ImageLoader(api.Loader):
 
         # Imprint it manually
         data = {
-            "schema": "avalon-core:container-2.0",
-            "id": pipeline.AVALON_CONTAINER_ID,
+            "schema": "openpype:container-2.0",
+            "id": AVALON_CONTAINER_ID,
             "name": node_name,
             "namespace": namespace,
             "loader": str(self.__class__.__name__),
@@ -87,7 +92,7 @@ class ImageLoader(api.Loader):
         node = container["node"]
 
         # Update the file path
-        file_path = api.get_representation_path(representation)
+        file_path = get_representation_path(representation)
         file_path = file_path.replace("\\", "/")
         file_path = self._get_file_sequence(file_path)
 
@@ -114,10 +119,14 @@ class ImageLoader(api.Loader):
         if not parent.children():
             parent.destroy()
 
-    def _get_file_sequence(self, root):
+    def _get_file_sequence(self, file_path):
+        root = os.path.dirname(file_path)
         files = sorted(os.listdir(root))
 
         first_fname = files[0]
         prefix, padding, suffix = first_fname.rsplit(".", 2)
         fname = ".".join([prefix, "$F{}".format(len(padding)), suffix])
         return os.path.join(root, fname).replace("\\", "/")
+
+    def switch(self, container, representation):
+        self.update(container, representation)

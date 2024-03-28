@@ -1,8 +1,8 @@
 import pyblish.api
-import openpype.api
 
 import hou
-from avalon.houdini import lib
+from openpype.pipeline.publish import RepairAction
+from openpype.hosts.houdini.api import lib
 
 
 class CollectRemotePublishSettings(pyblish.api.ContextPlugin):
@@ -13,7 +13,7 @@ class CollectRemotePublishSettings(pyblish.api.ContextPlugin):
     hosts = ["houdini"]
     targets = ["deadline"]
     label = "Remote Publish Submission Settings"
-    actions = [openpype.api.RepairAction]
+    actions = [RepairAction]
 
     def process(self, context):
 

@@ -1,4 +1,4 @@
-from Qt import QtWidgets
+from qtpy import QtWidgets
 from openpype.tools.experimental_tools import (
     ExperimentalTools,
     LOCAL_EXPERIMENTAL_KEY
@@ -28,7 +28,7 @@ class LocalExperimentalToolsWidgets(QtWidgets.QWidget):
 
         layout.addRow(empty_label)
 
-        experimental_defs = ExperimentalTools(filter_hosts=False)
+        experimental_defs = ExperimentalTools(refresh=False)
         checkboxes_by_identifier = {}
         for tool in experimental_defs.tools:
             checkbox = QtWidgets.QCheckBox(self)

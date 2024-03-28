@@ -1,8 +1,18 @@
 from maya import cmds
 
 import pyblish.api
-import openpype.api
 import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishValidationError
+)
+
+
+def _as_report_list(values, prefix="- ", suffix="\n"):
+    """Return list as bullet point list for a report"""
+    if not values:
+        return ""
+    return prefix + (suffix + prefix).join(values)
 
 
 class ValidateNoDefaultCameras(pyblish.api.InstancePlugin):
@@ -13,10 +23,9 @@ class ValidateNoDefaultCameras(pyblish.api.InstancePlugin):
     settings when being loaded and sometimes being skipped.
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ['maya']
     families = ['camera']
-    version = (0, 1, 0)
     label = "No Default Cameras"
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction]
 
@@ -29,4 +38,10 @@ class ValidateNoDefaultCameras(pyblish.api.InstancePlugin):
     def process(self, instance):
         """Process all the cameras in the instance"""
         invalid = self.get_invalid(instance)
-        assert not invalid, "Default cameras found: {0}".format(invalid)
+        if invalid:
+            raise PublishValidationError(
+                "Default cameras found:\n\n{0}".format(
+                    _as_report_list(sorted(invalid))
+                ),
+                title="Default cameras"
+            )

@@ -1,5 +1,7 @@
-import pyblish.api
 import os
+import pyblish.api
+
+from openpype.pipeline.create import get_subset_name
 
 
 class CollectWorkfile(pyblish.api.ContextPlugin):
@@ -9,32 +11,22 @@ class CollectWorkfile(pyblish.api.ContextPlugin):
     label = "Collect Workfile"
     hosts = ["photoshop"]
 
+    default_variant = "Main"
+
     def process(self, context):
-        family = "workfile"
-        task = os.getenv("AVALON_TASK", None)
-        subset = family + task.capitalize()
+        for instance in context:
+            if instance.data["family"] == "workfile":
+                file_path = context.data["currentFile"]
+                _, ext = os.path.splitext(file_path)
+                staging_dir = os.path.dirname(file_path)
+                base_name = os.path.basename(file_path)
 
-        file_path = context.data["currentFile"]
-        staging_dir = os.path.dirname(file_path)
-        base_name = os.path.basename(file_path)
-
-        # Create instance
-        instance = context.create_instance(subset)
-        instance.data.update({
-            "subset": subset,
-            "label": base_name,
-            "name": base_name,
-            "family": family,
-            "families": [],
-            "representations": [],
-            "asset": os.environ["AVALON_ASSET"]
-        })
-
-        # creating representation
-        _, ext = os.path.splitext(file_path)
-        instance.data["representations"].append({
-            "name": ext[1:],
-            "ext": ext[1:],
-            "files": base_name,
-            "stagingDir": staging_dir,
-        })
+                # creating representation
+                _, ext = os.path.splitext(file_path)
+                instance.data["representations"].append({
+                    "name": ext[1:],
+                    "ext": ext[1:],
+                    "files": base_name,
+                    "stagingDir": staging_dir,
+                })
+                return

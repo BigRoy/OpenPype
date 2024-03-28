@@ -1,9 +1,12 @@
 import os
 import tempfile
-from avalon.tvpaint import lib, pipeline
+from openpype.hosts.tvpaint.api import plugin
+from openpype.hosts.tvpaint.api.lib import (
+    execute_george_through_file,
+)
 
 
-class ImportSound(pipeline.Loader):
+class ImportSound(plugin.Loader):
     """Load sound to TVPaint.
 
     Sound layers does not have ids but only position index so we can't
@@ -57,14 +60,15 @@ class ImportSound(pipeline.Loader):
         output_filepath = output_file.name.replace("\\", "/")
 
         # Prepare george script
+        path = self.filepath_from_context(context).replace("\\", "/")
         import_script = "\n".join(self.import_script_lines)
         george_script = import_script.format(
-            self.fname.replace("\\", "/"),
+            path,
             output_filepath
         )
         self.log.info("*** George script:\n{}\n***".format(george_script))
         # Execute geoge script
-        lib.execute_george_through_file(george_script)
+        execute_george_through_file(george_script)
 
         # Read output file
         lines = []

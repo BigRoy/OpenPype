@@ -1,9 +1,25 @@
 {
+    "imageio": {
+        "activate_host_color_management": true,
+        "ocio_config": {
+            "override_global_config": false,
+            "filepath": []
+        },
+        "file_rules": {
+            "activate_host_rules": false,
+            "rules": {}
+        }
+    },
     "publish": {
         "CollectPalettes": {
             "allowed_tasks": [
                 ".*"
             ]
+        },
+        "ValidateAudio": {
+            "enabled": true,
+            "optional": true,
+            "active": true
         },
         "ValidateContainers": {
             "enabled": true,
@@ -17,13 +33,6 @@
             "frame_check_filter": [],
             "skip_resolution_check": [],
             "skip_timelines_check": []
-        },
-        "HarmonySubmitDeadline": {
-            "use_published": false,
-            "priority": 50,
-            "primary_pool": "",
-            "secondary_pool": "",
-            "chunk_size": 1000000
         }
     }
 }

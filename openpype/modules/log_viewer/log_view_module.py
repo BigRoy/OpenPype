@@ -1,6 +1,5 @@
-from openpype.api import Logger
-from openpype.modules import OpenPypeModule
-from openpype_interfaces import ITrayModule
+from openpype import AYON_SERVER_ENABLED
+from openpype.modules import OpenPypeModule, ITrayModule
 
 
 class LogViewModule(OpenPypeModule, ITrayModule):
@@ -9,6 +8,8 @@ class LogViewModule(OpenPypeModule, ITrayModule):
     def initialize(self, modules_settings):
         logging_settings = modules_settings[self.name]
         self.enabled = logging_settings["enabled"]
+        if AYON_SERVER_ENABLED:
+            self.enabled = False
 
         # Tray attributes
         self.window = None
@@ -24,7 +25,7 @@ class LogViewModule(OpenPypeModule, ITrayModule):
 
     # Definition of Tray menu
     def tray_menu(self, tray_menu):
-        from Qt import QtWidgets
+        from qtpy import QtWidgets
         # Menu for Tray App
         menu = QtWidgets.QMenu('Logging', tray_menu)
 

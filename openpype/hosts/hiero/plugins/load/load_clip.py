@@ -1,9 +1,16 @@
-from avalon import io, api
+from openpype.client import (
+    get_version_by_id,
+    get_last_version_by_subset_id
+)
+from openpype.pipeline import (
+    get_representation_path,
+    get_current_project_name,
+)
+from openpype.lib.transcoding import (
+    VIDEO_EXTENSIONS,
+    IMAGE_EXTENSIONS
+)
 import openpype.hosts.hiero.api as phiero
-# from openpype.hosts.hiero.api import plugin, lib
-# reload(lib)
-# reload(plugin)
-# reload(phiero)
 
 
 class LoadClip(phiero.SequenceLoader):
@@ -14,7 +21,10 @@ class LoadClip(phiero.SequenceLoader):
     """
 
     families = ["render2d", "source", "plate", "render", "review"]
-    representations = ["exr", "dpx", "jpg", "jpeg", "png", "h264"]
+    representations = ["*"]
+    extensions = set(
+        ext.lstrip(".") for ext in IMAGE_EXTENSIONS.union(VIDEO_EXTENSIONS)
+    )
 
     label = "Load as clip"
     order = -10
@@ -31,6 +41,38 @@ class LoadClip(phiero.SequenceLoader):
 
     clip_name_template = "{asset}_{subset}_{representation}"
 
+    @classmethod
+    def apply_settings(cls, project_settings, system_settings):
+        plugin_type_settings = (
+            project_settings
+            .get("hiero", {})
+            .get("load", {})
+        )
+
+        if not plugin_type_settings:
+            return
+
+        plugin_name = cls.__name__
+
+        plugin_settings = None
+        # Look for plugin settings in host specific settings
+        if plugin_name in plugin_type_settings:
+            plugin_settings = plugin_type_settings[plugin_name]
+
+        if not plugin_settings:
+            return
+
+        print(">>> We have preset for {}".format(plugin_name))
+        for option, value in plugin_settings.items():
+            if option == "enabled" and value is False:
+                print("  - is disabled by preset")
+            elif option == "representations":
+                continue
+            else:
+                print("  - setting `{}`: `{}`".format(option, value))
+            setattr(cls, option, value)
+
+
     def load(self, context, name, namespace, options):
         # add clip name template to options
         options.update({
@@ -45,7 +87,8 @@ class LoadClip(phiero.SequenceLoader):
             })
 
         # load clip to timeline and get main variables
-        track_item = phiero.ClipLoader(self, context, **options).load()
+        path = self.filepath_from_context(context)
+        track_item = phiero.ClipLoader(self, context, path, **options).load()
         namespace = namespace or track_item.name()
         version = context['version']
         version_data = version.get("data", {})
@@ -103,16 +146,16 @@ class LoadClip(phiero.SequenceLoader):
         name = container['name']
         namespace = container['namespace']
         track_item = phiero.get_track_items(
-            track_item_name=namespace)
-        version = io.find_one({
-            "type": "version",
-            "_id": representation["parent"]
-        })
-        version_data = version.get("data", {})
-        version_name = version.get("name", None)
+            track_item_name=namespace).pop()
+
+        project_name = get_current_project_name()
+        version_doc = get_version_by_id(project_name, representation["parent"])
+
+        version_data = version_doc.get("data", {})
+        version_name = version_doc.get("name", None)
         colorspace = version_data.get("colorspace", None)
         object_name = "{}_{}".format(name, namespace)
-        file = api.get_representation_path(representation).replace("\\", "/")
+        file = get_representation_path(representation).replace("\\", "/")
         clip = track_item.source()
 
         # reconnect media to new path
@@ -144,7 +187,7 @@ class LoadClip(phiero.SequenceLoader):
         })
 
         # update color of clip regarding the version order
-        self.set_item_color(track_item, version)
+        self.set_item_color(track_item, version_doc)
 
         return phiero.update_container(track_item, data_imprint)
 
@@ -154,7 +197,7 @@ class LoadClip(phiero.SequenceLoader):
         # load clip to timeline and get main variables
         namespace = container['namespace']
         track_item = phiero.get_track_items(
-            track_item_name=namespace)
+            track_item_name=namespace).pop()
         track = track_item.parent()
 
         # remove track item from track
@@ -167,21 +210,14 @@ class LoadClip(phiero.SequenceLoader):
             cls.sequence = cls.track.parent()
 
     @classmethod
-    def set_item_color(cls, track_item, version):
-
+    def set_item_color(cls, track_item, version_doc):
+        project_name = get_current_project_name()
+        last_version_doc = get_last_version_by_subset_id(
+            project_name, version_doc["parent"], fields=["_id"]
+        )
         clip = track_item.source()
-        # define version name
-        version_name = version.get("name", None)
-        # get all versions in list
-        versions = io.find({
-            "type": "version",
-            "parent": version["parent"]
-        }).distinct('name')
-
-        max_version = max(versions)
-
         # set clip colour
-        if version_name == max_version:
+        if version_doc["_id"] == last_version_doc["_id"]:
             clip.binItem().setColor(cls.clip_color_last)
         else:
             clip.binItem().setColor(cls.clip_color)

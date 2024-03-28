@@ -7,9 +7,8 @@ import contextlib
 
 from maya import cmds
 
-import avalon.maya.lib as lib
-import openpype.api
-import openpype.hosts.maya.api.lib as maya
+from openpype.pipeline import publish
+from openpype.hosts.maya.api import lib
 
 
 @contextlib.contextmanager
@@ -91,7 +90,7 @@ def yetigraph_attribute_values(assumed_destination, resources):
                 pass
 
 
-class ExtractYetiRig(openpype.api.Extractor):
+class ExtractYetiRig(publish.Extractor):
     """Extract the Yeti rig to a Maya Scene and write the Yeti rig data."""
 
     label = "Extract Yeti Rig"
@@ -105,12 +104,12 @@ class ExtractYetiRig(openpype.api.Extractor):
             instance.context.data["project_settings"]["maya"]["ext_mapping"]
         )
         if ext_mapping:
-            self.log.info("Looking in settings for scene type ...")
+            self.log.debug("Looking in settings for scene type ...")
             # use extension mapping for first family found
             for family in self.families:
                 try:
                     self.scene_type = ext_mapping[family]
-                    self.log.info(
+                    self.log.debug(
                         "Using {} as scene type".format(self.scene_type))
                     break
                 except KeyError:
@@ -125,10 +124,10 @@ class ExtractYetiRig(openpype.api.Extractor):
         settings_path = os.path.join(dirname, "yeti.rigsettings")
 
         # Yeti related staging dirs
-        maya_path = os.path.join(
-            dirname, "yeti_rig.{}".format(self.scene_type))
+        maya_path = os.path.join(dirname,
+                                 "yeti_rig.{}".format(self.scene_type))
 
-        self.log.info("Writing metadata file")
+        self.log.debug("Writing metadata file: {}".format(settings_path))
 
         image_search_path = resources_dir = instance.data["resourcesDir"]
 
@@ -148,7 +147,7 @@ class ExtractYetiRig(openpype.api.Extractor):
                 dst = os.path.join(image_search_path, os.path.basename(file))
                 instance.data['transfers'].append([src, dst])
 
-                self.log.info("adding transfer {} -> {}". format(src, dst))
+                self.log.debug("adding transfer {} -> {}". format(src, dst))
 
         # Ensure the imageSearchPath is being remapped to the publish folder
         attr_value = {"%s.imageSearchPath" % n: str(image_search_path) for
@@ -158,7 +157,7 @@ class ExtractYetiRig(openpype.api.Extractor):
         input_set = next(i for i in instance if i == "input_SET")
 
         # Get all items
-        set_members = cmds.sets(input_set, query=True)
+        set_members = cmds.sets(input_set, query=True) or []
         set_members += cmds.listRelatives(set_members,
                                           allDescendents=True,
                                           fullPath=True) or []
@@ -168,7 +167,7 @@ class ExtractYetiRig(openpype.api.Extractor):
         resources = instance.data.get("resources", {})
         with disconnect_plugs(settings, members):
             with yetigraph_attribute_values(resources_dir, resources):
-                with maya.attribute_values(attr_value):
+                with lib.attribute_values(attr_value):
                     cmds.select(nodes, noExpand=True)
                     cmds.file(maya_path,
                               force=True,
@@ -183,7 +182,7 @@ class ExtractYetiRig(openpype.api.Extractor):
         if "representations" not in instance.data:
             instance.data["representations"] = []
 
-        self.log.info("rig file: {}".format(maya_path))
+        self.log.debug("rig file: {}".format(maya_path))
         instance.data["representations"].append(
             {
                 'name': self.scene_type,
@@ -192,7 +191,7 @@ class ExtractYetiRig(openpype.api.Extractor):
                 'stagingDir': dirname
             }
         )
-        self.log.info("settings file: {}".format(settings_path))
+        self.log.debug("settings file: {}".format(settings_path))
         instance.data["representations"].append(
             {
                 'name': 'rigsettings',
@@ -202,6 +201,6 @@ class ExtractYetiRig(openpype.api.Extractor):
             }
         )
 
-        self.log.info("Extracted {} to {}".format(instance, dirname))
+        self.log.debug("Extracted {} to {}".format(instance, dirname))
 
         cmds.select(clear=True)

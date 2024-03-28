@@ -1,7 +1,11 @@
-from tests.integration.hosts.maya.lib import MayaTestClass
+import re
+import os
+
+from tests.lib.assert_classes import DBAssert
+from tests.integration.hosts.maya.lib import MayaLocalPublishTestClass
 
 
-class TestPublishInMaya(MayaTestClass):
+class TestPublishInMaya(MayaLocalPublishTestClass):
     """Basic test case for publishing in Maya
 
         Shouldnt be running standalone only via 'runtests' pype command! (??)
@@ -25,45 +29,79 @@ class TestPublishInMaya(MayaTestClass):
     PERSIST = False
 
     TEST_FILES = [
-        ("1BTSIIULJTuDc8VvXseuiJV_fL6-Bu7FP", "test_maya_publish.zip", "")
+        ("test_publish_in_maya", "", "")
     ]
 
-    APP = "maya"
+    APP_GROUP = "maya"
     # keep empty to locate latest installed variant or explicit
     APP_VARIANT = ""
 
     TIMEOUT = 120  # publish timeout
 
+    def test_publish(
+        self,
+        dbcon,
+        publish_finished,
+        download_test_data
+    ):
+        """Testing Pyblish and Python logs within Maya."""
+
+        # All maya output via MAYA_CMD_FILE_OUTPUT env var during test run
+        logging_path = os.path.join(download_test_data, "output.log")
+        with open(logging_path, "r") as f:
+            logging_output = f.read()
+
+        print(("-" * 50) + "LOGGING" + ("-" * 50))
+        print(logging_output)
+
+        # Check for pyblish errors.
+        error_regex = r"pyblish \(ERROR\)((.|\n)*?)((pyblish \())"
+        matches = re.findall(error_regex, logging_output)
+        assert not matches, matches[0][0]
+
+        # Check for python errors.
+        error_regex = r"// Error((.|\n)*)"
+        matches = re.findall(error_regex, logging_output)
+        assert not matches, matches[0][0]
+
     def test_db_asserts(self, dbcon, publish_finished):
         """Host and input data dependent expected results in DB."""
         print("test_db_asserts")
-        assert 5 == dbcon.count_documents({"type": "version"}), \
-            "Not expected no of versions"
+        failures = []
+        failures.append(DBAssert.count_of_types(dbcon, "version", 2))
 
-        assert 0 == dbcon.count_documents({"type": "version",
-                                           "name": {"$ne": 1}}), \
-            "Only versions with 1 expected"
+        failures.append(
+            DBAssert.count_of_types(dbcon, "version", 0, name={"$ne": 1}))
 
-        assert 1 == dbcon.count_documents({"type": "subset",
-                                           "name": "modelMain"}), \
-            "modelMain subset must be present"
+        failures.append(
+            DBAssert.count_of_types(dbcon, "subset", 1,
+                                    name="modelMain"))
 
-        assert 1 == dbcon.count_documents({"type": "subset",
-                                           "name": "workfileTest_task"}), \
-            "workfileTest_task subset must be present"
+        failures.append(
+            DBAssert.count_of_types(dbcon, "subset", 1,
+                                    name="workfileTest_task"))
 
-        assert 11 == dbcon.count_documents({"type": "representation"}), \
-            "Not expected no of representations"
+        failures.append(DBAssert.count_of_types(dbcon, "representation", 5))
 
-        assert 2 == dbcon.count_documents({"type": "representation",
-                                           "context.subset": "modelMain",
-                                           "context.ext": "abc"}), \
-            "Not expected no of representations with ext 'abc'"
+        additional_args = {"context.subset": "modelMain",
+                           "context.ext": "abc"}
+        failures.append(
+            DBAssert.count_of_types(dbcon, "representation", 2,
+                                    additional_args=additional_args))
 
-        assert 2 == dbcon.count_documents({"type": "representation",
-                                           "context.subset": "modelMain",
-                                           "context.ext": "ma"}), \
-            "Not expected no of representations with ext 'abc'"
+        additional_args = {"context.subset": "modelMain",
+                           "context.ext": "ma"}
+        failures.append(
+            DBAssert.count_of_types(dbcon, "representation", 2,
+                                    additional_args=additional_args))
+
+        additional_args = {"context.subset": "workfileTest_task",
+                           "context.ext": "ma"}
+        failures.append(
+            DBAssert.count_of_types(dbcon, "representation", 1,
+                                    additional_args=additional_args))
+
+        assert not any(failures)
 
 
 if __name__ == "__main__":

@@ -11,20 +11,23 @@ Provides:
     instance -> families (adding ["review", "ftrack"])
 """
 
-import opentimelineio as otio
-import pyblish.api
 from pprint import pformat
 
+import pyblish.api
 
-class CollectOcioReview(pyblish.api.InstancePlugin):
+
+class CollectOtioReview(pyblish.api.InstancePlugin):
     """Get matching otio track from defined review layer"""
 
     label = "Collect OTIO Review"
-    order = pyblish.api.CollectorOrder - 0.47
+    order = pyblish.api.CollectorOrder - 0.078
     families = ["clip"]
-    hosts = ["resolve", "hiero"]
+    hosts = ["resolve", "hiero", "flame"]
 
     def process(self, instance):
+        # Not all hosts can import this module.
+        import opentimelineio as otio
+
         # get basic variables
         otio_review_clips = []
         otio_timeline = instance.context.data["otioTimeline"]
@@ -46,7 +49,7 @@ class CollectOcioReview(pyblish.api.InstancePlugin):
 
         # loop all tracks and match with name in `reviewTrack`
         for track in otio_timeline.tracks:
-            if review_track_name not in track.name:
+            if review_track_name != track.name:
                 continue
 
             # process correct track
@@ -87,7 +90,9 @@ class CollectOcioReview(pyblish.api.InstancePlugin):
                 otio_review_clips.append(otio_gap)
 
         if otio_review_clips:
-            instance.data["label"] += " (review)"
+            # add review track to instance and change label to reflect it
+            label = instance.data.get("label", instance.data["subset"])
+            instance.data["label"] = label + " (review)"
             instance.data["families"] += ["review", "ftrack"]
             instance.data["otioReviewClips"] = otio_review_clips
             self.log.info(

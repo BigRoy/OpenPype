@@ -1,46 +1,66 @@
-import maya.mel as mel
-import pymel.core as pm
+import os
 
 import pyblish.api
-import openpype.api
 
+from maya import cmds
 
-def get_file_rule(rule):
-    """Workaround for a bug in python with cmds.workspace"""
-    return mel.eval('workspace -query -fileRuleEntry "{}"'.format(rule))
+from openpype.pipeline.publish import (
+    PublishValidationError, RepairAction, ValidateContentsOrder)
 
 
 class ValidateRenderImageRule(pyblish.api.InstancePlugin):
-    """Validates "images" file rule is set to "renders/"
+    """Validates Maya Workpace "images" file rule matches project settings.
+
+    This validates against the configured default render image folder:
+        Studio Settings > Project > Maya >
+        Render Settings > Default render image folder.
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     label = "Images File Rule (Workspace)"
     hosts = ["maya"]
     families = ["renderlayer"]
-    actions = [openpype.api.RepairAction]
+    actions = [RepairAction]
 
     def process(self, instance):
 
-        default_render_file = self.get_default_render_image_folder(instance)
-
-        assert get_file_rule("images") == default_render_file, (
-            "Workspace's `images` file rule must be set to: {}".format(
-                default_render_file
-            )
+        required_images_rule = os.path.normpath(
+            self.get_default_render_image_folder(instance)
         )
+        current_images_rule = os.path.normpath(
+            cmds.workspace(fileRuleEntry="images")
+        )
+
+        if current_images_rule != required_images_rule:
+            raise PublishValidationError(
+                (
+                    "Invalid workspace `images` file rule value: '{}'. "
+                    "Must be set to: '{}'"
+                ).format(current_images_rule, required_images_rule))
 
     @classmethod
     def repair(cls, instance):
-        default = cls.get_default_render_image_folder(instance)
-        pm.workspace.fileRules["images"] = default
-        pm.system.Workspace.save()
 
-    @staticmethod
-    def get_default_render_image_folder(instance):
+        required_images_rule = cls.get_default_render_image_folder(instance)
+        current_images_rule = cmds.workspace(fileRuleEntry="images")
+
+        if current_images_rule != required_images_rule:
+            cmds.workspace(fileRule=("images", required_images_rule))
+            cmds.workspace(saveWorkspace=True)
+
+    @classmethod
+    def get_default_render_image_folder(cls, instance):
+        staging_dir = instance.data.get("stagingDir")
+        if staging_dir:
+            cls.log.debug(
+                "Staging dir found: \"{}\". Ignoring setting from "
+                "`project_settings/maya/RenderSettings/"
+                "default_render_image_folder`.".format(staging_dir)
+            )
+            return staging_dir
+
         return instance.context.data.get('project_settings')\
             .get('maya') \
-            .get('create') \
-            .get('CreateRender') \
+            .get('RenderSettings') \
             .get('default_render_image_folder')

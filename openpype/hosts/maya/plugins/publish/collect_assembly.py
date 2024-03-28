@@ -2,7 +2,7 @@ from collections import defaultdict
 import pyblish.api
 
 from maya import cmds, mel
-from avalon import maya as avalon
+from openpype.hosts.maya import api
 from openpype.hosts.maya.api import lib
 
 # TODO : Publish of assembly: -unique namespace for all assets, VALIDATOR!
@@ -24,25 +24,22 @@ class CollectAssembly(pyblish.api.InstancePlugin):
     """
 
     order = pyblish.api.CollectorOrder + 0.49
-    label = "Assemby"
+    label = "Assembly"
     families = ["assembly"]
 
     def process(self, instance):
 
         # Find containers
-        containers = avalon.ls()
+        containers = api.ls()
 
         # Get all content from the instance
         instance_lookup = set(cmds.ls(instance, type="transform", long=True))
         data = defaultdict(list)
-        self.log.info(instance_lookup)
 
         hierarchy_nodes = []
         for container in containers:
 
-            self.log.info(container)
             root = lib.get_container_transforms(container, root=True)
-            self.log.info(root)
             if not root or root not in instance_lookup:
                 continue
 
@@ -70,7 +67,7 @@ class CollectAssembly(pyblish.api.InstancePlugin):
             data[representation_id].append(instance_data)
 
         instance.data["scenedata"] = dict(data)
-        instance.data["hierarchy"] = list(set(hierarchy_nodes))
+        instance.data["nodesHierarchy"] = list(set(hierarchy_nodes))
 
     def get_file_rule(self, rule):
         return mel.eval('workspace -query -fileRuleEntry "{}"'.format(rule))

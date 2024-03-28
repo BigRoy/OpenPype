@@ -1,12 +1,11 @@
 import pyblish.api
-from openpype.hosts import resolve
-from avalon import api as avalon
 from pprint import pformat
 
-# dev
-from importlib import reload
+from openpype import AYON_SERVER_ENABLED
+from openpype.pipeline import get_current_asset_name
+
+from openpype.hosts.resolve import api as rapi
 from openpype.hosts.resolve.otio import davinci_export
-reload(davinci_export)
 
 
 class PrecollectWorkfile(pyblish.api.ContextPlugin):
@@ -16,22 +15,27 @@ class PrecollectWorkfile(pyblish.api.ContextPlugin):
     order = pyblish.api.CollectorOrder - 0.5
 
     def process(self, context):
+        current_asset_name = asset_name = get_current_asset_name()
 
-        asset = avalon.Session["AVALON_ASSET"]
-        subset = "workfile"
-        project = resolve.get_current_project()
+        if AYON_SERVER_ENABLED:
+            asset_name = current_asset_name.split("/")[-1]
+
+        subset = "workfileMain"
+        project = rapi.get_current_project()
         fps = project.GetSetting("timelineFrameRate")
-        video_tracks = resolve.get_video_track_names()
+        video_tracks = rapi.get_video_track_names()
 
         # adding otio timeline to context
         otio_timeline = davinci_export.create_otio_timeline(project)
 
         instance_data = {
-            "name": "{}_{}".format(asset, subset),
-            "asset": asset,
-            "subset": "{}{}".format(asset, subset.capitalize()),
+            "name": "{}_{}".format(asset_name, subset),
+            "label": "{} {}".format(current_asset_name, subset),
+            "asset": current_asset_name,
+            "subset": subset,
             "item": project,
-            "family": "workfile"
+            "family": "workfile",
+            "families": []
         }
 
         # create instance with workfile

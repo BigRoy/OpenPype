@@ -1,26 +1,28 @@
-from collections import defaultdict
 import copy
+import platform
+from collections import defaultdict
 
-from Qt import QtWidgets, QtCore, QtGui
+from qtpy import QtWidgets, QtCore, QtGui
 
-from avalon import api, style
-from avalon.api import AvalonMongoDB
+from openpype.client import get_representations
+from openpype.pipeline import load, Anatomy
+from openpype import resources, style
 
-from openpype.api import Anatomy, config
-from openpype import resources
-
-from openpype.lib.delivery import (
-    sizeof_fmt,
-    path_from_representation,
+from openpype.lib import (
+    format_file_size,
+    collect_frames,
+    get_datetime_data,
+)
+from openpype.pipeline.load import get_representation_path_with_anatomy
+from openpype.pipeline.delivery import (
     get_format_dict,
     check_destination_path,
-    process_single_file,
-    process_sequence,
-    collect_frames
+    deliver_single_file,
+    deliver_sequence,
 )
 
 
-class Delivery(api.SubsetLoader):
+class Delivery(load.SubsetLoaderPlugin):
     """Export selected versions to folder structure from Template"""
 
     is_multiple_contexts_compatible = True
@@ -58,36 +60,46 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
     def __init__(self, contexts, log=None, parent=None):
         super(DeliveryOptionsDialog, self).__init__(parent=parent)
 
-        project = contexts[0]["project"]["name"]
-        self.anatomy = Anatomy(project)
-        self._representations = None
-        self.log = log
-        self.currently_uploaded = 0
-
-        self.dbcon = AvalonMongoDB()
-        self.dbcon.Session["AVALON_PROJECT"] = project
-        self.dbcon.install()
-
-        self._set_representations(contexts)
-
         self.setWindowTitle("OpenPype - Deliver versions")
         icon = QtGui.QIcon(resources.get_openpype_icon_filepath())
         self.setWindowIcon(icon)
 
         self.setWindowFlags(
-            QtCore.Qt.WindowCloseButtonHint |
-            QtCore.Qt.WindowMinimizeButtonHint
+            QtCore.Qt.WindowStaysOnTopHint
+            | QtCore.Qt.WindowCloseButtonHint
+            | QtCore.Qt.WindowMinimizeButtonHint
         )
+
         self.setStyleSheet(style.load_stylesheet())
+
+        project_name = contexts[0]["project"]["name"]
+        self.anatomy = Anatomy(project_name)
+        self._representations = None
+        self.log = log
+        self.currently_uploaded = 0
+
+        self._set_representations(project_name, contexts)
 
         dropdown = QtWidgets.QComboBox()
         self.templates = self._get_templates(self.anatomy)
         for name, _ in self.templates.items():
             dropdown.addItem(name)
+        if self.templates and platform.system() == "Darwin":
+            # fix macos QCombobox Style
+            dropdown.setItemDelegate(QtWidgets.QStyledItemDelegate())
+            # update combo box length to longest entry
+            longest_key = max(self.templates.keys(), key=len)
+            dropdown.setMinimumContentsLength(len(longest_key))
 
         template_label = QtWidgets.QLabel()
         template_label.setCursor(QtGui.QCursor(QtCore.Qt.IBeamCursor))
         template_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+
+        renumber_frame = QtWidgets.QCheckBox()
+
+        first_frame_start = QtWidgets.QSpinBox()
+        max_int = (1 << 32) // 2
+        first_frame_start.setRange(0, max_int - 1)
 
         root_line_edit = QtWidgets.QLineEdit()
 
@@ -112,11 +124,13 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         input_layout.addRow("Selected representations", selected_label)
         input_layout.addRow("Delivery template", dropdown)
         input_layout.addRow("Template value", template_label)
+        input_layout.addRow("Renumber Frame", renumber_frame)
+        input_layout.addRow("Renumber start frame", first_frame_start)
         input_layout.addRow("Root", root_line_edit)
         input_layout.addRow("Representations", repre_checkboxes_layout)
 
         btn_delivery = QtWidgets.QPushButton("Deliver")
-        btn_delivery.setEnabled(bool(dropdown.currentText()))
+        btn_delivery.setEnabled(False)
 
         progress_bar = QtWidgets.QProgressBar(self)
         progress_bar.setMinimum = 0
@@ -139,6 +153,8 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         self.selected_label = selected_label
         self.template_label = template_label
         self.dropdown = dropdown
+        self.first_frame_start = first_frame_start
+        self.renumber_frame = renumber_frame
         self.root_line_edit = root_line_edit
         self.progress_bar = progress_bar
         self.text_area = text_area
@@ -153,6 +169,15 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         btn_delivery.clicked.connect(self.deliver)
         dropdown.currentIndexChanged.connect(self._update_template_value)
 
+        if not self.dropdown.count():
+            self.text_area.setVisible(True)
+            error_message = (
+                "No Delivery Templates found!\n"
+                "Add Template in [project_anatomy/templates/delivery]"
+            )
+            self.text_area.setText(error_message)
+            self.log.error(error_message.replace("\n", " "))
+
     def deliver(self):
         """Main method to loop through all selected representations"""
         self.progress_bar.setVisible(True)
@@ -163,14 +188,18 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
 
         selected_repres = self._get_selected_repres()
 
-        datetime_data = config.get_datetime_data()
+        datetime_data = get_datetime_data()
         template_name = self.dropdown.currentText()
         format_dict = get_format_dict(self.anatomy, self.root_line_edit.text())
+        renumber_frame = self.renumber_frame.isChecked()
+        frame_offset = self.first_frame_start.value()
         for repre in self._representations:
             if repre["name"] not in selected_repres:
                 continue
 
-            repre_path = path_from_representation(repre, self.anatomy)
+            repre_path = get_representation_path_with_anatomy(
+                repre, self.anatomy
+            )
 
             anatomy_data = copy.deepcopy(repre["context"])
             new_report_items = check_destination_path(str(repre["_id"]),
@@ -201,11 +230,33 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
                     src_paths.append(src_path)
                 sources_and_frames = collect_frames(src_paths)
 
+                frames = set(sources_and_frames.values())
+                frames.discard(None)
+                first_frame = None
+                if frames:
+                    first_frame = min(frames)
+
                 for src_path, frame in sources_and_frames.items():
                     args[0] = src_path
-                    if frame:
+                    # Renumber frames
+                    if renumber_frame and frame is not None:
+                        # Calculate offset between
+                        # first frame and current frame
+                        # - '0' for first frame
+                        offset = frame_offset - int(first_frame)
+                        # Add offset to new frame start
+                        dst_frame = int(frame) + offset
+                        if dst_frame < 0:
+                            msg = "Renumber frame has a smaller number than original frame"     # noqa
+                            report_items[msg].append(src_path)
+                            self.log.warning("{} <{}>".format(
+                                msg, dst_frame))
+                            continue
+                        frame = dst_frame
+
+                    if frame is not None:
                         anatomy_data["frame"] = frame
-                    new_report_items, uploaded = process_single_file(*args)
+                    new_report_items, uploaded = deliver_single_file(*args)
                     report_items.update(new_report_items)
                     self._update_progress(uploaded)
             else:  # fallback for Pype2 and representations without files
@@ -214,9 +265,9 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
                     repre["context"]["frame"] = len(str(frame)) * "#"
 
                 if not frame:
-                    new_report_items, uploaded = process_single_file(*args)
+                    new_report_items, uploaded = deliver_single_file(*args)
                 else:
-                    new_report_items, uploaded = process_sequence(*args)
+                    new_report_items, uploaded = deliver_sequence(*args)
                 report_items.update(new_report_items)
                 self._update_progress(uploaded)
 
@@ -238,13 +289,12 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
 
         return templates
 
-    def _set_representations(self, contexts):
+    def _set_representations(self, project_name, contexts):
         version_ids = [context["version"]["_id"] for context in contexts]
 
-        repres = list(self.dbcon.find({
-            "type": "representation",
-            "parent": {"$in": version_ids}
-        }))
+        repres = list(get_representations(
+            project_name, version_ids=version_ids
+        ))
 
         self._representations = repres
 
@@ -267,8 +317,9 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
 
     def _prepare_label(self):
         """Provides text with no of selected files and their size."""
-        label = "{} files, size {}".format(self.files_selected,
-                                           sizeof_fmt(self.size_selected))
+        label = "{} files, size {}".format(
+            self.files_selected,
+            format_file_size(self.size_selected))
         return label
 
     def _get_selected_repres(self):
@@ -286,14 +337,17 @@ class DeliveryOptionsDialog(QtWidgets.QDialog):
         self.files_selected, self.size_selected = \
             self._get_counts(selected_repres)
         self.selected_label.setText(self._prepare_label())
+        # update delivery button state if any templates found
+        if self.dropdown.count():
+            self.btn_delivery.setEnabled(bool(selected_repres))
 
     def _update_template_value(self, _index=None):
         """Sets template value to label after selection in dropdown."""
         name = self.dropdown.currentText()
         template_value = self.templates.get(name)
         if template_value:
-            self.btn_delivery.setEnabled(True)
             self.template_label.setText(template_value)
+            self.btn_delivery.setEnabled(bool(self._get_selected_repres()))
 
     def _update_progress(self, uploaded):
         """Update progress bar after each repre copied."""

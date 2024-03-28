@@ -1,7 +1,7 @@
 import uuid
-from Qt import QtGui, QtCore
+from qtpy import QtGui, QtCore
 
-from avalon import api
+from openpype.pipeline import discover_legacy_creator_plugins
 
 from . constants import (
     FAMILY_ROLE,
@@ -21,8 +21,10 @@ class CreatorsModel(QtGui.QStandardItemModel):
         self._creators_by_id = {}
 
         items = []
-        creators = api.discover(api.Creator)
+        creators = discover_legacy_creator_plugins()
         for creator in creators:
+            if not creator.enabled:
+                continue
             item_id = str(uuid.uuid4())
             self._creators_by_id[item_id] = creator
 
@@ -36,9 +38,10 @@ class CreatorsModel(QtGui.QStandardItemModel):
         if not items:
             item = QtGui.QStandardItem("No registered families")
             item.setEnabled(False)
-            item.setData(QtCore.Qt.ItemIsEnabled, False)
+            item.setData(False, QtCore.Qt.ItemIsEnabled)
             items.append(item)
 
+        items.sort(key=lambda item: item.text())
         self.invisibleRootItem().appendRows(items)
 
     def get_creator_by_id(self, item_id):
@@ -50,6 +53,9 @@ class CreatorsModel(QtGui.QStandardItemModel):
             index = self.index(row, 0)
             item_id = index.data(ITEM_ID_ROLE)
             creator_plugin = self._creators_by_id.get(item_id)
-            if creator_plugin and creator_plugin.family == family:
+            if creator_plugin and (
+                creator_plugin.label.lower() == family.lower()
+                or creator_plugin.family.lower() == family.lower()
+            ):
                 indexes.append(index)
         return indexes

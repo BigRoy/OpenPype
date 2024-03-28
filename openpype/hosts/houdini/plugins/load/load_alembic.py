@@ -1,10 +1,13 @@
-from avalon import api
+import os
+from openpype.pipeline import (
+    load,
+    get_representation_path,
+)
+from openpype.hosts.houdini.api import pipeline
 
-from avalon.houdini import pipeline, lib
 
-
-class AbcLoader(api.Loader):
-    """Specific loader of Alembic for the avalon.animation family"""
+class AbcLoader(load.LoaderPlugin):
+    """Load Alembic"""
 
     families = ["model", "animation", "pointcache", "gpuCache"]
     label = "Load Alembic"
@@ -14,27 +17,19 @@ class AbcLoader(api.Loader):
     color = "orange"
 
     def load(self, context, name=None, namespace=None, data=None):
-
-        import os
         import hou
 
         # Format file name, Houdini only wants forward slashes
-        file_path = os.path.normpath(self.fname)
+        file_path = self.filepath_from_context(context)
+        file_path = os.path.normpath(file_path)
         file_path = file_path.replace("\\", "/")
 
         # Get the root node
         obj = hou.node("/obj")
 
-        # Create a unique name
-        counter = 1
+        # Define node name
         namespace = namespace if namespace else context["asset"]["name"]
-        formatted = "{}_{}".format(namespace, name) if namespace else name
-        node_name = "{0}_{1:03d}".format(formatted, counter)
-
-        children = lib.children_as_string(hou.node("/obj"))
-        while node_name in children:
-            counter += 1
-            node_name = "{0}_{1:03d}".format(formatted, counter)
+        node_name = "{}_{}".format(namespace, name) if namespace else name
 
         # Create a new geo node
         container = obj.createNode("geo", node_name=node_name)
@@ -98,7 +93,7 @@ class AbcLoader(api.Loader):
             return
 
         # Update the file path
-        file_path = api.get_representation_path(representation)
+        file_path = get_representation_path(representation)
         file_path = file_path.replace("\\", "/")
 
         alembic_node.setParms({"fileName": file_path})
@@ -110,3 +105,6 @@ class AbcLoader(api.Loader):
 
         node = container["node"]
         node.destroy()
+
+    def switch(self, container, representation):
+        self.update(container, representation)

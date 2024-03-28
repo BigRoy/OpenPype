@@ -1,7 +1,11 @@
+import os
 import pyblish.api
 import maya.cmds as cmds
-import openpype.api
-import os
+
+from openpype.pipeline.publish import (
+    RepairContextAction,
+    PublishValidationError
+)
 
 
 class ValidateLoadedPlugin(pyblish.api.ContextPlugin):
@@ -10,7 +14,7 @@ class ValidateLoadedPlugin(pyblish.api.ContextPlugin):
     label = "Loaded Plugin"
     order = pyblish.api.ValidatorOrder
     host = ["maya"]
-    actions = [openpype.api.RepairContextAction]
+    actions = [RepairContextAction]
 
     @classmethod
     def get_invalid(cls, context):
@@ -34,7 +38,7 @@ class ValidateLoadedPlugin(pyblish.api.ContextPlugin):
 
         invalid = self.get_invalid(context)
         if invalid:
-            raise RuntimeError(
+            raise PublishValidationError(
                 "Found forbidden plugin name: {}".format(", ".join(invalid))
             )
 

@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
+import os
 import pyblish.api
 
-import os
+from openpype.pipeline import PublishValidationError
 
 
 class ValidateUSDRenderProductNames(pyblish.api.InstancePlugin):
@@ -22,10 +24,11 @@ class ValidateUSDRenderProductNames(pyblish.api.InstancePlugin):
 
             if not os.path.isabs(filepath):
                 invalid.append(
-                    "Output file path is not " "absolute path: %s" % filepath
+                    "Output file path is not absolute path: %s" % filepath
                 )
 
         if invalid:
             for message in invalid:
                 self.log.error(message)
-            raise RuntimeError("USD Render Paths are invalid.")
+            raise PublishValidationError(
+                "USD Render Paths are invalid.", title=self.label)

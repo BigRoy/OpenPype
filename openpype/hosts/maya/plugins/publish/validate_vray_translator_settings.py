@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """Validate VRay Translator settings."""
 import pyblish.api
-import openpype.api
-from openpype.plugin import contextplugin_should_run
+from openpype.pipeline.publish import (
+    context_plugin_should_run,
+    RepairContextAction,
+    ValidateContentsOrder,
+    PublishValidationError
+)
 
 from maya import cmds
 
@@ -10,20 +14,23 @@ from maya import cmds
 class ValidateVRayTranslatorEnabled(pyblish.api.ContextPlugin):
     """Validate VRay Translator settings for extracting vrscenes."""
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     label = "VRay Translator Settings"
     families = ["vrayscene_layer"]
-    actions = [openpype.api.RepairContextAction]
+    actions = [RepairContextAction]
 
     def process(self, context):
         """Plugin entry point."""
         # Workaround bug pyblish-base#250
-        if not contextplugin_should_run(self, context):
+        if not context_plugin_should_run(self, context):
             return
 
         invalid = self.get_invalid(context)
         if invalid:
-            raise RuntimeError("Found invalid VRay Translator settings!")
+            raise PublishValidationError(
+                message="Found invalid VRay Translator settings",
+                title=self.label
+            )
 
     @classmethod
     def get_invalid(cls, context):
@@ -32,7 +39,11 @@ class ValidateVRayTranslatorEnabled(pyblish.api.ContextPlugin):
 
         # Get vraySettings node
         vray_settings = cmds.ls(type="VRaySettingsNode")
-        assert vray_settings, "Please ensure a VRay Settings Node is present"
+        if not vray_settings:
+            raise PublishValidationError(
+                "Please ensure a VRay Settings Node is present",
+                title=cls.label
+            )
 
         node = vray_settings[0]
 

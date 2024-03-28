@@ -1,8 +1,12 @@
 import os
+from copy import deepcopy
+
 import opentimelineio as otio
 import pyblish.api
+
 from openpype import lib as plib
-from copy import deepcopy
+from openpype.pipeline.context_tools import get_current_project_asset
+
 
 class CollectInstances(pyblish.api.InstancePlugin):
     """Collect instances from editorial's OTIO sequence"""
@@ -48,7 +52,7 @@ class CollectInstances(pyblish.api.InstancePlugin):
 
         # get timeline otio data
         timeline = instance.data["otio_timeline"]
-        fps = plib.get_asset()["data"]["fps"]
+        fps = get_current_project_asset()["data"]["fps"]
 
         tracks = timeline.each_child(
             descended_from_type=otio.schema.Track
@@ -83,7 +87,7 @@ class CollectInstances(pyblish.api.InstancePlugin):
                 if isinstance(clip, otio.schema.Gap):
                     continue
 
-                # skip all generators like black ampty
+                # skip all generators like black empty
                 if isinstance(
                     clip.media_reference,
                         otio.schema.GeneratorReference):
@@ -142,7 +146,7 @@ class CollectInstances(pyblish.api.InstancePlugin):
                     "item": clip,
                     "clipName": clip_name,
 
-                    # parent time properities
+                    # parent time properties
                     "trackStartFrame": track_start_frame,
                     "handleStart": handle_start,
                     "handleEnd": handle_end,
@@ -166,7 +170,8 @@ class CollectInstances(pyblish.api.InstancePlugin):
                     "frameStart": frame_start,
                     "frameEnd": frame_end,
                     "frameStartH": frame_start - handle_start,
-                    "frameEndH": frame_end + handle_end
+                    "frameEndH": frame_end + handle_end,
+                    "newAssetPublishing": True
                 }
 
                 for data_key in instance_data_filter:
@@ -180,14 +185,14 @@ class CollectInstances(pyblish.api.InstancePlugin):
                         "families": []
                     }
                 })
-                for subset, properities in self.subsets.items():
-                    version = properities.get("version")
+                for subset, properties in self.subsets.items():
+                    version = properties.get("version")
                     if version == 0:
-                        properities.pop("version")
+                        properties.pop("version")
 
                     # adding Review-able instance
                     subset_instance_data = deepcopy(instance_data)
-                    subset_instance_data.update(deepcopy(properities))
+                    subset_instance_data.update(deepcopy(properties))
                     subset_instance_data.update({
                         # unique attributes
                         "name": f"{name}_{subset}",

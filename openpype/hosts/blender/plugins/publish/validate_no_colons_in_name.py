@@ -1,10 +1,19 @@
 from typing import List
 
+import bpy
+
 import pyblish.api
+
 import openpype.hosts.blender.api.action
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    OptionalPyblishPluginMixin,
+    PublishValidationError
+)
 
 
-class ValidateNoColonsInName(pyblish.api.InstancePlugin):
+class ValidateNoColonsInName(pyblish.api.InstancePlugin,
+                             OptionalPyblishPluginMixin):
     """There cannot be colons in names
 
     Object or bone names cannot include colons. Other software do not
@@ -12,20 +21,19 @@ class ValidateNoColonsInName(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ["blender"]
     families = ["model", "rig"]
-    version = (0, 1, 0)
     label = "No Colons in names"
     actions = [openpype.hosts.blender.api.action.SelectInvalidAction]
 
-    @classmethod
-    def get_invalid(cls, instance) -> List:
+    @staticmethod
+    def get_invalid(instance) -> List:
         invalid = []
-        for obj in [obj for obj in instance]:
+        for obj in instance:
             if ':' in obj.name:
                 invalid.append(obj)
-            if obj.type == 'ARMATURE':
+            if isinstance(obj, bpy.types.Object) and obj.type == 'ARMATURE':
                 for bone in obj.data.bones:
                     if ':' in bone.name:
                         invalid.append(obj)
@@ -33,7 +41,12 @@ class ValidateNoColonsInName(pyblish.api.InstancePlugin):
         return invalid
 
     def process(self, instance):
+        if not self.is_active(instance.data):
+            return
+
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError(
-                f"Objects found with colon in name: {invalid}")
+            names = ", ".join(obj.name for obj in invalid)
+            raise PublishValidationError(
+                f"Objects found with colon in name: {names}"
+            )

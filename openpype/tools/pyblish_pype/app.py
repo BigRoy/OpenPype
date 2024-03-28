@@ -6,8 +6,9 @@ import ctypes
 import platform
 import contextlib
 
+from qtpy import QtCore, QtGui, QtWidgets
+
 from . import control, settings, util, window
-from Qt import QtCore, QtGui, QtWidgets
 
 self = sys.modules[__name__]
 
@@ -62,9 +63,9 @@ def install_fonts():
         # In hosts, this will be called each time the GUI is shown,
         # potentially installing a font each time.
         if database.addApplicationFont(path) < 0:
-            print("Could not install %s\n" % path)
+            print("Could not install %s" % path)
         else:
-            print("Installed %s\n" % font)
+            print("Installed %s" % font)
 
 
 def on_destroyed():
@@ -90,9 +91,8 @@ def show(parent=None):
         install_fonts()
         install_translator(app)
 
-        ctrl = control.Controller()
-
         if self._window is None:
+            ctrl = control.Controller()
             self._window = window.Window(ctrl, parent)
             self._window.destroyed.connect(on_destroyed)
 

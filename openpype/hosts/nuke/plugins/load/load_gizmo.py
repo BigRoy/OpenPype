@@ -1,19 +1,38 @@
-from avalon import api, style, io
 import nuke
-from avalon.nuke import lib as anlib
-from avalon.nuke import containerise, update_container
+
+from openpype.client import (
+    get_version_by_id,
+    get_last_version_by_subset_id,
+)
+from openpype.pipeline import (
+    load,
+    get_current_project_name,
+    get_representation_path,
+)
+from openpype.hosts.nuke.api.lib import (
+    maintained_selection,
+    get_avalon_knob_data,
+    set_avalon_knob_data,
+    swap_node_with_dependency,
+)
+from openpype.hosts.nuke.api import (
+    containerise,
+    update_container,
+    viewer_update_and_undo_stop
+)
 
 
-class LoadGizmo(api.Loader):
+class LoadGizmo(load.LoaderPlugin):
     """Loading nuke Gizmo"""
 
-    representations = ["gizmo"]
     families = ["gizmo"]
+    representations = ["*"]
+    extensions = {"nk"}
 
     label = "Load Gizmo"
     order = 0
     icon = "dropbox"
-    color = style.colors.light
+    color = "white"
     node_color = "0x75338eff"
 
     def load(self, context, name, namespace, data):
@@ -27,7 +46,7 @@ class LoadGizmo(api.Loader):
             data (dict): compulsory attribute > not used
 
         Returns:
-            nuke node: containerised nuke node object
+            nuke node: containerized nuke node object
         """
 
         # get main variables
@@ -45,32 +64,33 @@ class LoadGizmo(api.Loader):
         add_keys = ["frameStart", "frameEnd", "handleStart", "handleEnd",
                     "source", "author", "fps"]
 
-        data_imprint = {"frameStart": first,
-                        "frameEnd": last,
-                        "version": vname,
-                        "colorspaceInput": colorspace,
-                        "objectName": object_name}
+        data_imprint = {
+            "frameStart": first,
+            "frameEnd": last,
+            "version": vname,
+            "colorspaceInput": colorspace
+        }
 
         for k in add_keys:
             data_imprint.update({k: version_data[k]})
 
         # getting file path
-        file = self.fname.replace("\\", "/")
+        file = self.filepath_from_context(context).replace("\\", "/")
 
         # adding nodes to node graph
         # just in case we are in group lets jump out of it
         nuke.endGroup()
 
-        with anlib.maintained_selection():
+        with maintained_selection():
             # add group from nk
             nuke.nodePaste(file)
 
-            GN = nuke.selectedNode()
+            group_node = nuke.selectedNode()
 
-            GN["name"].setValue(object_name)
+            group_node["name"].setValue(object_name)
 
             return containerise(
-                node=GN,
+                node=group_node,
                 name=name,
                 namespace=namespace,
                 context=context,
@@ -88,17 +108,16 @@ class LoadGizmo(api.Loader):
 
         # get main variables
         # Get version from io
-        version = io.find_one({
-            "type": "version",
-            "_id": representation["parent"]
-        })
-        # get corresponding node
-        GN = nuke.toNode(container['objectName'])
+        project_name = get_current_project_name()
+        version_doc = get_version_by_id(project_name, representation["parent"])
 
-        file = api.get_representation_path(representation).replace("\\", "/")
+        # get corresponding node
+        group_node = container["node"]
+
+        file = get_representation_path(representation).replace("\\", "/")
         name = container['name']
-        version_data = version.get("data", {})
-        vname = version.get("name", None)
+        version_data = version_doc.get("data", {})
+        vname = version_doc.get("name", None)
         first = version_data.get("frameStart", None)
         last = version_data.get("frameEnd", None)
         namespace = container['namespace']
@@ -108,56 +127,56 @@ class LoadGizmo(api.Loader):
         add_keys = ["frameStart", "frameEnd", "handleStart", "handleEnd",
                     "source", "author", "fps"]
 
-        data_imprint = {"representation": str(representation["_id"]),
-                        "frameStart": first,
-                        "frameEnd": last,
-                        "version": vname,
-                        "colorspaceInput": colorspace,
-                        "objectName": object_name}
+        data_imprint = {
+            "representation": str(representation["_id"]),
+            "frameStart": first,
+            "frameEnd": last,
+            "version": vname,
+            "colorspaceInput": colorspace
+        }
 
         for k in add_keys:
             data_imprint.update({k: version_data[k]})
+
+        # capture pipeline metadata
+        avalon_data = get_avalon_knob_data(group_node)
 
         # adding nodes to node graph
         # just in case we are in group lets jump out of it
         nuke.endGroup()
 
-        with anlib.maintained_selection():
-            xpos = GN.xpos()
-            ypos = GN.ypos()
-            avalon_data = anlib.get_avalon_knob_data(GN)
-            nuke.delete(GN)
-            # add group from nk
+        with maintained_selection([group_node]):
+            # insert nuke script to the script
             nuke.nodePaste(file)
+            # convert imported to selected node
+            new_group_node = nuke.selectedNode()
+            # swap nodes with maintained connections
+            with swap_node_with_dependency(
+                    group_node, new_group_node) as node_name:
+                new_group_node["name"].setValue(node_name)
+                # set updated pipeline metadata
+                set_avalon_knob_data(new_group_node, avalon_data)
 
-            GN = nuke.selectedNode()
-            anlib.set_avalon_knob_data(GN, avalon_data)
-            GN.setXYpos(xpos, ypos)
-            GN["name"].setValue(object_name)
-
-        # get all versions in list
-        versions = io.find({
-            "type": "version",
-            "parent": version["parent"]
-        }).distinct('name')
-
-        max_version = max(versions)
+        last_version_doc = get_last_version_by_subset_id(
+            project_name, version_doc["parent"], fields=["_id"]
+        )
 
         # change color of node
-        if version.get("name") not in [max_version]:
-            GN["tile_color"].setValue(int("0xd88467ff", 16))
+        if version_doc["_id"] == last_version_doc["_id"]:
+            color_value = self.node_color
         else:
-            GN["tile_color"].setValue(int(self.node_color, 16))
+            color_value = "0xd88467ff"
 
-        self.log.info("udated to version: {}".format(version.get("name")))
+        new_group_node["tile_color"].setValue(int(color_value, 16))
 
-        return update_container(GN, data_imprint)
+        self.log.info("updated to version: {}".format(version_doc.get("name")))
+
+        return update_container(new_group_node, data_imprint)
 
     def switch(self, container, representation):
         self.update(container, representation)
 
     def remove(self, container):
-        from avalon.nuke import viewer_update_and_undo_stop
-        node = nuke.toNode(container['objectName'])
+        node = container["node"]
         with viewer_update_and_undo_stop():
             nuke.delete(node)

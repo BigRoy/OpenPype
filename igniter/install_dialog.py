@@ -5,14 +5,12 @@ import sys
 import re
 import collections
 
-from Qt import QtCore, QtGui, QtWidgets  # noqa
-from Qt.QtGui import QValidator  # noqa
-from Qt.QtCore import QTimer  # noqa
+from qtpy import QtCore, QtGui, QtWidgets
 
 from .install_thread import InstallThread
 from .tools import (
     validate_mongo_connection,
-    get_openpype_path_from_db
+    get_openpype_icon_path
 )
 
 from .nice_progress_bar import NiceProgressBar
@@ -187,7 +185,6 @@ class InstallDialog(QtWidgets.QDialog):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         roboto_font_path = os.path.join(current_dir, "RobotoMono-Regular.ttf")
         poppins_font_path = os.path.join(current_dir, "Poppins")
-        icon_path = os.path.join(current_dir, "openpype_icon.png")
 
         # Install roboto font
         QtGui.QFontDatabase.addApplicationFont(roboto_font_path)
@@ -196,6 +193,7 @@ class InstallDialog(QtWidgets.QDialog):
                 QtGui.QFontDatabase.addApplicationFont(filename)
 
         # Load logo
+        icon_path = get_openpype_icon_path()
         pixmap_openpype_logo = QtGui.QPixmap(icon_path)
         # Set logo as icon of window
         self.setWindowIcon(QtGui.QIcon(pixmap_openpype_logo))
@@ -388,8 +386,11 @@ class InstallDialog(QtWidgets.QDialog):
         install_thread.start()
 
     def _installation_finished(self):
+        # TODO we should find out why status can be set to 'None'?
+        # - 'InstallThread.run' should handle all cases so not sure where
+        #       that come from
         status = self._install_thread.result()
-        if status >= 0:
+        if status is not None and status >= 0:
             self._update_progress(100)
             QtWidgets.QApplication.processEvents()
             self.done(3)

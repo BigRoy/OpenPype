@@ -1,6 +1,6 @@
 import hou
 import pyblish.api
-from avalon.houdini import lib
+from openpype.hosts.houdini.api import lib
 import openpype.hosts.houdini.api.usd as hou_usdlib
 import openpype.lib.usdlib as usdlib
 
@@ -121,10 +121,6 @@ class CollectInstancesUsdLayered(pyblish.api.ContextPlugin):
                 instance.data.update(data)
                 instance.data.update(save_data)
                 instance.data["usdLayer"] = layer
-
-                # Don't allow the Pyblish `instanceToggled` we have installed
-                # to set this node to bypass.
-                instance.data["_allowToggleBypass"] = False
 
                 instances.append(instance)
 

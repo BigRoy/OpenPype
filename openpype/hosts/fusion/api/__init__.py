@@ -1,16 +1,18 @@
 from .pipeline import (
-    install,
-    uninstall
-)
+    FusionHost,
+    ls,
 
-from .utils import (
-    setup
+    imprint_container,
+    parse_container
 )
-
 
 from .lib import (
-    get_additional_data,
-    update_frame_range
+    maintained_selection,
+    update_frame_range,
+    set_asset_framerange,
+    get_current_comp,
+    get_bmd_library,
+    comp_lock_and_undo_chunk
 )
 
 from .menu import launch_openpype_menu
@@ -18,15 +20,19 @@ from .menu import launch_openpype_menu
 
 __all__ = [
     # pipeline
-    "install",
-    "uninstall",
+    "FusionHost",
+    "ls",
 
-    # utils
-    "setup",
+    "imprint_container",
+    "parse_container",
 
     # lib
-    "get_additional_data",
+    "maintained_selection",
     "update_frame_range",
+    "set_asset_framerange",
+    "get_current_comp",
+    "get_bmd_library",
+    "comp_lock_and_undo_chunk",
 
     # menu
     "launch_openpype_menu",

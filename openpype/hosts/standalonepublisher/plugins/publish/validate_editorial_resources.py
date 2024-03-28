@@ -1,5 +1,8 @@
 import pyblish.api
-import openpype.api
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishXmlValidationError,
+)
 
 
 class ValidateEditorialResources(pyblish.api.InstancePlugin):
@@ -12,12 +15,14 @@ class ValidateEditorialResources(pyblish.api.InstancePlugin):
     # make sure it is enabled only if at least both families are available
     match = pyblish.api.Subset
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
 
     def process(self, instance):
         self.log.debug(
             f"Instance: {instance}, Families: "
             f"{[instance.data['family']] + instance.data['families']}")
         check_file = instance.data["editorialSourcePath"]
-        msg = f"Missing \"{check_file}\"."
-        assert check_file, msg
+        msg = "Missing source video file."
+
+        if not check_file:
+            raise PublishXmlValidationError(self, msg)

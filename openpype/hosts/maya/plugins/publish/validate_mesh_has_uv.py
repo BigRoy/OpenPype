@@ -1,42 +1,17 @@
-import re
-
 from maya import cmds
 
 import pyblish.api
-import openpype.api
 import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    ValidateMeshOrder,
+    OptionalPyblishPluginMixin,
+    PublishValidationError
+)
+from openpype.hosts.maya.api.lib import len_flattened
 
 
-def len_flattened(components):
-    """Return the length of the list as if it was flattened.
-
-    Maya will return consecutive components as a single entry
-    when requesting with `maya.cmds.ls` without the `flatten`
-    flag. Though enabling `flatten` on a large list (e.g. millions)
-    will result in a slow result. This command will return the amount
-    of entries in a non-flattened list by parsing the result with
-    regex.
-
-    Args:
-        components (list): The non-flattened components.
-
-    Returns:
-        int: The amount of entries.
-
-    """
-    assert isinstance(components, (list, tuple))
-    n = 0
-    for c in components:
-        match = re.search("\[([0-9]+):([0-9]+)\]", c)
-        if match:
-            start, end = match.groups()
-            n += int(end) - int(start) + 1
-        else:
-            n += 1
-    return n
-
-
-class ValidateMeshHasUVs(pyblish.api.InstancePlugin):
+class ValidateMeshHasUVs(pyblish.api.InstancePlugin,
+                         OptionalPyblishPluginMixin):
     """Validate the current mesh has UVs.
 
     It validates whether the current UV set has non-zero UVs and
@@ -45,10 +20,9 @@ class ValidateMeshHasUVs(pyblish.api.InstancePlugin):
     UVs for every face.
     """
 
-    order = openpype.api.ValidateMeshOrder
+    order = ValidateMeshOrder
     hosts = ['maya']
     families = ['model']
-    category = 'geometry'
     label = 'Mesh Has UVs'
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction]
     optional = True
@@ -58,6 +32,15 @@ class ValidateMeshHasUVs(pyblish.api.InstancePlugin):
         invalid = []
 
         for node in cmds.ls(instance, type='mesh'):
+            num_vertices = cmds.polyEvaluate(node, vertex=True)
+
+            if num_vertices == 0:
+                cls.log.warning(
+                    "Skipping \"{}\", cause it does not have any "
+                    "vertices.".format(node)
+                )
+                continue
+
             uv = cmds.polyEvaluate(node, uv=True)
 
             if uv == 0:
@@ -88,8 +71,19 @@ class ValidateMeshHasUVs(pyblish.api.InstancePlugin):
         return invalid
 
     def process(self, instance):
+        if not self.is_active(instance.data):
+            return
 
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Meshes found in instance without "
-                               "valid UVs: {0}".format(invalid))
+
+            names = "<br>".join(
+                " - {}".format(node) for node in invalid
+            )
+
+            raise PublishValidationError(
+                title="Mesh has missing UVs",
+                message="Model meshes are required to have UVs.<br><br>"
+                        "Meshes detected with invalid or missing UVs:<br>"
+                        "{0}".format(names)
+            )

@@ -1,8 +1,12 @@
 from maya import cmds
 
 import pyblish.api
-import openpype.api
+
 import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishValidationError
+)
 
 
 class ValidateTransformZero(pyblish.api.Validator):
@@ -14,11 +18,9 @@ class ValidateTransformZero(pyblish.api.Validator):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ["maya"]
     families = ["model"]
-    category = "geometry"
-    version = (0, 1, 0)
     label = "Transform Zero (Freeze)"
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction]
 
@@ -63,5 +65,14 @@ class ValidateTransformZero(pyblish.api.Validator):
 
         invalid = self.get_invalid(instance)
         if invalid:
-            raise ValueError("Nodes found with transform "
-                             "values: {0}".format(invalid))
+
+            names = "<br>".join(
+                " - {}".format(node) for node in invalid
+            )
+
+            raise PublishValidationError(
+                title="Transform Zero",
+                message="The model publish allows no transformations. You must"
+                        " <b>freeze transformations</b> to continue.<br><br>"
+                        "Nodes found with transform values: "
+                        "{0}".format(names))

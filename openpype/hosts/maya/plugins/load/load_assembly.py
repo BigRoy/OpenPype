@@ -1,7 +1,16 @@
-from avalon import api
+import maya.cmds as cmds
+
+from openpype.pipeline import (
+    load,
+    remove_container
+)
+
+from openpype.hosts.maya.api.pipeline import containerise
+from openpype.hosts.maya.api.lib import unique_namespace
+from openpype.hosts.maya.api import setdress
 
 
-class AssemblyLoader(api.Loader):
+class AssemblyLoader(load.LoaderPlugin):
 
     families = ["assembly"]
     representations = ["json"]
@@ -13,21 +22,18 @@ class AssemblyLoader(api.Loader):
 
     def load(self, context, name, namespace, data):
 
-        from avalon.maya.pipeline import containerise
-        from avalon.maya import lib
-
         asset = context['asset']['name']
-        namespace = namespace or lib.unique_namespace(
+        namespace = namespace or unique_namespace(
             asset + "_",
             prefix="_" if asset[0].isdigit() else "",
             suffix="_",
         )
 
-        from openpype.hosts.maya.api import setdress
-
-        containers = setdress.load_package(filepath=self.fname,
-                                               name=name,
-                                               namespace=namespace)
+        containers = setdress.load_package(
+            filepath=self.filepath_from_context(context),
+            name=name,
+            namespace=namespace
+        )
 
         self[:] = containers
 
@@ -45,23 +51,17 @@ class AssemblyLoader(api.Loader):
 
     def update(self, container, representation):
 
-        from openpype import setdress
-        return setdress.update_package(container,
-                                           representation)
+        return setdress.update_package(container, representation)
 
     def remove(self, container):
         """Remove all sub containers"""
-
-        from avalon import api
-        from openpype import setdress
-        import maya.cmds as cmds
 
         # Remove all members
         member_containers = setdress.get_contained_containers(container)
         for member_container in member_containers:
             self.log.info("Removing container %s",
                           member_container['objectName'])
-            api.remove(member_container)
+            remove_container(member_container)
 
         # Remove alembic hierarchy reference
         # TODO: Check whether removing all contained references is safe enough

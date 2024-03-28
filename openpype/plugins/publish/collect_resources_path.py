@@ -12,16 +12,20 @@ import os
 import copy
 
 import pyblish.api
-from avalon import api
 
 
 class CollectResourcesPath(pyblish.api.InstancePlugin):
-    """Generate directory path where the files and resources will be stored"""
+    """Generate directory path where the files and resources will be stored.
+
+    Collects folder name and file name from files, if exists, for in-situ
+    publishing.
+    """
 
     label = "Collect Resources Path"
     order = pyblish.api.CollectorOrder + 0.495
     families = ["workfile",
                 "pointcache",
+                "proxyAbc",
                 "camera",
                 "animation",
                 "model",
@@ -40,6 +44,7 @@ class CollectResourcesPath(pyblish.api.InstancePlugin):
                 "rig",
                 "plate",
                 "look",
+                "mvLook",
                 "yetiRig",
                 "yeticache",
                 "nukenodes",
@@ -50,10 +55,16 @@ class CollectResourcesPath(pyblish.api.InstancePlugin):
                 "source",
                 "assembly",
                 "fbx",
+                "gltf",
                 "textures",
                 "action",
                 "background",
-                "effect"
+                "effect",
+                "staticMesh",
+                "skeletalMesh",
+                "xgen",
+                "yeticacheUE",
+                "tycache"
                 ]
 
     def process(self, instance):
@@ -68,27 +79,20 @@ class CollectResourcesPath(pyblish.api.InstancePlugin):
             "representation": "TEMP"
         })
 
-        # For the first time publish
-        if instance.data.get("hierarchy"):
-            template_data.update({
-                "hierarchy": instance.data["hierarchy"]
-            })
-
-        anatomy_filled = anatomy.format(template_data)
-
-        if "folder" in anatomy.templates["publish"]:
-            publish_folder = anatomy_filled["publish"]["folder"]
+        publish_templates = anatomy.templates_obj["publish"]
+        if "folder" in publish_templates:
+            publish_folder = publish_templates["folder"].format_strict(
+                template_data
+            )
         else:
             # solve deprecated situation when `folder` key is not underneath
             # `publish` anatomy
-            project_name = api.Session["AVALON_PROJECT"]
             self.log.warning((
                 "Deprecation warning: Anatomy does not have set `folder`"
                 " key underneath `publish` (in global of for project `{}`)."
-            ).format(project_name))
+            ).format(anatomy.project_name))
 
-            file_path = anatomy_filled["publish"]["path"]
-            # Directory
+            file_path = publish_templates["path"].format_strict(template_data)
             publish_folder = os.path.dirname(file_path)
 
         publish_folder = os.path.normpath(publish_folder)

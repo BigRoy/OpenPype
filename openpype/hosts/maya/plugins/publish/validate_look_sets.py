@@ -1,8 +1,10 @@
+import pyblish.api
 import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api import lib
-
-import pyblish.api
-import openpype.api
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishValidationError
+)
 
 
 class ValidateLookSets(pyblish.api.InstancePlugin):
@@ -38,7 +40,7 @@ class ValidateLookSets(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     families = ['look']
     hosts = ['maya']
     label = 'Look Sets'
@@ -49,15 +51,12 @@ class ValidateLookSets(pyblish.api.InstancePlugin):
 
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("'{}' has invalid look "
+            raise PublishValidationError("'{}' has invalid look "
                                "content".format(instance.name))
 
     @classmethod
     def get_invalid(cls, instance):
         """Get all invalid nodes"""
-
-        cls.log.info("Validating look content for "
-                     "'{}'".format(instance.name))
 
         relationships = instance.data["lookData"]["relationships"]
         invalid = []

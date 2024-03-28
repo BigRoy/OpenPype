@@ -3,18 +3,15 @@ from datetime import datetime
 import logging
 import numbers
 
-import Qt
-from Qt import QtWidgets, QtGui, QtCore
+from qtpy import QtWidgets, QtGui, QtCore
 
-from avalon.lib import HeroVersionType
-from openpype.style import get_objected_colors
+from openpype.client import (
+    get_versions,
+    get_hero_versions,
+)
+from openpype.pipeline import HeroVersionType
 from .models import TreeModel
 from . import lib
-
-if Qt.__binding__ == "PySide":
-    from PySide.QtGui import QStyleOptionViewItemV4
-elif Qt.__binding__ == "PyQt4":
-    from PyQt4.QtGui import QStyleOptionViewItemV4
 
 log = logging.getLogger(__name__)
 
@@ -27,15 +24,20 @@ class VersionDelegate(QtWidgets.QStyledItemDelegate):
     lock = False
 
     def __init__(self, dbcon, *args, **kwargs):
-        self.dbcon = dbcon
+        self._dbcon = dbcon
         super(VersionDelegate, self).__init__(*args, **kwargs)
+
+    def get_project_name(self):
+        return self._dbcon.active_project()
 
     def displayText(self, value, locale):
         if isinstance(value, HeroVersionType):
             return lib.format_version(value, True)
-        assert isinstance(value, numbers.Integral), (
-            "Version is not integer. \"{}\" {}".format(value, str(type(value)))
-        )
+        if not isinstance(value, numbers.Integral):
+            # For cases where no version is resolved like NOT FOUND cases
+            # where a representation might not exist in current database
+            return
+
         return lib.format_version(value)
 
     def paint(self, painter, option, index):
@@ -57,7 +59,10 @@ class VersionDelegate(QtWidgets.QStyledItemDelegate):
             style = QtWidgets.QApplication.style()
 
         style.drawControl(
-            style.CE_ItemViewItem, option, painter, option.widget
+            QtWidgets.QStyle.CE_ItemViewItem,
+            option,
+            painter,
+            option.widget
         )
 
         painter.save()
@@ -69,9 +74,12 @@ class VersionDelegate(QtWidgets.QStyledItemDelegate):
         pen.setColor(fg_color)
         painter.setPen(pen)
 
-        text_rect = style.subElementRect(style.SE_ItemViewItemText, option)
+        text_rect = style.subElementRect(
+            QtWidgets.QStyle.SE_ItemViewItemText,
+            option
+        )
         text_margin = style.proxy().pixelMetric(
-            style.PM_FocusFrameHMargin, option, option.widget
+            QtWidgets.QStyle.PM_FocusFrameHMargin, option, option.widget
         ) + 1
 
         painter.drawText(
@@ -115,26 +123,28 @@ class VersionDelegate(QtWidgets.QStyledItemDelegate):
                 "Version is not integer"
             )
 
+        project_name = self.get_project_name()
         # Add all available versions to the editor
         parent_id = item["version_document"]["parent"]
-        version_docs = list(self.dbcon.find(
-            {
-                "type": "version",
-                "parent": parent_id
-            },
-            sort=[("name", 1)]
-        ))
+        version_docs = [
+            version_doc
+            for version_doc in sorted(
+                get_versions(project_name, subset_ids=[parent_id]),
+                key=lambda item: item["name"]
+            )
+            if version_doc["data"].get("active", True)
+        ]
 
-        hero_version_doc = self.dbcon.find_one(
-            {
-                "type": "hero_version",
-                "parent": parent_id
-            }, {
-                "name": 1,
-                "data.tags": 1,
-                "version_id": 1
-            }
+        hero_versions = list(
+            get_hero_versions(
+                project_name,
+                subset_ids=[parent_id],
+                fields=["name", "data.tags", "version_id"]
+            )
         )
+        hero_version_doc = None
+        if hero_versions:
+            hero_version_doc = hero_versions[0]
 
         doc_for_hero_version = None
 
@@ -288,9 +298,5 @@ class PrettyTimeDelegate(QtWidgets.QStyledItemDelegate):
     """
 
     def displayText(self, value, locale):
-
-        if value is None:
-            # Ignore None value
-            return
-
-        return pretty_timestamp(value)
+        if value is not None:
+            return pretty_timestamp(value)

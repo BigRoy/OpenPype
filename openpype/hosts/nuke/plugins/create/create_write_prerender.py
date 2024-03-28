@@ -1,121 +1,142 @@
-from collections import OrderedDict
-from openpype.hosts.nuke.api import (
-    plugin,
-    lib)
 import nuke
+import sys
+import six
+
+from openpype.pipeline import (
+    CreatedInstance
+)
+from openpype.lib import (
+    BoolDef
+)
+from openpype.hosts.nuke import api as napi
+from openpype.hosts.nuke.api.plugin import exposed_write_knobs
 
 
-class CreateWritePrerender(plugin.PypeCreator):
-    # change this to template preset
-    name = "WritePrerender"
-    label = "Create Write Prerender"
-    hosts = ["nuke"]
-    n_class = "Write"
+class CreateWritePrerender(napi.NukeWriteCreator):
+    identifier = "create_write_prerender"
+    label = "Prerender (write)"
     family = "prerender"
     icon = "sign-out"
-    defaults = ["Key01", "Bg01", "Fg01", "Branch01", "Part01"]
 
-    def __init__(self, *args, **kwargs):
-        super(CreateWritePrerender, self).__init__(*args, **kwargs)
+    instance_attributes = [
+        "use_range_limit"
+    ]
+    default_variants = [
+        "Key01",
+        "Bg01",
+        "Fg01",
+        "Branch01",
+        "Part01"
+    ]
+    temp_rendering_path_template = (
+        "{work}/renders/nuke/{subset}/{subset}.{frame}.{ext}")
 
-        data = OrderedDict()
+    # Before write node render.
+    order = 90
 
-        data["family"] = self.family
-        data["families"] = self.n_class
+    def get_pre_create_attr_defs(self):
+        attr_defs = [
+            BoolDef(
+                "use_selection",
+                default=not self.create_context.headless,
+                label="Use selection"
+            ),
+            self._get_render_target_enum()
+        ]
+        return attr_defs
 
-        for k, v in self.data.items():
-            if k not in data.keys():
-                data.update({k: v})
-
-        self.data = data
-        self.nodes = nuke.selectedNodes()
-        self.log.debug("_ self.data: '{}'".format(self.data))
-
-    def process(self):
-        inputs = []
-        outputs = []
-        instance = nuke.toNode(self.data["subset"])
-        selected_node = None
-
-        # use selection
-        if (self.options or {}).get("useSelection"):
-            nodes = self.nodes
-
-            if not (len(nodes) < 2):
-                msg = ("Select only one node. The node "
-                       "you want to connect to, "
-                       "or tick off `Use selection`")
-                self.log.error(msg)
-                nuke.message(msg)
-
-            if len(nodes) == 0:
-                msg = (
-                    "No nodes selected. Please select a single node to connect"
-                    " to or tick off `Use selection`"
-                )
-                self.log.error(msg)
-                nuke.message(msg)
-
-            selected_node = nodes[0]
-            inputs = [selected_node]
-            outputs = selected_node.dependent()
-
-            if instance:
-                if (instance.name() in selected_node.name()):
-                    selected_node = instance.dependencies()[0]
-
-        # if node already exist
-        if instance:
-            # collect input / outputs
-            inputs = instance.dependencies()
-            outputs = instance.dependent()
-            selected_node = inputs[0]
-            # remove old one
-            nuke.delete(instance)
-
-        # recreate new
+    def create_instance_node(self, subset_name, instance_data):
+        # add fpath_template
         write_data = {
-            "nodeclass": self.n_class,
-            "families": [self.family],
-            "avalon": self.data
+            "creator": self.__class__.__name__,
+            "subset": subset_name,
+            "fpath_template": self.temp_rendering_path_template
         }
 
-        # add creator data
-        creator_data = {"creator": self.__class__.__name__}
-        self.data.update(creator_data)
-        write_data.update(creator_data)
+        write_data.update(instance_data)
 
-        if self.presets.get('fpath_template'):
-            self.log.info("Adding template path from preset")
-            write_data.update(
-                {"fpath_template": self.presets["fpath_template"]}
-            )
+        # get width and height
+        if self.selected_node:
+            width, height = (
+                self.selected_node.width(), self.selected_node.height())
         else:
-            self.log.info("Adding template path from plugin")
-            write_data.update({
-                "fpath_template": ("{work}/prerenders/nuke/{subset}"
-                                   "/{subset}.{frame}.{ext}")})
+            actual_format = nuke.root().knob('format').value()
+            width, height = (actual_format.width(), actual_format.height())
 
-        self.log.info("write_data: {}".format(write_data))
-
-        write_node = lib.create_write_node(
-            self.data["subset"],
+        created_node = napi.create_write_node(
+            subset_name,
             write_data,
-            input=selected_node,
-            prenodes=[],
-            review=False,
-            linked_knobs=["channels", "___", "first", "last", "use_limit"])
+            input=self.selected_node,
+            prenodes=self.prenodes,
+            linked_knobs=self.get_linked_knobs(),
+            **{
+                "width": width,
+                "height": height
+            }
+        )
 
-        # relinking to collected connections
-        for i, input in enumerate(inputs):
-            write_node.setInput(i, input)
+        self._add_frame_range_limit(created_node)
 
-        write_node.autoplace()
+        self.integrate_links(created_node, outputs=True)
 
-        for output in outputs:
-            output.setInput(0, write_node)
+        return created_node
 
-        # open group node
+    def create(self, subset_name, instance_data, pre_create_data):
+        # pass values from precreate to instance
+        self.pass_pre_attributes_to_instance(
+            instance_data,
+            pre_create_data,
+            [
+                "render_target"
+            ]
+        )
+
+        # make sure selected nodes are added
+        self.set_selected_nodes(pre_create_data)
+
+        # make sure subset name is unique
+        self.check_existing_subset(subset_name)
+
+        instance_node = self.create_instance_node(
+            subset_name,
+            instance_data
+        )
+
+        try:
+            instance = CreatedInstance(
+                self.family,
+                subset_name,
+                instance_data,
+                self
+            )
+
+            instance.transient_data["node"] = instance_node
+
+            self._add_instance_to_context(instance)
+
+            napi.set_node_data(
+                instance_node,
+                napi.INSTANCE_DATA_KNOB,
+                instance.data_to_store()
+            )
+
+            exposed_write_knobs(
+                self.project_settings, self.__class__.__name__, instance_node
+            )
+
+            return instance
+
+        except Exception as er:
+            six.reraise(
+                napi.NukeCreatorError,
+                napi.NukeCreatorError("Creator error: {}".format(er)),
+                sys.exc_info()[2]
+            )
+
+    def _add_frame_range_limit(self, write_node):
+        if "use_range_limit" not in self.instance_attributes:
+            return
+
         write_node.begin()
         for n in nuke.allNodes():
             # get write node
@@ -123,9 +144,8 @@ class CreateWritePrerender(plugin.PypeCreator):
                 w_node = n
         write_node.end()
 
-        if self.presets.get("use_range_limit"):
-            w_node["use_limit"].setValue(True)
-            w_node["first"].setValue(nuke.root()["first_frame"].value())
-            w_node["last"].setValue(nuke.root()["last_frame"].value())
+        w_node["use_limit"].setValue(True)
+        w_node["first"].setValue(nuke.root()["first_frame"].value())
+        w_node["last"].setValue(nuke.root()["last_frame"].value())
 
         return write_node

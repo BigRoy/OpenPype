@@ -1,15 +1,31 @@
 import collections
 import logging
+import itertools
 from functools import partial
 
-from Qt import QtWidgets, QtCore
+from qtpy import QtWidgets, QtCore
+import qtawesome
 
-from avalon import io, api, style
-from avalon.vendor import qtawesome
-from avalon.lib import HeroVersionType
-from avalon.tools import lib as tools_lib
-
+from openpype.client import (
+    get_version_by_id,
+    get_versions,
+    get_hero_versions,
+    get_representation_by_id,
+    get_representations,
+)
+from openpype import style
+from openpype.pipeline import (
+    legacy_io,
+    HeroVersionType,
+    update_container,
+    remove_container,
+    discover_inventory_actions,
+)
 from openpype.modules import ModulesManager
+from openpype.tools.utils.lib import (
+    iter_model_rows,
+    format_version
+)
 
 from .switch_dialog import SwitchAssetDialog
 from .model import InventoryModel
@@ -20,26 +36,29 @@ DEFAULT_COLOR = "#fb9c15"
 log = logging.getLogger("SceneInventory")
 
 
-class SceneInvetoryView(QtWidgets.QTreeView):
+class SceneInventoryView(QtWidgets.QTreeView):
     data_changed = QtCore.Signal()
     hierarchy_view_changed = QtCore.Signal(bool)
 
     def __init__(self, parent=None):
-        super(SceneInvetoryView, self).__init__(parent=parent)
+        super(SceneInventoryView, self).__init__(parent=parent)
 
         # view settings
         self.setIndentation(12)
         self.setAlternatingRowColors(True)
         self.setSortingEnabled(True)
-        self.setSelectionMode(self.ExtendedSelection)
+        self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_right_mouse_menu)
         self._hierarchy_view = False
         self._selected = None
 
         manager = ModulesManager()
-        self.sync_server = manager.modules_by_name["sync_server"]
-        self.sync_enabled = self.sync_server.enabled
+        sync_server = manager.modules_by_name.get("sync_server")
+        sync_enabled = sync_server is not None and sync_server.enabled
+
+        self.sync_server = sync_server
+        self.sync_enabled = sync_enabled
 
     def _set_hierarchy_view(self, enabled):
         if enabled == self._hierarchy_view:
@@ -64,50 +83,49 @@ class SceneInvetoryView(QtWidgets.QTreeView):
         self.setStyleSheet("QTreeView {}")
 
     def _build_item_menu_for_selection(self, items, menu):
+
+        # Exclude items that are "NOT FOUND" since setting versions, updating
+        # and removal won't work for those items.
+        items = [item for item in items if not item.get("isNotFound")]
+
         if not items:
             return
 
-        repre_ids = []
-        for item in items:
-            item_id = io.ObjectId(item["representation"])
-            if item_id not in repre_ids:
-                repre_ids.append(item_id)
+        # An item might not have a representation, for example when an item
+        # is listed as "NOT FOUND"
+        repre_ids = {
+            item["representation"]
+            for item in items
+        }
 
-        repre_docs = io.find(
-            {
-                "type": "representation",
-                "_id": {"$in": repre_ids}
-            },
-            {"parent": 1}
+        project_name = legacy_io.active_project()
+        repre_docs = get_representations(
+            project_name, representation_ids=repre_ids, fields=["parent"]
         )
 
-        version_ids = []
-        for repre_doc in repre_docs:
-            version_id = repre_doc["parent"]
-            if version_id not in version_ids:
-                version_ids.append(version_id)
+        version_ids = {
+            repre_doc["parent"]
+            for repre_doc in repre_docs
+        }
 
-        loaded_versions = io.find({
-            "_id": {"$in": version_ids},
-            "type": {"$in": ["version", "hero_version"]}
-        })
+        loaded_versions = get_versions(
+            project_name, version_ids=version_ids, hero=True
+        )
 
         loaded_hero_versions = []
         versions_by_parent_id = collections.defaultdict(list)
-        version_parents = []
+        subset_ids = set()
         for version in loaded_versions:
             if version["type"] == "hero_version":
                 loaded_hero_versions.append(version)
             else:
                 parent_id = version["parent"]
                 versions_by_parent_id[parent_id].append(version)
-                if parent_id not in version_parents:
-                    version_parents.append(parent_id)
+                subset_ids.add(parent_id)
 
-        all_versions = io.find({
-            "type": {"$in": ["hero_version", "version"]},
-            "parent": {"$in": version_parents}
-        })
+        all_versions = get_versions(
+            project_name, subset_ids=subset_ids, hero=True
+        )
         hero_versions = []
         versions = []
         for version in all_versions:
@@ -134,38 +152,35 @@ class SceneInvetoryView(QtWidgets.QTreeView):
         switch_to_versioned = None
         if has_loaded_hero_versions:
             def _on_switch_to_versioned(items):
-                repre_ids = []
-                for item in items:
-                    item_id = io.ObjectId(item["representation"])
-                    if item_id not in repre_ids:
-                        repre_ids.append(item_id)
+                repre_ids = {
+                    item["representation"]
+                    for item in items
+                }
 
-                repre_docs = io.find(
-                    {
-                        "type": "representation",
-                        "_id": {"$in": repre_ids}
-                    },
-                    {"parent": 1}
+                repre_docs = get_representations(
+                    project_name,
+                    representation_ids=repre_ids,
+                    fields=["parent"]
                 )
 
-                version_ids = []
+                version_ids = set()
                 version_id_by_repre_id = {}
                 for repre_doc in repre_docs:
                     version_id = repre_doc["parent"]
-                    version_id_by_repre_id[repre_doc["_id"]] = version_id
-                    if version_id not in version_ids:
-                        version_ids.append(version_id)
-                hero_versions = io.find(
-                    {
-                        "_id": {"$in": version_ids},
-                        "type": "hero_version"
-                    },
-                    {"version_id": 1}
+                    repre_id = str(repre_doc["_id"])
+                    version_id_by_repre_id[repre_id] = version_id
+                    version_ids.add(version_id)
+
+                hero_versions = get_hero_versions(
+                    project_name,
+                    version_ids=version_ids,
+                    fields=["version_id"]
                 )
-                version_ids = set()
+
+                hero_src_version_ids = set()
                 for hero_version in hero_versions:
                     version_id = hero_version["version_id"]
-                    version_ids.add(version_id)
+                    hero_src_version_ids.add(version_id)
                     hero_version_id = hero_version["_id"]
                     for _repre_id, current_version_id in (
                         version_id_by_repre_id.items()
@@ -173,32 +188,27 @@ class SceneInvetoryView(QtWidgets.QTreeView):
                         if current_version_id == hero_version_id:
                             version_id_by_repre_id[_repre_id] = version_id
 
-                version_docs = io.find(
-                    {
-                        "_id": {"$in": list(version_ids)},
-                        "type": "version"
-                    },
-                    {"name": 1}
+                version_docs = get_versions(
+                    project_name,
+                    version_ids=hero_src_version_ids,
+                    fields=["name"]
                 )
                 version_name_by_id = {}
                 for version_doc in version_docs:
                     version_name_by_id[version_doc["_id"]] = \
                         version_doc["name"]
 
+                # Specify version per item to update to
+                update_items = []
+                update_versions = []
                 for item in items:
-                    repre_id = io.ObjectId(item["representation"])
+                    repre_id = item["representation"]
                     version_id = version_id_by_repre_id.get(repre_id)
                     version_name = version_name_by_id.get(version_id)
                     if version_name is not None:
-                        try:
-                            api.update(item, version_name)
-                        except AssertionError:
-                            self._show_version_error_dialog(
-                                version_name, [item]
-                            )
-                            log.warning("Update failed", exc_info=True)
-
-                self.data_changed.emit()
+                        update_items.append(item)
+                        update_versions.append(version_name)
+                self._update_containers(update_items, update_versions)
 
             update_icon = qtawesome.icon(
                 "fa.asterisk",
@@ -215,16 +225,6 @@ class SceneInvetoryView(QtWidgets.QTreeView):
 
         update_to_latest_action = None
         if has_outdated or has_loaded_hero_versions:
-            # update to latest version
-            def _on_update_to_latest(items):
-                for item in items:
-                    try:
-                        api.update(item, -1)
-                    except AssertionError:
-                        self._show_version_error_dialog(None, [item])
-                        log.warning("Update failed", exc_info=True)
-                self.data_changed.emit()
-
             update_icon = qtawesome.icon(
                 "fa.angle-double-up",
                 color=DEFAULT_COLOR
@@ -235,21 +235,11 @@ class SceneInvetoryView(QtWidgets.QTreeView):
                 menu
             )
             update_to_latest_action.triggered.connect(
-                lambda: _on_update_to_latest(items)
+                lambda: self._update_containers(items, version=-1)
             )
 
         change_to_hero = None
         if has_available_hero_version:
-            # change to hero version
-            def _on_update_to_hero(items):
-                for item in items:
-                    try:
-                        api.update(item, HeroVersionType(-1))
-                    except AssertionError:
-                        self._show_version_error_dialog('hero', [item])
-                        log.warning("Update failed", exc_info=True)
-                self.data_changed.emit()
-
             # TODO change icon
             change_icon = qtawesome.icon(
                 "fa.asterisk",
@@ -261,7 +251,8 @@ class SceneInvetoryView(QtWidgets.QTreeView):
                 menu
             )
             change_to_hero.triggered.connect(
-                lambda: _on_update_to_hero(items)
+                lambda: self._update_containers(items,
+                                                version=HeroVersionType(-1))
             )
 
         # set version
@@ -356,14 +347,13 @@ class SceneInvetoryView(QtWidgets.QTreeView):
                 repre_ids (list)
                 side (str): 'active_site'|'remote_site'
         """
-        project_name = io.Session["AVALON_PROJECT"]
+        project_name = legacy_io.Session["AVALON_PROJECT"]
         active_site = self.sync_server.get_active_site(project_name)
         remote_site = self.sync_server.get_remote_site(project_name)
 
-        repre_docs = io.find({
-            "type": "representation",
-            "_id": {"$in": repre_ids}
-        })
+        repre_docs = get_representations(
+            project_name, representation_ids=repre_ids
+        )
         repre_docs_by_id = {
             repre_doc["_id"]: repre_doc
             for repre_doc in repre_docs
@@ -373,7 +363,7 @@ class SceneInvetoryView(QtWidgets.QTreeView):
             if not repre_doc:
                 continue
 
-            progress = tools_lib.get_progress_for_repre(
+            progress = self.sync_server.get_progress_for_repre(
                 repre_doc,
                 active_site,
                 remote_site
@@ -478,7 +468,7 @@ class SceneInvetoryView(QtWidgets.QTreeView):
         containers = containers or [dict()]
 
         # Check which action will be available in the menu
-        Plugins = api.discover(api.InventoryAction)
+        Plugins = discover_inventory_actions()
         compatible = [p() for p in Plugins if
                       any(p.is_compatible(c) for c in containers)]
 
@@ -539,21 +529,21 @@ class SceneInvetoryView(QtWidgets.QTreeView):
         selection_model = self.selectionModel()
 
         select_mode = {
-            "select": selection_model.Select,
-            "deselect": selection_model.Deselect,
-            "toggle": selection_model.Toggle,
+            "select": QtCore.QItemSelectionModel.Select,
+            "deselect": QtCore.QItemSelectionModel.Deselect,
+            "toggle": QtCore.QItemSelectionModel.Toggle,
         }[options.get("mode", "select")]
 
-        for item in tools_lib.iter_model_rows(model, 0):
-            item = item.data(InventoryModel.ItemRole)
+        for index in iter_model_rows(model, 0):
+            item = index.data(InventoryModel.ItemRole)
             if item.get("isGroupNode"):
                 continue
 
             name = item.get("objectName")
             if name in object_names:
-                self.scrollTo(item)  # Ensure item is visible
-                flags = select_mode | selection_model.Rows
-                selection_model.select(item, flags)
+                self.scrollTo(index)  # Ensure item is visible
+                flags = select_mode | QtCore.QItemSelectionModel.Rows
+                selection_model.select(index, flags)
 
                 object_names.remove(name)
 
@@ -648,25 +638,35 @@ class SceneInvetoryView(QtWidgets.QTreeView):
 
         active = items[-1]
 
+        project_name = legacy_io.active_project()
         # Get available versions for active representation
-        representation_id = io.ObjectId(active["representation"])
-        representation = io.find_one({"_id": representation_id})
-        version = io.find_one({
-            "_id": representation["parent"]
-        })
+        repre_doc = get_representation_by_id(
+            project_name,
+            active["representation"],
+            fields=["parent"]
+        )
 
-        versions = list(io.find(
-            {
-                "parent": version["parent"],
-                "type": "version"
-            },
-            sort=[("name", 1)]
+        repre_version_doc = get_version_by_id(
+            project_name,
+            repre_doc["parent"],
+            fields=["parent"]
+        )
+
+        version_docs = list(get_versions(
+            project_name,
+            subset_ids=[repre_version_doc["parent"]],
+            hero=True
         ))
-
-        hero_version = io.find_one({
-            "parent": version["parent"],
-            "type": "hero_version"
-        })
+        hero_version = None
+        standard_versions = []
+        for version_doc in version_docs:
+            if version_doc["type"] == "hero_version":
+                hero_version = version_doc
+            else:
+                standard_versions.append(version_doc)
+        versions = list(reversed(
+            sorted(standard_versions, key=lambda item: item["name"])
+        ))
         if hero_version:
             _version_id = hero_version["version_id"]
             for _version in versions:
@@ -693,7 +693,7 @@ class SceneInvetoryView(QtWidgets.QTreeView):
         all_versions = []
         if hero_version:
             all_versions.append(hero_version)
-        all_versions.extend(reversed(versions))
+        all_versions.extend(versions)
 
         if current_item:
             index = all_versions.index(current_item)
@@ -704,7 +704,7 @@ class SceneInvetoryView(QtWidgets.QTreeView):
         labels = []
         for version in all_versions:
             is_hero = version["type"] == "hero_version"
-            label = tools_lib.format_version(version["name"], is_hero)
+            label = format_version(version["name"], is_hero)
             labels.append(label)
             versions_by_label[label] = version["name"]
 
@@ -721,14 +721,7 @@ class SceneInvetoryView(QtWidgets.QTreeView):
 
         if label:
             version = versions_by_label[label]
-            for item in items:
-                try:
-                    api.update(item, version)
-                except AssertionError:
-                    self._show_version_error_dialog(version, [item])
-                    log.warning("Update failed", exc_info=True)
-            # refresh model when done
-            self.data_changed.emit()
+            self._update_containers(items, version)
 
     def _show_switch_dialog(self, items):
         """Display Switch dialog"""
@@ -754,7 +747,7 @@ class SceneInvetoryView(QtWidgets.QTreeView):
             return
 
         for item in items:
-            api.remove(item)
+            remove_container(item)
         self.data_changed.emit()
 
     def _show_version_error_dialog(self, version, items):
@@ -763,16 +756,16 @@ class SceneInvetoryView(QtWidgets.QTreeView):
             Args:
                 version: str or int or None
         """
-        if not version:
+        if version == -1:
             version_str = "latest"
-        elif version == "hero":
+        elif isinstance(version, HeroVersionType):
             version_str = "hero"
         elif isinstance(version, int):
             version_str = "v{:03d}".format(version)
         else:
             version_str = version
 
-        dialog = QtWidgets.QMessageBox()
+        dialog = QtWidgets.QMessageBox(self)
         dialog.setIcon(QtWidgets.QMessageBox.Warning)
         dialog.setStyleSheet(style.load_stylesheet())
         dialog.setWindowTitle("Update failed")
@@ -792,3 +785,73 @@ class SceneInvetoryView(QtWidgets.QTreeView):
         ).format(version_str)
         dialog.setText(msg)
         dialog.exec_()
+
+    def update_all(self):
+        """Update all items that are currently 'outdated' in the view"""
+        # Get the source model through the proxy model
+        model = self.model().sourceModel()
+
+        # Get all items from outdated groups
+        outdated_items = []
+        for index in iter_model_rows(model,
+                                     column=0,
+                                     include_root=False):
+            item = index.data(model.ItemRole)
+
+            if not item.get("isGroupNode"):
+                continue
+
+            # Only the group nodes contain the "highest_version" data and as
+            # such we find only the groups and take its children.
+            if not model.outdated(item):
+                continue
+
+            # Collect all children which we want to update
+            children = item.children()
+            outdated_items.extend(children)
+
+        if not outdated_items:
+            log.info("Nothing to update.")
+            return
+
+        # Trigger update to latest
+        self._update_containers(outdated_items, version=-1)
+
+    def _update_containers(self, items, version):
+        """Helper to update items to given version (or version per item)
+
+        If at least one item is specified this will always try to refresh
+        the inventory even if errors occurred on any of the items.
+
+        Arguments:
+            items (list): Items to update
+            version (int or list): Version to set to.
+                This can be a list specifying a version for each item.
+                Like `update_container` version -1 sets the latest version
+                and HeroTypeVersion instances set the hero version.
+
+        """
+
+        if isinstance(version, (list, tuple)):
+            # We allow a unique version to be specified per item. In that case
+            # the length must match with the items
+            assert len(items) == len(version), (
+                "Number of items mismatches number of versions: "
+                "{} items - {} versions".format(len(items), len(version))
+            )
+            versions = version
+        else:
+            # Repeat the same version infinitely
+            versions = itertools.repeat(version)
+
+        # Trigger update to latest
+        try:
+            for item, item_version in zip(items, versions):
+                try:
+                    update_container(item, item_version)
+                except AssertionError:
+                    self._show_version_error_dialog(item_version, [item])
+                    log.warning("Update failed", exc_info=True)
+        finally:
+            # Always update the scene inventory view, even if errors occurred
+            self.data_changed.emit()

@@ -11,7 +11,7 @@ import TabItem from '@theme/TabItem';
 
 To build Pype you currently need (on all platforms):
 
-- **[Python 3.7](https://www.python.org/downloads/)** as we are following [vfx platform](https://vfxplatform.com).
+- **[Python 3.9](https://www.python.org/downloads/)** as we are following [vfx platform CY2022](https://vfxplatform.com).
 - **[git](https://git-scm.com/downloads)**
 
 We use [CX_Freeze](https://cx-freeze.readthedocs.io/en/latest) to freeze the code and all dependencies and
@@ -51,7 +51,9 @@ development tools like [CMake](https://cmake.org/) and [Visual Studio](https://v
 
 #### Run from source
 
-For development purposes it is possible to run OpenPype directly from the source. We provide a simple launcher script for this. 
+For development purposes it is possible to run OpenPype directly from the source. We provide a simple launcher script for this. To run the powershell scripts you may have to enable unrestricted execution as administrator:
+
+`Set-ExecutionPolicy -ExecutionPolicy unrestricted`
 
 To start OpenPype from source you need to 
 
@@ -114,8 +116,8 @@ To build OpenPype on Linux you will need:
 - **[curl](https://curl.se)** on systems that doesn't have one preinstalled.
 - **bzip2**, **readline**, **sqlite3** and other libraries.
 
-Because some Linux distros come with newer Python version pre-installed, you might 
-need to install **3.7** version and make use of it explicitly. 
+Because some Linux distros come with older Python version pre-installed, you might 
+need to install **3.9** version and make use of it explicitly. 
 Your best bet is probably using [pyenv](https://github.com/pyenv/pyenv).
 
 You can use your package manager to install **git** and other packages to your build
@@ -136,16 +138,16 @@ $ eval "$(pyenv virtualenv-init -)"
 # reload shell
 $ exec $SHELL
 
-# install Python 3.7.10
+# install Python 3.9.6
 # python will be downloaded and build so please make sure
-# you have all necessary requirements installed (see bellow).
-$ pyenv install -v 3.7.10
+# you have all necessary requirements installed (see below).
+$ pyenv install -v 3.9.6
 
 # change path to pype 3
 $ cd /path/to/pype-3
 
 # set local python version
-$ pyenv local 3.7.10
+$ pyenv local 3.9.6
 ```
 :::note Install build requirements for **Ubuntu**
 
@@ -193,7 +195,7 @@ For more information about setting your build environment please refer to [pyenv
 <TabItem value="mac">
 
 ### MacOS
-To build pype on MacOS you wil need:
+To build pype on MacOS you will need:
 
 - **[Homebrew](https://brew.sh)** - easy way of installing everything necessary.
 - **[CMake](https://cmake.org/)** to build some external OpenPype dependencies.
@@ -214,25 +216,25 @@ $ brew install cmake
 3) Install [pyenv](https://github.com/pyenv/pyenv):
 ```shell
 $ brew install pyenv
-$ echo 'eval "$(pypenv init -)"' >> ~/.zshrc
+$ echo 'eval "$(pyenv init -)"' >> ~/.zshrc
 $ pyenv init
 $ exec "$SHELL"
 $ PATH=$(pyenv root)/shims:$PATH
 ```
 
-4) Pull in required Python version 3.7.x
+4) Pull in required Python version 3.9.x
 ```shell
 # install Python build dependences
 $ brew install openssl readline sqlite3 xz zlib
 
-# replace with up-to-date 3.7.x version
-$ pyenv install 3.7.9
+# replace with up-to-date 3.9.x version
+$ pyenv install 3.9.6
 ```
 
 5) Set local Python version
 ```shell
 # switch to Pype source directory
-$ pyenv local 3.7.9
+$ pyenv local 3.9.6
 ```
 
 6) Install `create-dmg`
@@ -256,7 +258,7 @@ to `pyproject.toml` to `[tool.poetry.dependencies]` section.
 
 ```toml title="/pyproject.toml"
 [tool.poetry.dependencies]
-python = "3.7.*"
+python = "3.9.*"
 aiohttp = "^3.7"
 aiohttp_json_rpc = "*" # TVPaint server
 acre = { git = "https://github.com/pypeclub/acre.git" }
@@ -338,7 +340,7 @@ to update packages version, just run `poetry update` or delete lock file.
 
 ### create_zip
 Script to create packaged OpenPype version from current sources. This will strip developer stuff and
-package it into zip that can be used for [auto-updates for studio wide distributions](admin_distribute#automatic-updates), etc.
+package it into zip that can be used for [auto-updates for studio wide distributions](admin_distribute.md#automatic-updates), etc.
 Same as:
 ```shell
 poetry run python ./tools/create_zip.py

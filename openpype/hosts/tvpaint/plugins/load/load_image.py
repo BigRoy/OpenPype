@@ -1,11 +1,12 @@
-from avalon.vendor import qargparse
-from avalon.tvpaint import lib, pipeline
+from openpype.lib.attribute_definitions import BoolDef
+from openpype.hosts.tvpaint.api import plugin
+from openpype.hosts.tvpaint.api.lib import execute_george_through_file
 
 
-class ImportImage(pipeline.Loader):
+class ImportImage(plugin.Loader):
     """Load image or image sequence to TVPaint as new layer."""
 
-    families = ["render", "image", "background", "plate"]
+    families = ["render", "image", "background", "plate", "review"]
     representations = ["*"]
 
     label = "Import Image"
@@ -26,26 +27,28 @@ class ImportImage(pipeline.Loader):
         "preload": True
     }
 
-    options = [
-        qargparse.Boolean(
-            "stretch",
-            label="Stretch to project size",
-            default=True,
-            help="Stretch loaded image/s to project resolution?"
-        ),
-        qargparse.Boolean(
-            "timestretch",
-            label="Stretch to timeline length",
-            default=True,
-            help="Clip loaded image/s to timeline length?"
-        ),
-        qargparse.Boolean(
-            "preload",
-            label="Preload loaded image/s",
-            default=True,
-            help="Preload image/s?"
-        )
-    ]
+    @classmethod
+    def get_options(cls, contexts):
+        return [
+            BoolDef(
+                "stretch",
+                label="Stretch to project size",
+                default=cls.defaults["stretch"],
+                tooltip="Stretch loaded image/s to project resolution?"
+            ),
+            BoolDef(
+                "timestretch",
+                label="Stretch to timeline length",
+                default=cls.defaults["timestretch"],
+                tooltip="Clip loaded image/s to timeline length?"
+            ),
+            BoolDef(
+                "preload",
+                label="Preload loaded image/s",
+                default=cls.defaults["preload"],
+                tooltip="Preload image/s?"
+            )
+        ]
 
     def load(self, context, name, namespace, options):
         stretch = options.get("stretch", self.defaults["stretch"])
@@ -74,9 +77,10 @@ class ImportImage(pipeline.Loader):
         )
         # Fill import script with filename and layer name
         # - filename mus not contain backwards slashes
+        path = self.filepath_from_context(context).replace("\\", "/")
         george_script = self.import_script.format(
-            self.fname.replace("\\", "/"),
+            path,
             layer_name,
             load_options_str
         )
-        return lib.execute_george_through_file(george_script)
+        return execute_george_through_file(george_script)

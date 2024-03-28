@@ -2,28 +2,34 @@ import os
 import types
 
 import maya.cmds as cmds
+from mtoa.core import createOptions
 
 import pyblish.api
-import openpype.api
-import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    RepairAction,
+    ValidateContentsOrder,
+    PublishValidationError
+)
 
 
 class ValidateAssRelativePaths(pyblish.api.InstancePlugin):
     """Ensure exporting ass file has set relative texture paths"""
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ['maya']
     families = ['ass']
     label = "ASS has relative texture paths"
-    actions = [openpype.api.RepairAction]
+    actions = [RepairAction]
 
     def process(self, instance):
         # we cannot ask this until user open render settings as
-        # `defaultArnoldRenderOptions` doesn't exists
+        # `defaultArnoldRenderOptions` doesn't exist
+        errors = []
+
         try:
-            relative_texture = cmds.getAttr(
+            absolute_texture = cmds.getAttr(
                 "defaultArnoldRenderOptions.absolute_texture_paths")
-            relative_procedural = cmds.getAttr(
+            absolute_procedural = cmds.getAttr(
                 "defaultArnoldRenderOptions.absolute_procedural_paths")
             texture_search_path = cmds.getAttr(
                 "defaultArnoldRenderOptions.tspath"
@@ -32,15 +38,17 @@ class ValidateAssRelativePaths(pyblish.api.InstancePlugin):
                 "defaultArnoldRenderOptions.pspath"
             )
         except ValueError:
-            assert False, ("Can not validate, render setting were not opened "
-                           "yet so Arnold setting cannot be validate")
+            raise PublishValidationError(
+                "Default Arnold options has not been created yet."
+            )
 
         scene_dir, scene_basename = os.path.split(cmds.file(q=True, loc=True))
         scene_name, _ = os.path.splitext(scene_basename)
-        assert self.maya_is_true(relative_texture) is not True, \
-            ("Texture path is set to be absolute")
-        assert self.maya_is_true(relative_procedural) is not True, \
-            ("Procedural path is set to be absolute")
+
+        if self.maya_is_true(absolute_texture):
+            errors.append("Texture path is set to be absolute")
+        if self.maya_is_true(absolute_procedural):
+            errors.append("Procedural path is set to be absolute")
 
         anatomy = instance.context.data["anatomy"]
 
@@ -52,18 +60,25 @@ class ValidateAssRelativePaths(pyblish.api.InstancePlugin):
         for k in keys:
             paths.append("[{}]".format(k))
 
-        self.log.info("discovered roots: {}".format(":".join(paths)))
+        self.log.debug("discovered roots: {}".format(":".join(paths)))
 
-        assert ":".join(paths) in texture_search_path, (
-            "Project roots are not in texture_search_path"
-        )
+        if ":".join(paths) not in texture_search_path:
+            errors.append((
+                "Project roots {} are not in texture_search_path: {}"
+            ).format(paths, texture_search_path))
 
-        assert ":".join(paths) in procedural_search_path, (
-            "Project roots are not in procedural_search_path"
-        )
+        if ":".join(paths) not in procedural_search_path:
+            errors.append((
+                "Project roots {} are not in procedural_search_path: {}"
+            ).format(paths, procedural_search_path))
+
+        if errors:
+            raise PublishValidationError("\n".join(errors))
 
     @classmethod
     def repair(cls, instance):
+        createOptions()
+
         texture_path = cmds.getAttr("defaultArnoldRenderOptions.tspath")
         procedural_path = cmds.getAttr("defaultArnoldRenderOptions.pspath")
 
@@ -110,9 +125,9 @@ class ValidateAssRelativePaths(pyblish.api.InstancePlugin):
         Maya API will return a list of values, which need to be properly
         handled to evaluate properly.
         """
-        if isinstance(attr_val, types.BooleanType):
+        if isinstance(attr_val, bool):
             return attr_val
-        elif isinstance(attr_val, (types.ListType, types.GeneratorType)):
+        elif isinstance(attr_val, (list, types.GeneratorType)):
             return any(attr_val)
         else:
             return bool(attr_val)

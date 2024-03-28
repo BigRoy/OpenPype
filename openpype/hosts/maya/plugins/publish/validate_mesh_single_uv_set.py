@@ -1,12 +1,17 @@
 from maya import cmds
 
 import pyblish.api
-import openpype.api
 import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api import lib
+from openpype.pipeline.publish import (
+    RepairAction,
+    ValidateMeshOrder,
+    OptionalPyblishPluginMixin
+)
 
 
-class ValidateMeshSingleUVSet(pyblish.api.InstancePlugin):
+class ValidateMeshSingleUVSet(pyblish.api.InstancePlugin,
+                              OptionalPyblishPluginMixin):
     """Warn on multiple UV sets existing for each polygon mesh.
 
     On versions prior to Maya 2017 this will force no multiple uv sets because
@@ -15,15 +20,13 @@ class ValidateMeshSingleUVSet(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateMeshOrder
+    order = ValidateMeshOrder
     hosts = ['maya']
     families = ['model', 'pointcache']
-    category = 'uv'
     optional = True
-    version = (0, 1, 0)
     label = "Mesh Single UV Set"
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction,
-               openpype.api.RepairAction]
+               RepairAction]
 
     @staticmethod
     def get_invalid(instance):
@@ -46,6 +49,8 @@ class ValidateMeshSingleUVSet(pyblish.api.InstancePlugin):
 
     def process(self, instance):
         """Process all the nodes in the instance 'objectSet'"""
+        if not self.is_active(instance.data):
+            return
 
         invalid = self.get_invalid(instance)
 

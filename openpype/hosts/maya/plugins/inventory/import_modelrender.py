@@ -1,7 +1,22 @@
-from avalon import api, io
+import re
+import json
+
+from openpype.client import (
+    get_representation_by_id,
+    get_representations
+)
+from openpype.pipeline import (
+    InventoryAction,
+    get_representation_context,
+    get_current_project_name,
+)
+from openpype.hosts.maya.api.lib import (
+    maintained_selection,
+    apply_shaders
+)
 
 
-class ImportModelRender(api.InventoryAction):
+class ImportModelRender(InventoryAction):
 
     label = "Import Model Render Sets"
     icon = "industry"
@@ -18,8 +33,9 @@ class ImportModelRender(api.InventoryAction):
         )
 
     def process(self, containers):
-        from maya import cmds
+        from maya import cmds  # noqa: F401
 
+        project_name = get_current_project_name()
         for container in containers:
             con_name = container["objectName"]
             nodes = []
@@ -29,9 +45,9 @@ class ImportModelRender(api.InventoryAction):
                 else:
                     nodes.append(n)
 
-            repr_doc = io.find_one({
-                "_id": io.ObjectId(container["representation"]),
-            })
+            repr_doc = get_representation_by_id(
+                project_name, container["representation"], fields=["parent"]
+            )
             version_id = repr_doc["parent"]
 
             print("Importing render sets for model %r" % con_name)
@@ -49,35 +65,40 @@ class ImportModelRender(api.InventoryAction):
         Returns:
             None
         """
-        import json
-        from maya import cmds
-        from avalon import maya, io, pipeline
-        from openpype.hosts.maya.api import lib
 
+        from maya import cmds  # noqa: F401
+
+        project_name = get_current_project_name()
+        repre_docs = get_representations(
+            project_name, version_ids=[version_id], fields=["_id", "name"]
+        )
         # Get representations of shader file and relationships
-        look_repr = io.find_one({
-            "type": "representation",
-            "parent": version_id,
-            "name": {"$regex": self.scene_type_regex},
-        })
-        if not look_repr:
+        json_repre = None
+        look_repres = []
+        scene_type_regex = re.compile(self.scene_type_regex)
+        for repre_doc in repre_docs:
+            repre_name = repre_doc["name"]
+            if repre_name == self.look_data_type:
+                json_repre = repre_doc
+                continue
+
+            if scene_type_regex.fullmatch(repre_name):
+                look_repres.append(repre_doc)
+
+        look_repre = look_repres[0] if look_repres else None
+        # QUESTION shouldn't be json representation validated too?
+        if not look_repre:
             print("No model render sets for this model version..")
             return
 
-        json_repr = io.find_one({
-            "type": "representation",
-            "parent": version_id,
-            "name": self.look_data_type,
-        })
+        context = get_representation_context(look_repre["_id"])
+        maya_file = self.filepath_from_context(context)
 
-        context = pipeline.get_representation_context(look_repr["_id"])
-        maya_file = pipeline.get_representation_path_from_context(context)
-
-        context = pipeline.get_representation_context(json_repr["_id"])
-        json_file = pipeline.get_representation_path_from_context(context)
+        context = get_representation_context(json_repre["_id"])
+        json_file = self.filepath_from_context(context)
 
         # Import the look file
-        with maya.maintained_selection():
+        with maintained_selection():
             shader_nodes = cmds.file(maya_file,
                                      i=True,  # import
                                      returnNewNodes=True)
@@ -89,4 +110,4 @@ class ImportModelRender(api.InventoryAction):
             relationships = json.load(f)
 
         # Assign relationships
-        lib.apply_shaders(relationships, shader_nodes, nodes)
+        apply_shaders(relationships, shader_nodes, nodes)

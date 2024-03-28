@@ -1,10 +1,13 @@
 import json
 
-from avalon import io
 import pyblish.api
+from openpype.pipeline.publish import OptionalPyblishPluginMixin
 
 
-class IntegrateAnimation(pyblish.api.InstancePlugin):
+class IntegrateAnimation(
+        pyblish.api.InstancePlugin,
+        OptionalPyblishPluginMixin,
+):
     """Generate a JSON file for animation."""
 
     label = "Integrate Animation"
@@ -14,7 +17,7 @@ class IntegrateAnimation(pyblish.api.InstancePlugin):
     families = ["setdress"]
 
     def process(self, instance):
-        self.log.info("Integrate Animation")
+        self.log.debug("Integrate Animation")
 
         representation = instance.data.get('representations')[0]
         json_path = representation.get('publishedFiles')[0]

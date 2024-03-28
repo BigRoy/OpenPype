@@ -3,10 +3,10 @@ import json
 
 from maya import cmds
 
-import openpype.api
+from openpype.pipeline import publish
 
 
-class ExtractYetiCache(openpype.api.Extractor):
+class ExtractYetiCache(publish.Extractor):
     """Producing Yeti cache files using scene time range.
 
     This will extract Yeti cache file sequence and fur settings.
@@ -25,13 +25,10 @@ class ExtractYetiCache(openpype.api.Extractor):
         # Define extract output file path
         dirname = self.staging_dir(instance)
 
-        # Yeti related staging dirs
-        data_file = os.path.join(dirname, "yeti.fursettings")
-
         # Collect information for writing cache
-        start_frame = instance.data.get("frameStart")
-        end_frame = instance.data.get("frameEnd")
-        preroll = instance.data.get("preroll")
+        start_frame = instance.data["frameStartHandle"]
+        end_frame = instance.data["frameEndHandle"]
+        preroll = instance.data["preroll"]
         if preroll > 0:
             start_frame -= preroll
 
@@ -42,7 +39,7 @@ class ExtractYetiCache(openpype.api.Extractor):
         else:
             kwargs.update({"samples": samples})
 
-        self.log.info(
+        self.log.debug(
             "Writing out cache {} - {}".format(start_frame, end_frame))
         # Start writing the files for snap shot
         # <NAME> will be replace by the Yeti node name
@@ -56,35 +53,38 @@ class ExtractYetiCache(openpype.api.Extractor):
 
         cache_files = [x for x in os.listdir(dirname) if x.endswith(".fur")]
 
-        self.log.info("Writing metadata file")
-        settings = instance.data.get("fursettings", None)
-        if settings is not None:
-            with open(data_file, "w") as fp:
-                json.dump(settings, fp, ensure_ascii=False)
+        self.log.debug("Writing metadata file")
+        settings = instance.data["fursettings"]
+        fursettings_path = os.path.join(dirname, "yeti.fursettings")
+        with open(fursettings_path, "w") as fp:
+            json.dump(settings, fp, ensure_ascii=False)
 
         # build representations
         if "representations" not in instance.data:
             instance.data["representations"] = []
 
-        self.log.info("cache files: {}".format(cache_files[0]))
-        instance.data["representations"].append(
-            {
-                'name': 'fur',
-                'ext': 'fur',
-                'files': cache_files[0] if len(cache_files) == 1 else cache_files,
-                'stagingDir': dirname,
-                'frameStart': int(start_frame),
-                'frameEnd': int(end_frame)
-            }
-        )
+        self.log.debug("cache files: {}".format(cache_files[0]))
+
+        # Workaround: We do not explicitly register these files with the
+        # representation solely so that we can write multiple sequences
+        # a single Subset without renaming - it's a bit of a hack
+        # TODO: Implement better way to manage this sort of integration
+        if 'transfers' not in instance.data:
+            instance.data['transfers'] = []
+
+        publish_dir = instance.data["publishDir"]
+        for cache_filename in cache_files:
+            src = os.path.join(dirname, cache_filename)
+            dst = os.path.join(publish_dir, os.path.basename(cache_filename))
+            instance.data['transfers'].append([src, dst])
 
         instance.data["representations"].append(
             {
-                'name': 'fursettings',
+                'name': 'fur',
                 'ext': 'fursettings',
-                'files': os.path.basename(data_file),
+                'files': os.path.basename(fursettings_path),
                 'stagingDir': dirname
             }
         )
 
-        self.log.info("Extracted {} to {}".format(instance, dirname))
+        self.log.debug("Extracted {} to {}".format(instance, dirname))

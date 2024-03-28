@@ -1,8 +1,9 @@
 import uuid
-from Qt import QtCore, QtGui
+from qtpy import QtCore, QtGui
 
 import pyblish.api
 
+from openpype.tools.utils.lib import html_escape
 from .constants import (
     ITEM_ID_ROLE,
     ITEM_IS_GROUP_ROLE,
@@ -25,11 +26,13 @@ class InstancesModel(QtGui.QStandardItemModel):
         return self._items_by_id
 
     def set_report(self, report_item):
-        self.clear()
+        root_item = self.invisibleRootItem()
+        if root_item.rowCount() > 0:
+            root_item.removeRows(0, root_item.rowCount())
         self._items_by_id.clear()
         self._plugin_items_by_id.clear()
-
-        root_item = self.invisibleRootItem()
+        if not report_item:
+            return
 
         families = set(report_item.instance_items_by_family.keys())
         families.remove(None)
@@ -42,8 +45,14 @@ class InstancesModel(QtGui.QStandardItemModel):
             instance_items = report_item.instance_items_by_family[family]
             all_removed = True
             for instance_item in instance_items:
-                item = QtGui.QStandardItem(instance_item.label)
-                item.setData(instance_item.label, ITEM_LABEL_ROLE)
+                src_instance_label = instance_item.label
+                if src_instance_label is None:
+                    # Do not cause UI crash if label is 'None'
+                    src_instance_label = "No label"
+                instance_label = html_escape(src_instance_label)
+
+                item = QtGui.QStandardItem(src_instance_label)
+                item.setData(instance_label, ITEM_LABEL_ROLE)
                 item.setData(instance_item.errored, ITEM_ERRORED_ROLE)
                 item.setData(instance_item.id, ITEM_ID_ROLE)
                 item.setData(instance_item.removed, INSTANCE_REMOVED_ROLE)
@@ -116,11 +125,13 @@ class PluginsModel(QtGui.QStandardItemModel):
         return self._items_by_id
 
     def set_report(self, report_item):
-        self.clear()
+        root_item = self.invisibleRootItem()
+        if root_item.rowCount() > 0:
+            root_item.removeRows(0, root_item.rowCount())
         self._items_by_id.clear()
         self._plugin_items_by_id.clear()
-
-        root_item = self.invisibleRootItem()
+        if not report_item:
+            return
 
         labels_iter = iter(self.order_label_mapping)
         cur_order, cur_label = next(labels_iter)
@@ -156,7 +167,8 @@ class PluginsModel(QtGui.QStandardItemModel):
 
             items = []
             for plugin_item in plugin_items:
-                item = QtGui.QStandardItem(plugin_item.label)
+                label = plugin_item.label or plugin_item.name
+                item = QtGui.QStandardItem(label)
                 item.setData(False, ITEM_IS_GROUP_ROLE)
                 item.setData(plugin_item.label, ITEM_LABEL_ROLE)
                 item.setData(plugin_item.id, ITEM_ID_ROLE)

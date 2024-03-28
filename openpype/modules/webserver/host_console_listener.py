@@ -3,9 +3,9 @@ from aiohttp import web
 import json
 import logging
 from concurrent.futures import CancelledError
-from Qt import QtWidgets
+from qtpy import QtWidgets
 
-from openpype_interfaces import ITrayService
+from openpype.modules import ITrayService
 
 log = logging.getLogger(__name__)
 
@@ -34,8 +34,7 @@ class HostListener:
         webserver.add_route('*', "/ws/host_listener", self.websocket_handler)
 
     def _host_is_connecting(self, host_name, label):
-        from openpype.tools.tray_app.app import ConsoleDialog
-
+        from openpype.tools.stdout_broker.window import ConsoleDialog
         """ Initialize dialog, adds to submenu. """
         services_submenu = self.module._services_submenu
         action = QtWidgets.QAction(label, services_submenu)

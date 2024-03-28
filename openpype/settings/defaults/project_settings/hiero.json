@@ -1,4 +1,34 @@
 {
+    "imageio": {
+        "activate_host_color_management": true,
+        "ocio_config": {
+            "override_global_config": false,
+            "filepath": []
+        },
+        "file_rules": {
+            "activate_host_rules": false,
+            "rules": {}
+        },
+        "workfile": {
+            "ocioConfigName": "nuke-default",
+            "workingSpace": "linear",
+            "sixteenBitLut": "sRGB",
+            "eightBitLut": "sRGB",
+            "floatLut": "linear",
+            "logLut": "Cineon",
+            "viewerLut": "sRGB",
+            "thumbnailLut": "sRGB",
+            "monitorOutLut": "sRGB"
+        },
+        "regexInputs": {
+            "inputs": [
+                {
+                    "regex": "[^-a-zA-Z0-9](plateRef).*(?=mp4)",
+                    "colorspace": "sRGB"
+                }
+            ]
+        }
+    },
     "create": {
         "CreateShotClip": {
             "hierarchy": "{folder}/{sequence}",
@@ -27,16 +57,6 @@
                 "render",
                 "review"
             ],
-            "representations": [
-                "exr",
-                "dpx",
-                "jpg",
-                "jpeg",
-                "png",
-                "h264",
-                "mov",
-                "mp4"
-            ],
             "clip_name_template": "{asset}_{subset}_{representation}"
         }
     },
@@ -49,7 +69,23 @@
             "tags_addition": [
                 "review"
             ]
+        },
+        "CollectClipEffects": {
+            "enabled": true,
+            "effect_categories": {}
         }
     },
-    "filters": {}
+    "filters": {},
+    "scriptsmenu": {
+        "name": "OpenPype Tools",
+        "definition": [
+            {
+                "type": "action",
+                "sourcetype": "python",
+                "title": "OpenPype Docs",
+                "command": "import webbrowser;webbrowser.open(url='https://openpype.io/docs/artist_hosts_hiero')",
+                "tooltip": "Open the OpenPype Hiero user doc page"
+            }
+        ]
+    }
 }

@@ -1,14 +1,18 @@
 from maya import cmds
 
 import pyblish.api
-import openpype.api
+
 import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishValidationError
+)
 
 
 class ValidateYetiRigInputShapesInInstance(pyblish.api.Validator):
     """Validate if all input nodes are part of the instance's hierarchy"""
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ["maya"]
     families = ["yetiRig"]
     label = "Yeti Rig Input Shapes In Instance"
@@ -18,7 +22,7 @@ class ValidateYetiRigInputShapesInInstance(pyblish.api.Validator):
 
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Yeti Rig has invalid input meshes")
+            raise PublishValidationError("Yeti Rig has invalid input meshes")
 
     @classmethod
     def get_invalid(cls, instance):
@@ -33,8 +37,8 @@ class ValidateYetiRigInputShapesInInstance(pyblish.api.Validator):
 
         # Allow publish without input meshes.
         if not shapes:
-            cls.log.info("Found no input meshes for %s, skipping ..."
-                         % instance)
+            cls.log.debug("Found no input meshes for %s, skipping ..."
+                          % instance)
             return []
 
         # check if input node is part of groomRig instance

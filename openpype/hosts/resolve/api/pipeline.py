@@ -4,86 +4,94 @@ Basic avalon integration
 import os
 import contextlib
 from collections import OrderedDict
-from avalon import api as avalon
-from avalon import schema
-from avalon.pipeline import AVALON_CONTAINER_ID
-from pyblish import api as pyblish
-from openpype.api import Logger
-from . import lib
-from . import PLUGINS_DIR
-from openpype.tools.utils import host_tools
-log = Logger().get_logger(__name__)
 
+from pyblish import api as pyblish
+
+from openpype.lib import Logger
+from openpype.pipeline import (
+    schema,
+    register_loader_plugin_path,
+    register_creator_plugin_path,
+    AVALON_CONTAINER_ID,
+)
+from openpype.host import (
+    HostBase,
+    IWorkfileHost,
+    ILoadHost
+)
+
+from . import lib
+from .utils import get_resolve_module
+from .workio import (
+    open_file,
+    save_file,
+    file_extensions,
+    has_unsaved_changes,
+    work_root,
+    current_file
+)
+
+log = Logger.get_logger(__name__)
+
+HOST_DIR = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+PLUGINS_DIR = os.path.join(HOST_DIR, "plugins")
 PUBLISH_PATH = os.path.join(PLUGINS_DIR, "publish")
 LOAD_PATH = os.path.join(PLUGINS_DIR, "load")
 CREATE_PATH = os.path.join(PLUGINS_DIR, "create")
-INVENTORY_PATH = os.path.join(PLUGINS_DIR, "inventory")
 
 AVALON_CONTAINERS = ":AVALON_CONTAINERS"
 
 
-def install():
-    """Install resolve-specific functionality of avalon-core.
+class ResolveHost(HostBase, IWorkfileHost, ILoadHost):
+    name = "resolve"
 
-    This is where you install menus and register families, data
-    and loaders into resolve.
+    def install(self):
+        """Install resolve-specific functionality of avalon-core.
 
-    It is called automatically when installing via `api.install(resolve)`.
+        This is where you install menus and register families, data
+        and loaders into resolve.
 
-    See the Maya equivalent for inspiration on how to implement this.
+        It is called automatically when installing via `api.install(resolve)`.
 
-    """
-    from .. import get_resolve_module
+        See the Maya equivalent for inspiration on how to implement this.
 
-    # Disable all families except for the ones we explicitly want to see
-    family_states = [
-        "imagesequence",
-        "render2d",
-        "plate",
-        "render",
-        "mov",
-        "clip"
-    ]
-    avalon.data["familiesStateDefault"] = False
-    avalon.data["familiesStateToggled"] = family_states
+        """
 
-    log.info("openpype.hosts.resolve installed")
+        log.info("openpype.hosts.resolve installed")
 
-    pyblish.register_host("resolve")
-    pyblish.register_plugin_path(PUBLISH_PATH)
-    log.info("Registering DaVinci Resovle plug-ins..")
+        pyblish.register_host(self.name)
+        pyblish.register_plugin_path(PUBLISH_PATH)
+        print("Registering DaVinci Resolve plug-ins..")
 
-    avalon.register_plugin_path(avalon.Loader, LOAD_PATH)
-    avalon.register_plugin_path(avalon.Creator, CREATE_PATH)
-    avalon.register_plugin_path(avalon.InventoryAction, INVENTORY_PATH)
+        register_loader_plugin_path(LOAD_PATH)
+        register_creator_plugin_path(CREATE_PATH)
 
-    # register callback for switching publishable
-    pyblish.register_callback("instanceToggled", on_pyblish_instance_toggled)
+        # register callback for switching publishable
+        pyblish.register_callback("instanceToggled",
+                                  on_pyblish_instance_toggled)
 
-    get_resolve_module()
+        get_resolve_module()
 
+    def open_workfile(self, filepath):
+        return open_file(filepath)
 
-def uninstall():
-    """Uninstall all tha was installed
+    def save_workfile(self, filepath=None):
+        return save_file(filepath)
 
-    This is where you undo everything that was done in `install()`.
-    That means, removing menus, deregistering families and  data
-    and everything. It should be as though `install()` was never run,
-    because odds are calling this function means the user is interested
-    in re-installing shortly afterwards. If, for example, he has been
-    modifying the menu or registered families.
+    def work_root(self, session):
+        return work_root(session)
 
-    """
-    pyblish.deregister_host("resolve")
-    pyblish.deregister_plugin_path(PUBLISH_PATH)
-    log.info("Deregistering DaVinci Resovle plug-ins..")
+    def get_current_workfile(self):
+        return current_file()
 
-    avalon.deregister_plugin_path(avalon.Loader, LOAD_PATH)
-    avalon.deregister_plugin_path(avalon.Creator, CREATE_PATH)
-    avalon.deregister_plugin_path(avalon.InventoryAction, INVENTORY_PATH)
+    def workfile_has_unsaved_changes(self):
+        return has_unsaved_changes()
 
-    # register callback for switching publishable
-    pyblish.deregister_callback("instanceToggled", on_pyblish_instance_toggled)
+    def get_workfile_extensions(self):
+        return file_extensions()
+
+    def get_containers(self):
+        return ls()
 
 
 def containerise(timeline_item,
@@ -119,10 +127,8 @@ def containerise(timeline_item,
     })
 
     if data:
-        for k, v in data.items():
-            data_imprint.update({k: v})
+        data_imprint.update(data)
 
-    print("_ data_imprint: {}".format(data_imprint))
     lib.set_timeline_item_pype_tag(timeline_item, data_imprint)
 
     return timeline_item
@@ -211,15 +217,6 @@ def update_container(timeline_item, data=None):
     return bool(lib.set_timeline_item_pype_tag(timeline_item, container))
 
 
-def launch_workfiles_app(*args):
-    host_tools.show_workfiles()
-
-
-def publish(parent):
-    """Shorthand to publish from within host"""
-    return host_tools.show_publish()
-
-
 @contextlib.contextmanager
 def maintained_selection():
     """Maintain selection during context
@@ -249,7 +246,7 @@ def on_pyblish_instance_toggled(instance, old_value, new_value):
     log.info("instance toggle: {}, old_value: {}, new_value:{} ".format(
         instance, old_value, new_value))
 
-    from openpype.hosts.resolve import (
+    from openpype.hosts.resolve.api import (
         set_publish_attribute
     )
 

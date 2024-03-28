@@ -1,5 +1,9 @@
 import pyblish.api
-import openpype.api
+
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishXmlValidationError,
+)
 
 
 class ValidateTextureBatch(pyblish.api.InstancePlugin):
@@ -7,7 +11,7 @@ class ValidateTextureBatch(pyblish.api.InstancePlugin):
 
     label = "Validate Texture Presence"
     hosts = ["standalonepublisher"]
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     families = ["texture_batch_workfile"]
     optional = False
 
@@ -15,8 +19,10 @@ class ValidateTextureBatch(pyblish.api.InstancePlugin):
         present = False
         for instance in instance.context:
             if instance.data["family"] == "textures":
-                self.log.info("Some textures present.")
+                self.log.info("At least some textures present.")
 
                 return
 
-        assert present, "No textures found in published batch!"
+        msg = "No textures found in published batch!"
+        if not present:
+            raise PublishXmlValidationError(self, msg)

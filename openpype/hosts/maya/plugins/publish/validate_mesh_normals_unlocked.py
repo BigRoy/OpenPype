@@ -1,11 +1,25 @@
 from maya import cmds
+import maya.api.OpenMaya as om2
 
 import pyblish.api
-import openpype.api
 import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    RepairAction,
+    ValidateMeshOrder,
+    OptionalPyblishPluginMixin,
+    PublishValidationError
+)
 
 
-class ValidateMeshNormalsUnlocked(pyblish.api.Validator):
+def _as_report_list(values, prefix="- ", suffix="\n"):
+    """Return list as bullet point list for a report"""
+    if not values:
+        return ""
+    return prefix + (suffix + prefix).join(values)
+
+
+class ValidateMeshNormalsUnlocked(pyblish.api.Validator,
+                                  OptionalPyblishPluginMixin):
     """Validate all meshes in the instance have unlocked normals
 
     These can be unlocked manually through:
@@ -13,22 +27,26 @@ class ValidateMeshNormalsUnlocked(pyblish.api.Validator):
 
     """
 
-    order = openpype.api.ValidateMeshOrder
+    order = ValidateMeshOrder
     hosts = ['maya']
     families = ['model']
-    category = 'geometry'
-    version = (0, 1, 0)
     label = 'Mesh Normals Unlocked'
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction,
-               openpype.api.RepairAction]
+               RepairAction]
     optional = True
 
     @staticmethod
     def has_locked_normals(mesh):
-        """Return whether a mesh node has locked normals"""
-        return any(cmds.polyNormalPerVertex("{}.vtxFace[*][*]".format(mesh),
-                                            query=True,
-                                            freezeNormal=True))
+        """Return whether mesh has at least one locked normal"""
+
+        sel = om2.MGlobal.getSelectionListByName(mesh)
+        node = sel.getDependNode(0)
+        fn_mesh = om2.MFnMesh(node)
+        _, normal_ids = fn_mesh.getNormalIds()
+        for normal_id in normal_ids:
+            if fn_mesh.isNormalLocked(normal_id):
+                return True
+        return False
 
     @classmethod
     def get_invalid(cls, instance):
@@ -39,12 +57,18 @@ class ValidateMeshNormalsUnlocked(pyblish.api.Validator):
 
     def process(self, instance):
         """Raise invalid when any of the meshes have locked normals"""
+        if not self.is_active(instance.data):
+            return
 
         invalid = self.get_invalid(instance)
 
         if invalid:
-            raise ValueError("Meshes found with "
-                             "locked normals: {0}".format(invalid))
+            raise PublishValidationError(
+                "Meshes found with locked normals:\n\n{0}".format(
+                    _as_report_list(sorted(invalid))
+                ),
+                title="Locked normals"
+            )
 
     @classmethod
     def repair(cls, instance):

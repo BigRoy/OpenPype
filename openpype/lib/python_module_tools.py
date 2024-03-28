@@ -5,8 +5,9 @@ import importlib
 import inspect
 import logging
 
+import six
+
 log = logging.getLogger(__name__)
-PY3 = sys.version_info[0] == 3
 
 
 def import_filepath(filepath, module_name=None):
@@ -27,8 +28,9 @@ def import_filepath(filepath, module_name=None):
 
     # Prepare module object where content of file will be parsed
     module = types.ModuleType(module_name)
+    module.__file__ = filepath
 
-    if PY3:
+    if six.PY3:
         # Use loader so module has full specs
         module_loader = importlib.machinery.SourceFileLoader(
             module_name, filepath
@@ -38,9 +40,8 @@ def import_filepath(filepath, module_name=None):
         # Execute module code and store content to module
         with open(filepath) as _stream:
             # Execute content and store it to module object
-            exec(_stream.read(), module.__dict__)
+            six.exec_(_stream.read(), module.__dict__)
 
-        module.__file__ = filepath
     return module
 
 
@@ -49,32 +50,30 @@ def modules_from_path(folder_path):
 
     Arguments:
         path (str): Path to folder containing python scripts.
-        return_crasher (bool): Crashed module paths with exception info
-            will be returned too.
 
     Returns:
-        list, tuple: List of modules when `return_crashed` is False else tuple
-            with list of modules at first place and tuple of path and exception
-            info at second place.
+        tuple<list, list>: First list contains successfully imported modules
+            and second list contains tuples of path and exception.
     """
     crashed = []
     modules = []
+    output = (modules, crashed)
     # Just skip and return empty list if path is not set
     if not folder_path:
-        return modules
+        return output
 
     # Do not allow relative imports
     if folder_path.startswith("."):
         log.warning((
             "BUG: Relative paths are not allowed for security reasons. {}"
         ).format(folder_path))
-        return modules
+        return output
 
     folder_path = os.path.normpath(folder_path)
 
     if not os.path.isdir(folder_path):
         log.warning("Not a directory path: {}".format(folder_path))
-        return modules
+        return output
 
     for filename in os.listdir(folder_path):
         # Ignore files which start with underscore
@@ -101,7 +100,7 @@ def modules_from_path(folder_path):
             )
             continue
 
-    return modules, crashed
+    return output
 
 
 def recursive_bases_from_class(klass):
@@ -131,20 +130,12 @@ def classes_from_module(superclass, module):
     for name in dir(module):
         # It could be anything at this point
         obj = getattr(module, name)
-        if not inspect.isclass(obj):
+        if not inspect.isclass(obj) or obj is superclass:
             continue
 
-        # These are subclassed from nothing, not even `object`
-        if not len(obj.__bases__) > 0:
-            continue
+        if issubclass(obj, superclass):
+            classes.append(obj)
 
-        # Use string comparison rather than `issubclass`
-        # in order to support reloading of this module.
-        bases = recursive_bases_from_class(obj)
-        if not any(base.__name__ == superclass.__name__ for base in bases):
-            continue
-
-        classes.append(obj)
     return classes
 
 
@@ -230,7 +221,7 @@ def import_module_from_dirpath(dirpath, folder_name, dst_module_name=None):
         dst_module_name(str): Parent module name under which can be loaded
             module added.
     """
-    if PY3:
+    if six.PY3:
         module = _import_module_from_dirpath_py3(
             dirpath, folder_name, dst_module_name
         )
@@ -239,3 +230,70 @@ def import_module_from_dirpath(dirpath, folder_name, dst_module_name=None):
             dirpath, folder_name, dst_module_name
         )
     return module
+
+
+def is_func_signature_supported(func, *args, **kwargs):
+    """Check if a function signature supports passed args and kwargs.
+
+    This check does not actually call the function, just look if function can
+    be called with the arguments.
+
+    Notes:
+        This does NOT check if the function would work with passed arguments
+            only if they can be passed in. If function have *args, **kwargs
+            in paramaters, this will always return 'True'.
+
+    Example:
+        >>> def my_function(my_number):
+        ...     return my_number + 1
+        ...
+        >>> is_func_signature_supported(my_function, 1)
+        True
+        >>> is_func_signature_supported(my_function, 1, 2)
+        False
+        >>> is_func_signature_supported(my_function, my_number=1)
+        True
+        >>> is_func_signature_supported(my_function, number=1)
+        False
+        >>> is_func_signature_supported(my_function, "string")
+        True
+        >>> def my_other_function(*args, **kwargs):
+        ...     my_function(*args, **kwargs)
+        ...
+        >>> is_func_signature_supported(
+        ...     my_other_function,
+        ...     "string",
+        ...     1,
+        ...     other=None
+        ... )
+        True
+
+    Args:
+        func (Callable): A function where the signature should be tested.
+        *args (Any): Positional arguments for function signature.
+        **kwargs (Any): Keyword arguments for function signature.
+
+    Returns:
+        bool: Function can pass in arguments.
+    """
+
+    if hasattr(inspect, "signature"):
+        # Python 3 using 'Signature' object where we try to bind arg
+        #   or kwarg. Using signature is recommended approach based on
+        #   documentation.
+        sig = inspect.signature(func)
+        try:
+            sig.bind(*args, **kwargs)
+            return True
+        except TypeError:
+            pass
+
+    else:
+        # In Python 2 'signature' is not available so 'getcallargs' is used
+        # - 'getcallargs' is marked as deprecated since Python 3.0
+        try:
+            inspect.getcallargs(func, *args, **kwargs)
+            return True
+        except TypeError:
+            pass
+    return False

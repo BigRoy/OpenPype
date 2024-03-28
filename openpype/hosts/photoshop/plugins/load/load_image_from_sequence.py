@@ -1,18 +1,13 @@
 import os
 
-from avalon import api
-from avalon import photoshop
-from avalon.pipeline import get_representation_path_from_context
-from avalon.vendor import qargparse
+import qargparse
 
-from openpype.lib import Anatomy
-from openpype.hosts.photoshop.plugins.lib import get_unique_layer_name
-
-stub = photoshop.stub()
+from openpype.hosts.photoshop import api as photoshop
+from openpype.hosts.photoshop.api import get_unique_layer_name
 
 
-class ImageFromSequenceLoader(api.Loader):
-    """ Load specifing image from sequence
+class ImageFromSequenceLoader(photoshop.PhotoshopLoader):
+    """ Load specific image from sequence
 
         Used only as quick load of reference file from a sequence.
 
@@ -34,19 +29,22 @@ class ImageFromSequenceLoader(api.Loader):
     options = []
 
     def load(self, context, name=None, namespace=None, data=None):
+
+        path = self.filepath_from_context(context)
         if data.get("frame"):
-            self.fname = os.path.join(os.path.dirname(self.fname),
-                                      data["frame"])
-            if not os.path.exists(self.fname):
+            path = os.path.join(
+                os.path.dirname(path), data["frame"]
+            )
+            if not os.path.exists(path):
                 return
 
-        stub = photoshop.stub()
-        layer_name = get_unique_layer_name(stub.get_layers(),
-                                           context["asset"]["name"],
-                                           name)
+        stub = self.get_stub()
+        layer_name = get_unique_layer_name(
+            stub.get_layers(), context["asset"]["name"], name
+        )
 
         with photoshop.maintained_selection():
-            layer = stub.import_smart_object(self.fname, layer_name)
+            layer = stub.import_smart_object(path, layer_name)
 
         self[:] = [layer]
         namespace = namespace or layer_name
@@ -66,7 +64,7 @@ class ImageFromSequenceLoader(api.Loader):
         """
         files = []
         for context in repre_contexts:
-            fname = get_representation_path_from_context(context)
+            fname = cls.filepath_from_context(context)
             _, file_extension = os.path.splitext(fname)
 
             for file_name in os.listdir(os.path.dirname(fname)):
@@ -95,4 +93,3 @@ class ImageFromSequenceLoader(api.Loader):
     def remove(self, container):
         """No update possible, not containerized."""
         pass
-

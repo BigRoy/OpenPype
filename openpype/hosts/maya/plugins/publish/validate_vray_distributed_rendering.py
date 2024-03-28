@@ -1,8 +1,9 @@
 import pyblish.api
-import openpype.api
-from openpype.hosts.maya.api import lib
-
 from maya import cmds
+
+from openpype.hosts.maya.api import lib
+from openpype.pipeline.publish import (
+    PublishValidationError, RepairAction, ValidateContentsOrder)
 
 
 class ValidateVRayDistributedRendering(pyblish.api.InstancePlugin):
@@ -15,10 +16,10 @@ class ValidateVRayDistributedRendering(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     label = "VRay Distributed Rendering"
     families = ["renderlayer"]
-    actions = [openpype.api.RepairAction]
+    actions = [RepairAction]
 
     # V-Ray attribute names
     enabled_attr = "vraySettings.sys_distributed_rendering_on"
@@ -33,7 +34,7 @@ class ValidateVRayDistributedRendering(pyblish.api.InstancePlugin):
         vray_settings = cmds.ls("vraySettings", type="VRaySettingsNode")
         assert vray_settings, "Please ensure a VRay Settings Node is present"
 
-        renderlayer = instance.data['setMembers']
+        renderlayer = instance.data['renderlayer']
 
         if not lib.get_attr_in_layer(self.enabled_attr, layer=renderlayer):
             # If not distributed rendering enabled, ignore..
@@ -42,14 +43,15 @@ class ValidateVRayDistributedRendering(pyblish.api.InstancePlugin):
         # If distributed rendering is enabled but it is *not* set to ignore
         # during batch mode we invalidate the instance
         if not lib.get_attr_in_layer(self.ignored_attr, layer=renderlayer):
-            raise RuntimeError("Renderlayer has distributed rendering enabled "
-                               "but is not set to ignore in batch mode.")
+            raise PublishValidationError(
+                ("Renderlayer has distributed rendering enabled "
+                 "but is not set to ignore in batch mode."))
 
     @classmethod
     def repair(cls, instance):
 
-        renderlayer = instance.data.get("setMembers")
+        renderlayer = instance.data.get("renderlayer")
         with lib.renderlayer(renderlayer):
-            cls.log.info("Enabling Distributed Rendering "
-                         "ignore in batch mode..")
+            cls.log.debug("Enabling Distributed Rendering "
+                          "ignore in batch mode..")
             cmds.setAttr(cls.ignored_attr, True)

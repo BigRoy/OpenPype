@@ -1,7 +1,12 @@
-from avalon import api
 import pyblish.api
-import openpype.api
-from avalon import photoshop
+
+from openpype.pipeline import get_current_asset_name
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishXmlValidationError,
+    OptionalPyblishPluginMixin
+)
+from openpype.hosts.photoshop import api as photoshop
 
 
 class ValidateInstanceAssetRepair(pyblish.api.Action):
@@ -23,37 +28,45 @@ class ValidateInstanceAssetRepair(pyblish.api.Action):
         # Apply pyblish.logic to get the instances for the plug-in
         instances = pyblish.api.instances_by_plugin(failed, plugin)
         stub = photoshop.stub()
+        current_asset_name = get_current_asset_name()
         for instance in instances:
             data = stub.read(instance[0])
-
-            data["asset"] = api.Session["AVALON_ASSET"]
+            data["asset"] = current_asset_name
             stub.imprint(instance[0], data)
 
 
-class ValidateInstanceAsset(pyblish.api.InstancePlugin):
+class ValidateInstanceAsset(OptionalPyblishPluginMixin,
+                            pyblish.api.InstancePlugin):
     """Validate the instance asset is the current selected context asset.
 
-        As it might happen that multiple worfiles are opened, switching
-        between them would mess with selected context.
-        In that case outputs might be output under wrong asset!
+    As it might happen that multiple worfiles are opened, switching
+    between them would mess with selected context.
+    In that case outputs might be output under wrong asset!
 
-        Repair action will use Context asset value (from Workfiles or Launcher)
-        Closing and reopening with Workfiles will refresh  Context value.
+    Repair action will use Context asset value (from Workfiles or Launcher)
+    Closing and reopening with Workfiles will refresh  Context value.
     """
 
     label = "Validate Instance Asset"
     hosts = ["photoshop"]
+    optional = True
     actions = [ValidateInstanceAssetRepair]
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
 
     def process(self, instance):
         instance_asset = instance.data["asset"]
-        current_asset = api.Session["AVALON_ASSET"]
-        msg = (
-            f"Instance asset {instance_asset} is not the same "
-            f"as current context {current_asset}. PLEASE DO:\n"
-            f"Repair with 'A' action to use '{current_asset}'.\n"
-            f"If that's not correct value, close workfile and "
-            f"reopen via Workfiles!"
-        )
-        assert instance_asset == current_asset, msg
+        current_asset = get_current_asset_name()
+
+        if instance_asset != current_asset:
+            msg = (
+                f"Instance asset {instance_asset} is not the same "
+                f"as current context {current_asset}."
+
+            )
+            repair_msg = (
+                f"Repair with 'Repair' button to use '{current_asset}'.\n"
+            )
+            formatting_data = {"msg": msg,
+                               "repair_msg": repair_msg}
+            raise PublishXmlValidationError(self, msg,
+                                            formatting_data=formatting_data)

@@ -1,20 +1,27 @@
 import os
 
 import pyblish.api
-import openpype.api
+
+from openpype.pipeline import publish
 from openpype.hosts.houdini.api.lib import render_rop
 
+import hou
 
-class ExtractAlembic(openpype.api.Extractor):
+
+class ExtractAlembic(publish.Extractor):
 
     order = pyblish.api.ExtractorOrder
     label = "Extract Alembic"
     hosts = ["houdini"]
-    families = ["pointcache", "camera"]
+    families = ["abc", "camera"]
+    targets = ["local", "remote"]
 
     def process(self, instance):
+        if instance.data.get("farm"):
+            self.log.debug("Should be processed on farm, skipping.")
+            return
 
-        ropnode = instance[0]
+        ropnode = hou.node(instance.data["instance_node"])
 
         # Get the filename from the filename parameter
         output = ropnode.evalParm("filename")

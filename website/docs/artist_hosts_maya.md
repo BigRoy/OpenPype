@@ -6,13 +6,13 @@ sidebar_label: Maya
 
 ## OpenPype global tools
 
--   [Set Context](artist_tools.md#set-context)
--   [Work Files](artist_tools.md#workfiles)
--   [Create](artist_tools.md#creator)
--   [Load](artist_tools.md#loader)
--   [Manage (Inventory)](artist_tools.md#inventory)
--   [Publish](artist_tools.md#publisher)
--   [Library Loader](artist_tools.md#library-loader)
+-   [Set Context](artist_tools_context_manager)
+-   [Work Files](artist_tools_workfiles)
+-   [Create](artist_tools_creator)
+-   [Load](artist_tools_loader)
+-   [Manage (Inventory)](artist_tools_inventory)
+-   [Publish](artist_tools_publisher)
+-   [Library Loader](artist_tools_library_loader)
 
 ## Working with OpenPype in Maya
 
@@ -50,12 +50,12 @@ can edit that field to change it to different asset (but that one must already e
 
 `Subset` field is a name you can decide on. It should describe what kind of data you
 have in the model. For example, you can name it `Proxy` to indicate that this is
-low resolution stuff. See [Subset](artist_concepts#subset).
+low resolution stuff. See [Subset](artist_concepts.md#subset).
 
 :::note LOD support
 By changing subset name you can take advantage of _LOD support_ in OpenPype. Your
 asset can contain various resolution defined by different subsets. You can then
-switch between them very easy using [Inventory (Manage)](artist_tools#inventory).
+switch between them very easy using [Inventory (Manage)](artist_tools_inventory).
 There LODs are conveniently grouped so they don't clutter Inventory view.
 
 Name your subset like `main_LOD1`. Important part is that `_LOD1`. You can have as many LODs as you need.
@@ -85,7 +85,7 @@ Now let's publish it. Go **OpenPype → Publish...**. You will be presented with
 ![Model publish](assets/maya-model_pre_publish.jpg)
 
 Note that content of this window can differs by your pipeline configuration.
-For more detail see [Publisher](artist_tools#publisher).
+For more detail see [Publisher](artist_tools_publisher).
 
 Items in left column are instances you will be publishing. You can disable them
 by clicking on square next to them. Green square indicate they are ready for
@@ -94,7 +94,7 @@ or publishing phase. Empty one with gray text is disabled.
 
 See that in this case we are publishing from scene file `model_test_v01.mb` in
 Maya model named `modelMain (ben)` (next item). Publishing of workfile is
-currenly disabled (last item).
+currently disabled (last item).
 
 Right column lists all tasks that are run during collection, validation,
 extraction and integration phase. White items are optional and you can disable
@@ -139,7 +139,7 @@ it can take a while. You should end up with everything green and message
 **Finished successfully ...** You can now close publisher window.
 
 To check for yourself that model is published, open
-[Asset Loader](artist_tools#loader) - **OpenPype → Load...**.
+[Asset Loader](artist_tools_loader) - **OpenPype → Load...**.
 There you should see your model, named `modelMain`.
 
 ## Look development
@@ -152,7 +152,7 @@ Let se how it works.
 ### Loading model
 
 In this example I have already published model of Buddha. To see how to publish
-model with OpenPype see [Publishing Model](artist_hosts_maya#publishing-models).
+model with OpenPype see [Publishing Model](artist_hosts_maya.md#publishing-models).
 
 First of lets start with empty scene. Now go **OpenPype → Load...**
 
@@ -200,8 +200,8 @@ there are few yellow icons in left shelf:
 
 ![Maya - shortcut icons](assets/maya-shortcut_buttons.jpg)
 
-Those are shortcuts for **Look Manager**, [Work Files](artist_tools.md#workfiles),
-[Load](artist_tools.md#loader), and [Manage (Inventory)](artist_tools.md#inventory).
+Those are shortcuts for **Look Manager**, [Work Files](artist_tools_workfiles),
+[Load](artist_tools_loader), and [Manage (Inventory)](artist_tools_inventory).
 
 Those can be found even in top menu, but that depends on your studio setup.
 
@@ -230,63 +230,70 @@ Maya settings concerning framerate, resolution and frame range are handled by
 OpenPype. If set correctly in Ftrack, Maya will validate you have correct fps on
 scene save and publishing offering way to fix it for you.
 
-For resolution and frame range, use **OpenPype → Reset Frame Range** and
-**OpenPype → Reset Resolution**
+For resolution and frame range, use **OpenPype → Set Frame Range** and
+**OpenPype → Set Resolution**
 
 
 ## Creating rigs with OpenPype
 
 Creating and publishing rigs with OpenPype follows similar workflow as with
 other data types. Create your rig and mark parts of your hierarchy in sets to
-help OpenPype validators and extractors to check it and publish it.
+help OpenPype validators and extractors to check and publish it.
 
 ### Preparing rig for publish
 
 When creating rigs, it is recommended (and it is in fact enforced by validators)
-to separate bones or driving objects, their controllers and geometry so they are
+to separate bones or driven objects, their controllers and geometry so they are
 easily managed. Currently OpenPype doesn't allow to publish model at the same time as
 its rig so for demonstration purposes, I'll first create simple model for robotic
 arm, just made out of simple boxes and I'll publish it.
 
 ![Maya - Simple model for rigging](assets/maya-rig_model_setup.jpg)
 
-For more information about publishing models, see [Publishing models](artist_hosts_maya#publishing-models).
+For more information about publishing models, see [Publishing models](artist_hosts_maya.md#publishing-models).
 
-Now lets start with empty scene. Load your model - **OpenPype → Load...**, right
+Now let's start with empty scene. Load your model - **OpenPype → Load...**, right
 click on it and select **Reference (abc)**.
 
-I've created few bones and their controllers in two separate
-groups - `rig_GRP` and `controls_GRP`. Naming is not important - just adhere to
-your naming conventions.
+I've created a few bones in `rig_GRP`, their controllers in `controls_GRP` and
+placed the rig's output geometry in `geometry_GRP`. Naming of the groups is not important - just adhere to
+your naming conventions. Then I parented everything into a single top group named `arm_rig`.
 
-Then I've put everything into `arm_rig` group.
-
-When you've prepared your hierarchy, it's time to create *Rig instance* in OpenPype.
-Select your whole rig hierarchy and go **OpenPype → Create...**. Select **Rig**.
-Set is created in your scene to mark rig parts for export. Notice that it has
-two subsets - `controls_SET` and `out_SET`. Put your controls into `controls_SET`
+With the prepared hierarchy it is time to create a *Rig instance* in OpenPype.
+Select the top group of your rig and go to **OpenPype → Create...**. Select **Rig**.
+A publish set for your rig is created in your scene to mark rig parts for export.
+Notice that it has two subsets - `controls_SET` and `out_SET`. Put your controls into `controls_SET`
 and geometry to `out_SET`. You should end up with something like this:
 
 ![Maya - Rig Hierarchy Example](assets/maya-rig_hierarchy_example.jpg)
 
+:::note controls_SET and out_SET contents
+It is totally allowed to put the `geometry_GRP` in the `out_SET` as opposed to
+the individual meshes - it's even **recommended**. However, the `controls_SET`
+requires the individual controls in it that the artist is supposed to animate
+and manipulate so the publish validators can accurately check the rig's
+controls.
+:::
+
 ### Publishing rigs
 
-Publishing rig is done in same way as publishing everything else. Save your scene
-and go **OpenPype → Publish**. When you run validation you'll mostly run at first into
-few issues. Although number of them will seem to be intimidating at first, you'll
-find out they are mostly minor things easily fixed.
+Publishing rigs is done in a same way as publishing everything else. Save your scene
+and go **OpenPype → Publish**. When you run validation you'll most likely run into
+a few issues at first. Although a number of them will seem to be intimidating you
+will find out they are mostly minor things, easily fixed and are there to optimize
+your rig for consistency and safe usage by the artist.
 
-* **Non Duplicate Instance Members (ID)** - This will most likely fail because when
+- **Non Duplicate Instance Members (ID)** - This will most likely fail because when
 creating rigs, we usually duplicate few parts of it to reuse them. But duplication
 will duplicate also ID of original object and OpenPype needs every object to have
 unique ID. This is easily fixed by **Repair** action next to validator name. click
 on little up arrow on right side of validator name and select **Repair** form menu.
 
-* **Joints Hidden** - This is enforcing joints (bones) to be hidden for user as
+- **Joints Hidden** - This is enforcing joints (bones) to be hidden for user as
 animator usually doesn't need to see them and they clutter his viewports. So
 well behaving rig should have them hidden. **Repair** action will help here also.
 
-* **Rig Controllers** will check if there are no transforms on unlocked attributes
+- **Rig Controllers** will check if there are no transforms on unlocked attributes
 of controllers. This is needed because animator should have ease way to reset rig
 to it's default position. It also check that those attributes doesn't have any
 incoming connections from other parts of scene to ensure that published rig doesn't
@@ -294,8 +301,21 @@ have any missing dependencies.
 
 ### Loading rigs
 
-You can load rig with [Loader](artist_tools.md#loader). Go **OpenPype → Load...**,
+You can load rig with [Loader](artist_tools_loader). Go **OpenPype → Load...**,
 select your rig, right click on it and **Reference** it.
+
+### Animation instances
+
+Whenever you load a rig an animation publish instance is automatically created
+for it. This means that if you load a rig you don't need to create a pointcache
+instance yourself to publish the geometry. This is all cleanly prepared for you
+when loading a published rig.
+
+:::tip Missing animation instance for your loaded rig?
+Did you accidentally delete the animation instance for a loaded rig? You can
+recreate it using the [**Recreate rig animation instance**](artist_hosts_maya.md#recreate-rig-animation-instance)
+inventory action.
+:::
 
 ## Point caches
 OpenPype is using Alembic format for point caches. Workflow is very similar as
@@ -308,9 +328,25 @@ Select its root and Go **OpenPype → Create...** and select **Point Cache**.
 
 After that, publishing will create corresponding **abc** files.
 
+When creating the instance, a objectset child `proxy` will be created. Meshes in the `proxy` objectset will be the viewport representation where loading supports proxies. Proxy representations are stored as `resources` of the subset.
+
 Example setup:
 
 ![Maya - Point Cache Example](assets/maya-pointcache_setup.png)
+
+#### Options
+
+- **Frame Start**: which frame to start the export at.
+- **Frame End**: which frame to end the export at.
+- **Handle Start**: additional frames to export at frame start. Ei. frame start - handle start = export start.
+- **Handle Start**: additional frames to export at frame end. Ei. frame end + handle end = export end.
+- **Step**: frequency of sampling the export. For example when dealing with quick movements for motion blur, a step size of less than 1 might be better.
+- **Refresh**: refresh the viewport when exporting the pointcache. For performance is best to leave off, but certain situations can require to refresh the viewport, for example using the Bullet plugin.
+- **Attr**: specific attributes to publish separated by `;`.
+- **AttrPrefix**: specific attributes which start with this prefix to publish separated by `;`.
+- **Include User Defined Attribudes**: include all user defined attributes in the publish.
+- **Farm**: if your studio has Deadline configured, artists could choose to offload potentially long running export of pointache and publish it to the farm. Only thing that is necessary is to toggle this attribute in created pointcache instance to True.
+- **Priority**: Farm priority.
 
 ### Loading Point Caches
 
@@ -328,7 +364,7 @@ OpenPype allows to version and manage those sets.
 ### Publishing Set dress / Layout
 
 Working with Set dresses is very easy. Just load your assets into scene with
-[Loader](artist_tools.md#loader) (**OpenPype → Load...**). Populate your scene as
+[Loader](artist_tools_loader) (**OpenPype → Load...**). Populate your scene as
 you wish, translate each piece to fit your need. When ready, select all imported
 stuff and go **OpenPype → Create...** and select **Set Dress** or **Layout**.
 This will create set containing your selection and marking it for publishing.
@@ -341,7 +377,7 @@ Now you can publish is with **OpenPype → Publish**.
 
 ### Loading Set dress / Layout
 
-You can load Set dress / Layout using [Loader](artist_tools.md#loader)
+You can load Set dress / Layout using [Loader](artist_tools_loader)
 (**OpenPype → Load...**). Select you layout or set dress, right click on it and
 select **Reference Maya Ascii (ma)**. This will populate your scene with all those
 models you've put into layout.
@@ -350,14 +386,11 @@ models you've put into layout.
 
 OpenPype in Maya can be used for submitting renders to render farm and for their
 subsequent publishing. Right now OpenPype support [AWS Thinkbox Deadline](https://www.awsthinkbox.com/deadline)
-and [Virtual Vertex Muster](https://www.vvertex.com/overview/).
+and [Royal Render](https://www.royalrender.de/).
 
-* For setting up Muster support see [admin section](admin_config#muster)
-* For setting up Deadline support see [here](admin_config#aws-thinkbox-deadline)
+* For setting up Royal Render support see [admin section](module_royalrender.md)
+* For setting up Deadline support see [here](module_deadline.md)
 
-:::note Muster login
-Muster is now configured so every user must log in to get authentication support. If OpenPype founds out this token is missing or expired, it will ask again for credentials.
-:::
 
 ### Creating basic render setup
 
@@ -370,7 +403,7 @@ Lets start with empty scene. First I'll pull in my favorite Buddha model.
 there just click on **Reference (abc)**.
 
 Next, I want to be sure that I have same frame range as is set on shot I am working
-on. To do this just **OpenPype → Reset Frame Range**. This should set Maya timeline to same
+on. To do this just **OpenPype → Set Frame Range**. This should set Maya timeline to same
 values as they are set on shot in *Ftrack* for example.
 
 I have my time set, so lets create some animation. We'll turn Buddha model around for
@@ -400,12 +433,7 @@ checked **Use selection** it will use your current Render Layers (if you have th
 if no render layers is present in scene, it will create one for you named **Main** and under it
 default collection with `*` selector.
 
-No matter if you use *Deadline* or *Muster*, OpenPype will try to connect to render farm and
-fetch machine pool list.
-
-:::note Muster login
-This might fail on *Muster* in the event that you have expired authentication token. In that case, you'll be presented with login window. Nothing will be created in the scene until you log in again and do create **Render** again.
-:::
+OpenPype will try to connect to render farm and fetch machine pool list.
 
 So now my scene now looks like this:
 
@@ -484,7 +512,7 @@ and for vray:
 maya/<Layer>/<Layer>
 ```
 
-Doing **OpenPype → Reset Resolution** will set correct resolution on camera.
+Doing **OpenPype → Set Resolution** will set correct resolution on camera.
 
 Scene is now ready for submission and should publish without errors.
 
@@ -499,6 +527,22 @@ You can create render that will be attached to another subset you are publishing
 In the scene from where you want to publish your model create *Render subset*. Prepare your render layer as needed and then drag
 model subset (Maya set node) under corresponding `LAYER_` set under *Render instance*. During publish, it will submit this render to farm and
 after it is rendered, it will be attached to your model subset.
+
+### Tile Rendering
+:::note Deadline
+This feature is only supported when using Deadline. See [here](module_deadline#openpypetileassembler-plugin) for setup.
+:::
+On the render instance objectset you'll find:
+
+* `Tile Rendering` - for enabling tile rendering.
+* `Tile X` - number of tiles in the X axis.
+* `Tile Y` - number of tiles in the Y axis.
+
+When submittig to Deadline, you'll get:
+
+- for each frame a tile rendering job, to render each from Maya.
+- for each frame a tile assembly job, to assemble the rendered tiles.
+- job to publish the assembled frames.
 
 ## Render Setups
 
@@ -546,7 +590,7 @@ Create your model, import it or load from OpenPype. I'll just import model as OB
 file.
 
 After we have our model in, we need to set everything to be able to publish it
-as model - for detail see [Publishing models](artist_hosts_maya#publishing-models).
+as model - for detail see [Publishing models](artist_hosts_maya.md#publishing-models).
 
 To recap - freeze transforms, rename it to `dragon_GEO` and put it into group
 `dragon_GRP`. Then select this group and **OpenPype → Create...** and choose **Model**.
@@ -593,197 +637,36 @@ That will create video file, pass it to another extractor creating burnins in it
 and finally uploading this video to ftrack with your model (or other type) published
 version. All parts of this process - like what burnins, what type of video file,
 settings for Maya playblast - can be customized by your TDs. For more information
-about customizing review process refer to [admin section](admin_presets_plugins).
+about customizing review process refer to [admin section](project_settings/settings_project_global.md/#publish-plugins).
 
 If you don't move `modelMain` into `reviewMain`, review will be generated but it will
 be published as separate entity.
 
-## Working with Yeti in OpenPype
 
-OpenPype can work with [Yeti](https://peregrinelabs.com/yeti/) in two data modes.
-It can handle Yeti caches and Yeti rigs.
+## Inventory Actions
 
-### Creating and publishing Yeti caches
+### Connect Geometry
 
-Let start by creating simple Yeti setup, just one object and Yeti node. Open new
-empty scene in Maya and create sphere. Then select sphere and go **Yeti → Create Yeti Node on Mesh**
-Open Yeti node graph **Yeti → Open Graph Editor** and create setup like this:
+This action will connect geometries between containers.
 
-![Maya - Yeti Basic Graph](assets/maya-yeti_basic_setup.jpg)
+#### Usage
 
-It doesn't matter what setting you use now, just select proper shape in first
-*Import* node. Select your Yeti node and create *Yeti Cache instance* - **OpenPype → Create...**
-and select **Yeti Cache**. Leave `Use selection` checked. You should end up with this setup:
+Select 1 container of type `animation` or `pointcache`, then 1+ container of any type.
 
-![Maya - Yeti Basic Setup](assets/maya-yeti_basic_setup_outline.jpg)
+#### Details
 
-You can see there is `yeticacheDefault` set. Instead of *Default* it could be named with
-whatever name you've entered in `subset` field during instance creation.
+The action searches the selected containers for 1 animation container of type `animation` or `pointcache`. This animation container will be connected to the rest of the selected containers. Matching geometries between containers is done by comparing the attribute `cbId`.
 
-We are almost ready for publishing cache. You can check basic settings by selecting
-Yeti cache set and opening *Extra attributes* in Maya **Attribute Editor**.
+The connection between geometries is done with a live blendshape.
 
-![Maya - Yeti Basic Setup](assets/maya-yeti_cache_attributes.jpg)
+### Recreate rig animation instance
 
-Those attributes there are self-explanatory, but:
+This action can regenerate an animation instance for a loaded rig, for example
+for when it was accidentally deleted by the user.
 
-- `Preroll` is number of frames simulation will run before cache frames are stored.
-This is usefull to "steady" simulation for example.
-- `Frame Start` from what frame we start to store cache files
-- `Frame End` to what frame we are storing cache files
-- `Fps` of cache
-- `Samples` how many time samples we take during caching
+![Maya - Inventory Action Recreate Rig Animation Instance](assets/maya-inventory_action_recreate_animation_instance.png)
 
-You can now publish Yeti cache as any other types. **OpenPype → Publish**. It will
-create sequence of `.fur` files and `.fursettings` metadata file with Yeti node
-setting.
+#### Usage
 
-### Loading Yeti caches
-
-You can load Yeti cache by **OpenPype → Load ...**. Select your cache, right+click on
-it and select **Load Yeti cache**. This will create Yeti node in scene and set its
-cache path to point to your published cache files. Note that this Yeti node will
-be named with same name as the one you've used to publish cache. Also notice that
-when you open graph on this Yeti node, all nodes are as they were in publishing node.
-
-### Creating and publishing Yeti Rig
-
-Yeti Rigs are working in similar way as caches, but are more complex and they deal with
-other data used by Yeti, like geometry and textures.
-
-Let's start by [loading](artist_hosts_maya#loading-model) into new scene some model.
-I've loaded my Buddha model.
-
-Create select model mesh, create Yeti node - **Yeti → Create Yeti Node on Mesh** and
-setup similar Yeti graph as in cache example above.
-
-Then select this Yeti node (mine is called with default name `pgYetiMaya1`) and
-create *Yeti Rig instance* - **OpenPype → Create...** and select **Yeti Cache**.
-Leave `Use selection` checked.
-
-Last step is to add our model geometry to rig instance, so middle+drag its
-geometry to `input_SET` under `yetiRigDefault` set representing rig instance.
-Note that its name can differ and is based on your subset name.
-
-![Maya - Yeti Rig Setup](assets/maya-yeti_rig.jpg)
-
-Save your scene and ready for publishing our new simple Yeti Rig!
-
-Go to publish **OpenPype → Publish** and run. This will publish rig with its geometry
-as `.ma` scene, save Yeti node settings and export one frame of Yeti cache from
-the beginning of your timeline. It will also collect all textures used in Yeti
-node, copy them to publish folder `resource` directory and set *Image search path*
-of published node to this location.
-
-:::note Collect Yeti Cache failure
-If you encounter **Collect Yeti Cache** failure during collecting phase, and the error is like
-```fix
-No object matches name: pgYetiMaya1Shape.cbId
-```
-then it is probably caused by scene not being saved before publishing.
-:::
-
-### Loading Yeti Rig
-
-You can load published Yeti Rigs as any other thing in OpenPype - **OpenPype → Load ...**,
-select you Yeti rig and right+click on it. In context menu you should see
-**Load Yeti Cache** and **Load Yeti Rig** items (among others). First one will
-load that one frame cache. The other one will load whole rig.
-
-Notice that although we put only geometry into `input_SET`, whole hierarchy was
-pulled inside also. This allows you to store complex scene element along Yeti
-node.
-
-:::tip auto-connecting rig mesh to existing one
-If you select some objects before loading rig it will try to find shapes
-under selected hierarchies and match them with shapes loaded with rig (published
-under `input_SET`). This mechanism uses *cbId* attribute on those shapes.
-If match is found shapes are connected using their `outMesh` and `outMesh`. Thus you can easily connect existing animation to loaded rig.
-:::
-
-## Working with Xgen in OpenPype
-
-OpenPype support publishing and loading of Xgen interactive grooms. You can publish 
-them as mayaAscii files with scalps that can be loaded into another maya scene, or as
-alembic caches. 
-
-### Publishing Xgen Grooms
-
-To prepare xgen for publishing just select all the descriptions that should be published together and the create Xgen Subset in the scene using - **OpenPype menu** → **Create**... and select **Xgen Interactive**. Leave Use selection checked.
-
-For actual publishing of your groom to go **OpenPype → Publish** and then press ▶ to publish. This will export `.ma` file containing your grooms with any geometries they are attached to and also a baked cache in `.abc` format 
-
-
-:::tip adding more descriptions
-You can add multiple xgen desctiption into the subset you are about to publish, simply by
-adding them to the maya set that was created for you. Please make sure that only xgen description nodes are present inside of the set and not the scalp geometry. 
-:::
-
-### Loading Xgen
-
-You can use published xgens by loading them using OpenPype Publisher. You can choose to reference or import xgen. We don't have any automatic mesh linking at the moment and it is expected, that groom is published with a scalp, that can then be manually attached to your animated mesh for example. 
-
-The alembic representation can be loaded too and it contains the groom converted to curves. Keep in mind that the density of the alembic directly depends on your viewport xgen density at the point of export.
-
-
-
-## Using Redshift Proxies
-
-OpenPype supports working with Redshift Proxy files. You can create  Redshift Proxy from almost
-any hierarchy in Maya and it will be included there. Redshift can export animation
-proxy file per frame.
-
-### Creating Redshift Proxy
-
-To mark data to publish as Redshift Proxy, select them in Maya and - **OpenPype → Create ...** and
-then select **Redshift Proxy**. You can name your subset and hit **Create** button.
-
-You can enable animation in Attribute Editor:
-
-![Maya - Yeti Rig Setup](assets/maya-create_rs_proxy.jpg)
-
-### Publishing Redshift Proxies
-
-Once data are marked as Redshift Proxy instance, they can be published - **OpenPype → Publish ...**
-
-### Using Redshift Proxies
-
-Published proxy files can be loaded with OpenPype Loader. It will create mesh and attach Redshift Proxy
-parameters to it - Redshift will then represent proxy with bounding box.
-
-## Using VRay Proxies
-
-OpenPype support publishing, loading and using of VRay Proxy in look management. Their underlaying format
-can be either vrmesh or alembic.
-
-:::warning vrmesh or alembic and look management
-Be aware that **vrmesh** cannot be used with looks as it doesn't retain IDs necessary to map shaders to geometry.
-:::
-
-### Creating VRay Proxy
-
-To create VRay Proxy, select geometry you want and - **OpenPype → Create ...** select **VRay Proxy**. Name your
-subset as you want and press **Create** button.
-
-This will create `vrayproxy` set for your subset. You can set some options in Attribute editor, mainly if you want
-export animation instead of single frame.
-
-![Maya - VRay Proxy Creation](assets/maya-vray_proxy.jpg)
-
-### Publishing VRay Proxies
-
-VRay Proxy can be published - **OpenPype → Publish ...**. It will publish data as VRays `vrmesh` format and as
-Alembic file.
-
-## Using VRay Proxies
-
-You can load VRay Proxy using loader - **OpenPype → Loader ...**
-
-![Maya - VRay Proxy Creation](assets/maya-vray_proxy-loader.jpg)
-
-Select your subset and right-click. Select **Import VRay Proxy (vrmesh)** to import it.
-
-:::note
-Note that even if it states `vrmesh` in descriptions, if loader finds Alembic published along (default behavior) it will
-use abc file instead of vrmesh as it is more flexible and without it looks doesn't work.
-:::
+Select 1 or more container of type `rig` for which you want to recreate the
+animation instance.

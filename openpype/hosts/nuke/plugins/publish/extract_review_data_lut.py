@@ -1,11 +1,12 @@
 import os
 import pyblish.api
-from avalon.nuke import lib as anlib
+
+from openpype.pipeline import publish
 from openpype.hosts.nuke.api import plugin
-import openpype
+from openpype.hosts.nuke.api.lib import maintained_selection
 
 
-class ExtractReviewDataLut(openpype.api.Extractor):
+class ExtractReviewDataLut(publish.Extractor):
     """Extracts movie and thumbnail with baked in luts
 
     must be run after extract_render_local.py
@@ -19,8 +20,7 @@ class ExtractReviewDataLut(openpype.api.Extractor):
     hosts = ["nuke"]
 
     def process(self, instance):
-        families = instance.data["families"]
-        self.log.info("Creating staging dir...")
+        self.log.debug("Creating staging dir...")
         if "representations" in instance.data:
             staging_dir = instance.data[
                 "representations"][0]["stagingDir"].replace("\\", "/")
@@ -33,11 +33,11 @@ class ExtractReviewDataLut(openpype.api.Extractor):
             staging_dir = os.path.normpath(os.path.dirname(render_path))
             instance.data["stagingDir"] = staging_dir
 
-        self.log.info(
+        self.log.debug(
             "StagingDir `{0}`...".format(instance.data["stagingDir"]))
 
         # generate data
-        with anlib.maintained_selection():
+        with maintained_selection():
             exporter = plugin.ExporterReviewLut(
                 self, instance
                 )
@@ -48,7 +48,12 @@ class ExtractReviewDataLut(openpype.api.Extractor):
                 exporter.stagingDir, exporter.file).replace("\\", "/")
             instance.data["representations"] += data["representations"]
 
-        if "render.farm" in families:
+        # review can be removed since `ProcessSubmittedJobOnFarm` will create
+        # reviewable representation if needed
+        if (
+            instance.data.get("farm")
+            and "review" in instance.data["families"]
+        ):
             instance.data["families"].remove("review")
 
         self.log.debug(

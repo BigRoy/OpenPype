@@ -1,8 +1,11 @@
 import pyblish.api
-import openpype.api
 import string
 
 import six
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishValidationError
+)
 
 # Allow only characters, numbers and underscore
 allowed = set(string.ascii_lowercase +
@@ -18,7 +21,7 @@ def validate_name(subset):
 class ValidateSubsetName(pyblish.api.InstancePlugin):
     """Validates subset name has only valid characters"""
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     families = ["*"]
     label = "Subset Name"
 
@@ -28,7 +31,7 @@ class ValidateSubsetName(pyblish.api.InstancePlugin):
 
         # Ensure subset data
         if subset is None:
-            raise RuntimeError("Instance is missing subset "
+            raise PublishValidationError("Instance is missing subset "
                                "name: {0}".format(subset))
 
         if not isinstance(subset, six.string_types):

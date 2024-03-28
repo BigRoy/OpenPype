@@ -1,18 +1,32 @@
-from avalon import api, io
-from avalon.nuke import lib as anlib
-from avalon.nuke import containerise, update_container
 import nuke
 
+from openpype.client import (
+    get_version_by_id,
+    get_last_version_by_subset_id,
+)
+from openpype.pipeline import (
+    load,
+    get_current_project_name,
+    get_representation_path,
+)
+from openpype.hosts.nuke.api.lib import maintained_selection
+from openpype.hosts.nuke.api import (
+    containerise,
+    update_container,
+    viewer_update_and_undo_stop
+)
 
-class AlembicModelLoader(api.Loader):
+
+class AlembicModelLoader(load.LoaderPlugin):
     """
-    This will load alembic model into script.
+    This will load alembic model or anim into script.
     """
 
-    families = ["model"]
-    representations = ["abc"]
+    families = ["model", "pointcache", "animation"]
+    representations = ["*"]
+    extensions = {"abc"}
 
-    label = "Load Alembic Model"
+    label = "Load Alembic"
     icon = "cube"
     color = "orange"
     node_color = "0x4ecd91ff"
@@ -32,25 +46,33 @@ class AlembicModelLoader(api.Loader):
         # add additional metadata from the version to imprint to Avalon knob
         add_keys = ["source", "author", "fps"]
 
-        data_imprint = {"frameStart": first,
-                        "frameEnd": last,
-                        "version": vname,
-                        "objectName": object_name}
+        data_imprint = {
+            "frameStart": first,
+            "frameEnd": last,
+            "version": vname
+        }
 
         for k in add_keys:
             data_imprint.update({k: version_data[k]})
 
         # getting file path
-        file = self.fname.replace("\\", "/")
+        file = self.filepath_from_context(context).replace("\\", "/")
 
-        with anlib.maintained_selection():
+        with maintained_selection():
             model_node = nuke.createNode(
                 "ReadGeo2",
                 "name {} file {} ".format(
                     object_name, file),
                 inpanel=False
             )
+
             model_node.forceValidate()
+
+            # Ensure all items are imported and selected.
+            scene_view = model_node.knob('scene_view')
+            scene_view.setImportedItems(scene_view.getAllItems())
+            scene_view.setSelectedItems(scene_view.getAllItems())
+
             model_node["frame_rate"].setValue(float(fps))
 
             # workaround because nuke's bug is not adding
@@ -91,17 +113,15 @@ class AlembicModelLoader(api.Loader):
             None
         """
         # Get version from io
-        version = io.find_one({
-            "type": "version",
-            "_id": representation["parent"]
-        })
-        object_name = container['objectName']
+        project_name = get_current_project_name()
+        version_doc = get_version_by_id(project_name, representation["parent"])
+
         # get corresponding node
-        model_node = nuke.toNode(object_name)
+        model_node = container["node"]
 
         # get main variables
-        version_data = version.get("data", {})
-        vname = version.get("name", None)
+        version_data = version_doc.get("data", {})
+        vname = version_doc.get("name", None)
         first = version_data.get("frameStart", None)
         last = version_data.get("frameEnd", None)
         fps = version_data.get("fps") or nuke.root()["fps"].getValue()
@@ -110,20 +130,20 @@ class AlembicModelLoader(api.Loader):
         # add additional metadata from the version to imprint to Avalon knob
         add_keys = ["source", "author", "fps"]
 
-        data_imprint = {"representation": str(representation["_id"]),
-                        "frameStart": first,
-                        "frameEnd": last,
-                        "version": vname,
-                        "objectName": object_name}
+        data_imprint = {
+            "representation": str(representation["_id"]),
+            "frameStart": first,
+            "frameEnd": last,
+            "version": vname
+        }
 
         for k in add_keys:
             data_imprint.update({k: version_data[k]})
 
         # getting file path
-        file = api.get_representation_path(representation).replace("\\", "/")
+        file = get_representation_path(representation).replace("\\", "/")
 
-        with anlib.maintained_selection():
-            model_node = nuke.toNode(object_name)
+        with maintained_selection():
             model_node['selected'].setValue(True)
 
             # collect input output dependencies
@@ -133,14 +153,21 @@ class AlembicModelLoader(api.Loader):
             model_node["frame_rate"].setValue(float(fps))
             model_node["file"].setValue(file)
 
+            # Ensure all items are imported and selected.
+            scene_view = model_node.knob('scene_view')
+            scene_view.setImportedItems(scene_view.getAllItems())
+            scene_view.setSelectedItems(scene_view.getAllItems())
+
             # workaround because nuke's bug is
             # not adding animation keys properly
             xpos = model_node.xpos()
             ypos = model_node.ypos()
             nuke.nodeCopy("%clipboard%")
             nuke.delete(model_node)
+
+            # paste the node back and set the position
             nuke.nodePaste("%clipboard%")
-            model_node = nuke.toNode(object_name)
+            model_node = nuke.selectedNode()
             model_node.setXYpos(xpos, ypos)
 
             # link to original input nodes
@@ -154,34 +181,31 @@ class AlembicModelLoader(api.Loader):
                 d.setInput(index, model_node)
 
         # color node by correct color by actual version
-        self.node_version_color(version, model_node)
+        self.node_version_color(version_doc, model_node)
 
-        self.log.info("udated to version: {}".format(version.get("name")))
+        self.log.info("updated to version: {}".format(version_doc.get("name")))
 
         return update_container(model_node, data_imprint)
 
     def node_version_color(self, version, node):
-        """ Coloring a node by correct color by actual version
-        """
-        # get all versions in list
-        versions = io.find({
-            "type": "version",
-            "parent": version["parent"]
-        }).distinct('name')
+        """ Coloring a node by correct color by actual version"""
 
-        max_version = max(versions)
+        project_name = get_current_project_name()
+        last_version_doc = get_last_version_by_subset_id(
+            project_name, version["parent"], fields=["_id"]
+        )
 
         # change color of node
-        if version.get("name") not in [max_version]:
-            node["tile_color"].setValue(int("0xd88467ff", 16))
+        if version["_id"] == last_version_doc["_id"]:
+            color_value = self.node_color
         else:
-            node["tile_color"].setValue(int(self.node_color, 16))
+            color_value = "0xd88467ff"
+        node["tile_color"].setValue(int(color_value, 16))
 
     def switch(self, container, representation):
         self.update(container, representation)
 
     def remove(self, container):
-        from avalon.nuke import viewer_update_and_undo_stop
         node = nuke.toNode(container['objectName'])
         with viewer_update_and_undo_stop():
             nuke.delete(node)

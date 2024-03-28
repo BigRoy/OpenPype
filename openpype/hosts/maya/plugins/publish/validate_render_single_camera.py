@@ -1,19 +1,14 @@
 import re
 
 import pyblish.api
-import openpype.api
-import openpype.hosts.maya.api.action
-
 from maya import cmds
 
-
-ImagePrefixes = {
-    'mentalray': 'defaultRenderGlobals.imageFilePrefix',
-    'vray': 'vraySettings.fileNamePrefix',
-    'arnold': 'defaultRenderGlobals.imageFilePrefix',
-    'renderman': 'defaultRenderGlobals.imageFilePrefix',
-    'redshift': 'defaultRenderGlobals.imageFilePrefix'
-}
+import openpype.hosts.maya.api.action
+from openpype.hosts.maya.api.lib_rendersettings import RenderSettings
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishValidationError
+)
 
 
 class ValidateRenderSingleCamera(pyblish.api.InstancePlugin):
@@ -23,7 +18,7 @@ class ValidateRenderSingleCamera(pyblish.api.InstancePlugin):
     prefix must contain <Camera> token.
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     label = "Render Single Camera"
     hosts = ['maya']
     families = ["renderlayer",
@@ -36,7 +31,7 @@ class ValidateRenderSingleCamera(pyblish.api.InstancePlugin):
         """Process all the cameras in the instance"""
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Invalid cameras for render.")
+            raise PublishValidationError("Invalid cameras for render.")
 
     @classmethod
     def get_invalid(cls, instance):
@@ -46,7 +41,11 @@ class ValidateRenderSingleCamera(pyblish.api.InstancePlugin):
         # handle various renderman names
         if renderer.startswith('renderman'):
             renderer = 'renderman'
-        file_prefix = cmds.getAttr(ImagePrefixes[renderer])
+
+        file_prefix = cmds.getAttr(
+            RenderSettings.get_image_prefix_attr(renderer)
+        )
+
 
         if len(cameras) > 1:
             if re.search(cls.R_CAMERA_TOKEN, file_prefix):

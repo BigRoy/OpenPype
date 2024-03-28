@@ -1,4 +1,14 @@
-from Qt import QtCore, QtGui, QtWidgets
+from qtpy import QtCore, QtWidgets
+
+from openpype.tools.utils.lib import (
+    checkstate_int_to_enum,
+    checkstate_enum_to_int,
+)
+from openpype.tools.utils.constants import (
+    CHECKED_INT,
+    UNCHECKED_INT,
+    ITEM_IS_USER_TRISTATE,
+)
 
 
 class ComboItemDelegate(QtWidgets.QStyledItemDelegate):
@@ -87,7 +97,9 @@ class MultiSelectionComboBox(QtWidgets.QComboBox):
             return
 
         index_flags = current_index.flags()
-        state = current_index.data(QtCore.Qt.CheckStateRole)
+        state = checkstate_int_to_enum(
+            current_index.data(QtCore.Qt.CheckStateRole)
+        )
         new_state = None
 
         if event.type() == QtCore.QEvent.MouseButtonRelease:
@@ -103,25 +115,25 @@ class MultiSelectionComboBox(QtWidgets.QComboBox):
                 return
 
             if state == QtCore.Qt.Unchecked:
-                new_state = QtCore.Qt.Checked
+                new_state = CHECKED_INT
             else:
-                new_state = QtCore.Qt.Unchecked
+                new_state = UNCHECKED_INT
 
         elif event.type() == QtCore.QEvent.KeyPress:
             # TODO: handle QtCore.Qt.Key_Enter, Key_Return?
             if event.key() == QtCore.Qt.Key_Space:
-                # toogle the current items check state
+                # toggle the current items check state
                 if (
                     index_flags & QtCore.Qt.ItemIsUserCheckable
-                    and index_flags & QtCore.Qt.ItemIsTristate
+                    and index_flags & ITEM_IS_USER_TRISTATE
                 ):
-                    new_state = QtCore.Qt.CheckState((int(state) + 1) % 3)
+                    new_state = (checkstate_enum_to_int(state) + 1) % 3
 
                 elif index_flags & QtCore.Qt.ItemIsUserCheckable:
                     if state != QtCore.Qt.Checked:
-                        new_state = QtCore.Qt.Checked
+                        new_state = CHECKED_INT
                     else:
-                        new_state = QtCore.Qt.Unchecked
+                        new_state = UNCHECKED_INT
 
         if new_state is not None:
             model.setData(current_index, new_state, QtCore.Qt.CheckStateRole)
@@ -176,15 +188,17 @@ class MultiSelectionComboBox(QtWidgets.QComboBox):
         for idx in range(self.count()):
             value = self.itemData(idx, role=QtCore.Qt.UserRole)
             if value in values:
-                check_state = QtCore.Qt.Checked
+                check_state = CHECKED_INT
             else:
-                check_state = QtCore.Qt.Unchecked
+                check_state = UNCHECKED_INT
             self.setItemData(idx, check_state, QtCore.Qt.CheckStateRole)
 
     def value(self):
         items = list()
         for idx in range(self.count()):
-            state = self.itemData(idx, role=QtCore.Qt.CheckStateRole)
+            state = checkstate_int_to_enum(
+                self.itemData(idx, role=QtCore.Qt.CheckStateRole)
+            )
             if state == QtCore.Qt.Checked:
                 items.append(
                     self.itemData(idx, role=QtCore.Qt.UserRole)
@@ -194,7 +208,9 @@ class MultiSelectionComboBox(QtWidgets.QComboBox):
     def checked_items_text(self):
         items = list()
         for idx in range(self.count()):
-            state = self.itemData(idx, role=QtCore.Qt.CheckStateRole)
+            state = checkstate_int_to_enum(
+                self.itemData(idx, role=QtCore.Qt.CheckStateRole)
+            )
             if state == QtCore.Qt.Checked:
                 items.append(self.itemText(idx))
         return items

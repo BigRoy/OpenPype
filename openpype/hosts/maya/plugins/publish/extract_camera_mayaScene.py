@@ -2,12 +2,15 @@
 """Extract camera as Maya Scene."""
 import os
 import itertools
+import contextlib
 
 from maya import cmds
 
-import avalon.maya
-import openpype.api
+from openpype.pipeline import publish
 from openpype.hosts.maya.api import lib
+from openpype.lib import (
+    BoolDef
+)
 
 
 def massage_ma_file(path):
@@ -44,7 +47,8 @@ def grouper(iterable, n, fillvalue=None):
 
     """
     args = [iter(iterable)] * n
-    return itertools.izip_longest(fillvalue=fillvalue, *args)
+    from six.moves import zip_longest
+    return zip_longest(fillvalue=fillvalue, *args)
 
 
 def unlock(plug):
@@ -78,7 +82,8 @@ def unlock(plug):
             cmds.disconnectAttr(source, destination)
 
 
-class ExtractCameraMayaScene(openpype.api.Extractor):
+class ExtractCameraMayaScene(publish.Extractor,
+                             publish.OptionalPyblishPluginMixin):
     """Extract a Camera as Maya Scene.
 
     This will create a duplicate of the camera that will be baked *with*
@@ -88,16 +93,21 @@ class ExtractCameraMayaScene(openpype.api.Extractor):
     The cameras gets baked to world space by default. Only when the instance's
     `bakeToWorldSpace` is set to False it will include its full hierarchy.
 
+    'camera' family expects only single camera, if multiple cameras are needed,
+    'matchmove' is better choice.
+
     Note:
         The extracted Maya ascii file gets "massaged" removing the uuid values
         so they are valid for older versions of Fusion (e.g. 6.4)
 
     """
 
-    label = "Camera (Maya Scene)"
+    label = "Extract Camera (Maya Scene)"
     hosts = ["maya"]
-    families = ["camera"]
+    families = ["camera", "matchmove"]
     scene_type = "ma"
+
+    keep_image_planes = True
 
     def process(self, instance):
         """Plugin entry point."""
@@ -106,31 +116,21 @@ class ExtractCameraMayaScene(openpype.api.Extractor):
             instance.context.data["project_settings"]["maya"]["ext_mapping"]
         )
         if ext_mapping:
-            self.log.info("Looking in settings for scene type ...")
+            self.log.debug("Looking in settings for scene type ...")
             # use extension mapping for first family found
             for family in self.families:
                 try:
                     self.scene_type = ext_mapping[family]
-                    self.log.info(
+                    self.log.debug(
                         "Using {} as scene type".format(self.scene_type))
                     break
                 except KeyError:
                     # no preset found
                     pass
 
-        framerange = [instance.data.get("frameStart", 1),
-                      instance.data.get("frameEnd", 1)]
-        handle_start = instance.data.get("handleStart", 0)
-        handle_end = instance.data.get("handleEnd", 0)
-
-        # TODO: deprecated attribute "handles"
-
-        if handle_start is None:
-            handle_start = instance.data.get("handles", 0)
-            handle_end = instance.data.get("handles", 0)
-
-        range_with_handles = [framerange[0] - handle_start,
-                              framerange[1] + handle_end]
+        # Collect the start and end including handles
+        start = instance.data["frameStartHandle"]
+        end = instance.data["frameEndHandle"]
 
         step = instance.data.get("step", 1.0)
         bake_to_worldspace = instance.data("bakeToWorldSpace", True)
@@ -141,15 +141,15 @@ class ExtractCameraMayaScene(openpype.api.Extractor):
                              "bake to world space is ignored...")
 
         # get cameras
-        members = instance.data['setMembers']
-        cameras = cmds.ls(members, leaf=True, shapes=True, long=True,
-                          dag=True, type="camera")
+        members = set(cmds.ls(instance.data['setMembers'], leaf=True,
+                      shapes=True, long=True, dag=True))
+        cameras = set(cmds.ls(members, leaf=True, shapes=True, long=True,
+                      dag=True, type="camera"))
 
         # validate required settings
-        assert len(cameras) == 1, "Single camera must be found in extraction"
         assert isinstance(step, float), "Step must be a float value"
-        camera = cameras[0]
-        transform = cmds.listRelatives(camera, parent=True, fullPath=True)
+        transforms = cmds.listRelatives(list(cameras),
+                                        parent=True, fullPath=True)
 
         # Define extract output file path
         dir_path = self.staging_dir(instance)
@@ -157,47 +157,65 @@ class ExtractCameraMayaScene(openpype.api.Extractor):
         path = os.path.join(dir_path, filename)
 
         # Perform extraction
-        with avalon.maya.maintained_selection():
+        with lib.maintained_selection():
             with lib.evaluation("off"):
-                with avalon.maya.suspended_refresh():
+                with lib.suspended_refresh():
                     if bake_to_worldspace:
-                        self.log.info(
-                            "Performing camera bakes: {}".format(transform))
                         baked = lib.bake_to_world_space(
-                            transform,
-                            frame_range=range_with_handles,
+                            transforms,
+                            frame_range=[start, end],
                             step=step
                         )
-                        baked_shapes = cmds.ls(baked,
-                                               type="camera",
-                                               dag=True,
-                                               shapes=True,
-                                               long=True)
-                    else:
-                        baked_shapes = cameras
-                    # Fix PLN-178: Don't allow background color to be non-black
-                    for cam in baked_shapes:
-                        attrs = {"backgroundColorR": 0.0,
-                                 "backgroundColorG": 0.0,
-                                 "backgroundColorB": 0.0,
-                                 "overscan": 1.0}
-                        for attr, value in attrs.items():
-                            plug = "{0}.{1}".format(cam, attr)
-                            unlock(plug)
-                            cmds.setAttr(plug, value)
+                        baked_camera_shapes = set(cmds.ls(baked,
+                                                  type="camera",
+                                                  dag=True,
+                                                  shapes=True,
+                                                  long=True))
 
-                    self.log.info("Performing extraction..")
-                    cmds.select(baked_shapes, noExpand=True)
-                    cmds.file(path,
-                              force=True,
-                              typ="mayaAscii" if self.scene_type == "ma" else "mayaBinary",  # noqa: E501
-                              exportSelected=True,
-                              preserveReferences=False,
-                              constructionHistory=False,
-                              channels=True,  # allow animation
-                              constraints=False,
-                              shader=False,
-                              expressions=False)
+                        members.update(baked_camera_shapes)
+                        members.difference_update(cameras)
+                    else:
+                        baked_camera_shapes = cmds.ls(list(cameras),
+                                                      type="camera",
+                                                      dag=True,
+                                                      shapes=True,
+                                                      long=True)
+
+                    attrs = {"backgroundColorR": 0.0,
+                             "backgroundColorG": 0.0,
+                             "backgroundColorB": 0.0,
+                             "overscan": 1.0}
+
+                    # Fix PLN-178: Don't allow background color to be non-black
+                    for cam, (attr, value) in itertools.product(cmds.ls(
+                            baked_camera_shapes, type="camera", dag=True,
+                            long=True), attrs.items()):
+                        plug = "{0}.{1}".format(cam, attr)
+                        unlock(plug)
+                        cmds.setAttr(plug, value)
+
+                    attr_values = self.get_attr_values_from_data(
+                        instance.data)
+                    keep_image_planes = attr_values.get("keep_image_planes")
+
+                    with transfer_image_planes(sorted(cameras),
+                                               sorted(baked_camera_shapes),
+                                               keep_image_planes):
+
+                        self.log.info("Performing extraction..")
+                        cmds.select(cmds.ls(list(members), dag=True,
+                                            shapes=True, long=True),
+                                    noExpand=True)
+                        cmds.file(path,
+                                  force=True,
+                                  typ="mayaAscii" if self.scene_type == "ma" else "mayaBinary",  # noqa: E501
+                                  exportSelected=True,
+                                  preserveReferences=False,
+                                  constructionHistory=False,
+                                  channels=True,  # allow animation
+                                  constraints=False,
+                                  shader=False,
+                                  expressions=False)
 
                     # Delete the baked hierarchy
                     if bake_to_worldspace:
@@ -216,5 +234,67 @@ class ExtractCameraMayaScene(openpype.api.Extractor):
         }
         instance.data["representations"].append(representation)
 
-        self.log.info("Extracted instance '{0}' to: {1}".format(
+        self.log.debug("Extracted instance '{0}' to: {1}".format(
             instance.name, path))
+
+    @classmethod
+    def get_attribute_defs(cls):
+        defs = super(ExtractCameraMayaScene, cls).get_attribute_defs()
+
+        defs.extend([
+            BoolDef("keep_image_planes",
+                    label="Keep Image Planes",
+                    tooltip="Preserving connected image planes on camera",
+                    default=cls.keep_image_planes),
+
+        ])
+
+        return defs
+
+
+@contextlib.contextmanager
+def transfer_image_planes(source_cameras, target_cameras,
+                          keep_input_connections):
+    """Reattaches image planes to baked or original cameras.
+
+    Baked cameras are duplicates of original ones.
+    This attaches it to duplicated camera properly and after
+    export it reattaches it back to original to keep image plane in workfile.
+    """
+    originals = {}
+    try:
+        for source_camera, target_camera in zip(source_cameras,
+                                                target_cameras):
+            image_plane_plug = "{}.imagePlane".format(source_camera)
+            image_planes = cmds.listConnections(image_plane_plug,
+                                                source=True,
+                                                destination=False,
+                                                type="imagePlane") or []
+
+            # Split of the parent path they are attached - we want
+            # the image plane node name if attached to a camera.
+            # TODO: Does this still mean the image plane name is unique?
+            image_planes = [x.split("->", 1)[-1] for x in image_planes]
+
+            if not image_planes:
+                continue
+
+            originals[source_camera] = []
+            for image_plane in image_planes:
+                if keep_input_connections:
+                    if source_camera == target_camera:
+                        continue
+                    _attach_image_plane(target_camera, image_plane)
+                else:  # explicitly detach image planes
+                    cmds.imagePlane(image_plane, edit=True, detach=True)
+                originals[source_camera].append(image_plane)
+        yield
+    finally:
+        for camera, image_planes in originals.items():
+            for image_plane in image_planes:
+                _attach_image_plane(camera, image_plane)
+
+
+def _attach_image_plane(camera, image_plane):
+    cmds.imagePlane(image_plane, edit=True, detach=True)
+    cmds.imagePlane(image_plane, edit=True, camera=camera)

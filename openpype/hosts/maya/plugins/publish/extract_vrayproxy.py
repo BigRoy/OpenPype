@@ -1,12 +1,12 @@
 import os
 
-import avalon.maya
-import openpype.api
-
 from maya import cmds
 
+from openpype.pipeline import publish
+from openpype.hosts.maya.api.lib import maintained_selection
 
-class ExtractVRayProxy(openpype.api.Extractor):
+
+class ExtractVRayProxy(publish.Extractor):
     """Extract the content of the instance to a vrmesh file
 
     Things to pay attention to:
@@ -16,7 +16,7 @@ class ExtractVRayProxy(openpype.api.Extractor):
 
     label = "VRay Proxy (.vrmesh)"
     hosts = ["maya"]
-    families = ["vrayproxy"]
+    families = ["vrayproxy.vrmesh"]
 
     def process(self, instance):
 
@@ -28,20 +28,23 @@ class ExtractVRayProxy(openpype.api.Extractor):
         if not anim_on:
             # Remove animation information because it is not required for
             # non-animated subsets
-            instance.data.pop("frameStart", None)
-            instance.data.pop("frameEnd", None)
+            keys = ["frameStart", "frameEnd",
+                    "handleStart", "handleEnd",
+                    "frameStartHandle", "frameEndHandle"]
+            for key in keys:
+                instance.data.pop(key, None)
 
             start_frame = 1
             end_frame = 1
         else:
-            start_frame = instance.data["frameStart"]
-            end_frame = instance.data["frameEnd"]
+            start_frame = instance.data["frameStartHandle"]
+            end_frame = instance.data["frameEndHandle"]
 
         vertex_colors = instance.data.get("vertexColors", False)
 
         # Write out vrmesh file
-        self.log.info("Writing: '%s'" % file_path)
-        with avalon.maya.maintained_selection():
+        self.log.debug("Writing: '%s'" % file_path)
+        with maintained_selection():
             cmds.select(instance.data["setMembers"], noExpand=True)
             cmds.vrayCreateProxy(exportType=1,
                                  dir=staging_dir,
@@ -65,5 +68,5 @@ class ExtractVRayProxy(openpype.api.Extractor):
         }
         instance.data["representations"].append(representation)
 
-        self.log.info("Extracted instance '%s' to: %s"
-                      % (instance.name, staging_dir))
+        self.log.debug("Extracted instance '%s' to: %s"
+                       % (instance.name, staging_dir))

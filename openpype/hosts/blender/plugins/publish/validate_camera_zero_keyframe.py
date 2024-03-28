@@ -1,12 +1,19 @@
 from typing import List
 
-import mathutils
+import bpy
 
 import pyblish.api
+
 import openpype.hosts.blender.api.action
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishValidationError,
+    OptionalPyblishPluginMixin
+)
 
 
-class ValidateCameraZeroKeyframe(pyblish.api.InstancePlugin):
+class ValidateCameraZeroKeyframe(pyblish.api.InstancePlugin,
+                                 OptionalPyblishPluginMixin):
     """Camera must have a keyframe at frame 0.
 
     Unreal shifts the first keyframe to frame 0. Forcing the camera to have
@@ -14,21 +21,17 @@ class ValidateCameraZeroKeyframe(pyblish.api.InstancePlugin):
     in Unreal and Blender.
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ["blender"]
     families = ["camera"]
-    category = "geometry"
-    version = (0, 1, 0)
     label = "Zero Keyframe"
     actions = [openpype.hosts.blender.api.action.SelectInvalidAction]
 
-    _identity = mathutils.Matrix()
-
-    @classmethod
-    def get_invalid(cls, instance) -> List:
+    @staticmethod
+    def get_invalid(instance) -> List:
         invalid = []
-        for obj in [obj for obj in instance]:
-            if obj.type == "CAMERA":
+        for obj in instance:
+            if isinstance(obj, bpy.types.Object) and obj.type == "CAMERA":
                 if obj.animation_data and obj.animation_data.action:
                     action = obj.animation_data.action
                     frames_set = set()
@@ -42,7 +45,12 @@ class ValidateCameraZeroKeyframe(pyblish.api.InstancePlugin):
         return invalid
 
     def process(self, instance):
+        if not self.is_active(instance.data):
+            return
+
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError(
-                f"Object found in instance is not in Object Mode: {invalid}")
+            names = ", ".join(obj.name for obj in invalid)
+            raise PublishValidationError(
+                f"Camera must have a keyframe at frame 0: {names}"
+            )

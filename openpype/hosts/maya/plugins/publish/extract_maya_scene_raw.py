@@ -4,11 +4,13 @@ import os
 
 from maya import cmds
 
-import avalon.maya
-import openpype.api
+from openpype.hosts.maya.api.lib import maintained_selection
+from openpype.pipeline import AVALON_CONTAINER_ID, publish
+from openpype.pipeline.publish import OpenPypePyblishPluginMixin
+from openpype.lib import BoolDef
 
 
-class ExtractMayaSceneRaw(openpype.api.Extractor):
+class ExtractMayaSceneRaw(publish.Extractor, OpenPypePyblishPluginMixin):
     """Extract as Maya Scene (raw).
 
     This will preserve all references, construction history, etc.
@@ -20,9 +22,24 @@ class ExtractMayaSceneRaw(openpype.api.Extractor):
                 "mayaScene",
                 "setdress",
                 "layout",
-                "camerarig",
-                "xgen"]
+                "camerarig"]
     scene_type = "ma"
+
+    @classmethod
+    def get_attribute_defs(cls):
+        return [
+            BoolDef(
+                "preserve_references",
+                label="Preserve References",
+                tooltip=(
+                    "When enabled references will still be references "
+                    "in the published file.\nWhen disabled the references "
+                    "are imported into the published file generating a "
+                    "file without references."
+                ),
+                default=True
+            )
+        ]
 
     def process(self, instance):
         """Plugin entry point."""
@@ -30,12 +47,12 @@ class ExtractMayaSceneRaw(openpype.api.Extractor):
             instance.context.data["project_settings"]["maya"]["ext_mapping"]
         )
         if ext_mapping:
-            self.log.info("Looking in settings for scene type ...")
+            self.log.debug("Looking in settings for scene type ...")
             # use extension mapping for first family found
             for family in self.families:
                 try:
                     self.scene_type = ext_mapping[family]
-                    self.log.info(
+                    self.log.debug(
                         "Using {} as scene type".format(self.scene_type))
                     break
                 except KeyError:
@@ -57,15 +74,26 @@ class ExtractMayaSceneRaw(openpype.api.Extractor):
         else:
             members = instance[:]
 
+        selection = members
+        if set(self.add_for_families).intersection(
+                set(instance.data.get("families", []))) or \
+                instance.data.get("family") in self.add_for_families:
+            selection += self._get_loaded_containers(members)
+
         # Perform extraction
-        self.log.info("Performing extraction ...")
-        with avalon.maya.maintained_selection():
-            cmds.select(members, noExpand=True)
+        self.log.debug("Performing extraction ...")
+        attribute_values = self.get_attr_values_from_data(
+            instance.data
+        )
+        with maintained_selection():
+            cmds.select(selection, noExpand=True)
             cmds.file(path,
                       force=True,
                       typ="mayaAscii" if self.scene_type == "ma" else "mayaBinary",  # noqa: E501
                       exportSelected=True,
-                      preserveReferences=True,
+                      preserveReferences=attribute_values[
+                          "preserve_references"
+                      ],
                       constructionHistory=True,
                       shader=True,
                       constraints=True,
@@ -82,4 +110,35 @@ class ExtractMayaSceneRaw(openpype.api.Extractor):
         }
         instance.data["representations"].append(representation)
 
-        self.log.info("Extracted instance '%s' to: %s" % (instance.name, path))
+        self.log.debug("Extracted instance '%s' to: %s" % (instance.name,
+                                                           path))
+
+    @staticmethod
+    def _get_loaded_containers(members):
+        # type: (list) -> list
+        refs_to_include = {
+            cmds.referenceQuery(node, referenceNode=True)
+            for node in members
+            if cmds.referenceQuery(node, isNodeReferenced=True)
+        }
+
+        members_with_refs = refs_to_include.union(members)
+
+        obj_sets = cmds.ls("*.id", long=True, type="objectSet", recursive=True,
+                           objectsOnly=True)
+
+        loaded_containers = []
+        for obj_set in obj_sets:
+
+            if not cmds.attributeQuery("id", node=obj_set, exists=True):
+                continue
+
+            id_attr = "{}.id".format(obj_set)
+            if cmds.getAttr(id_attr) != AVALON_CONTAINER_ID:
+                continue
+
+            set_content = set(cmds.sets(obj_set, query=True))
+            if set_content.intersection(members_with_refs):
+                loaded_containers.append(obj_set)
+
+        return loaded_containers

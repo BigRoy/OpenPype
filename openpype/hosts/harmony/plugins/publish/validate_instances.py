@@ -1,8 +1,11 @@
-import os
-
 import pyblish.api
-import openpype.api
-from avalon import harmony
+
+import openpype.hosts.harmony.api as harmony
+from openpype.pipeline import get_current_asset_name
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishXmlValidationError,
+)
 
 
 class ValidateInstanceRepair(pyblish.api.Action):
@@ -26,7 +29,7 @@ class ValidateInstanceRepair(pyblish.api.Action):
 
         for instance in instances:
             data = harmony.read(instance.data["setMembers"][0])
-            data["asset"] = os.environ["AVALON_ASSET"]
+            data["asset"] = get_current_asset_name()
             harmony.imprint(instance.data["setMembers"][0], data)
 
 
@@ -36,13 +39,20 @@ class ValidateInstance(pyblish.api.InstancePlugin):
     label = "Validate Instance"
     hosts = ["harmony"]
     actions = [ValidateInstanceRepair]
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
 
     def process(self, instance):
         instance_asset = instance.data["asset"]
-        current_asset = os.environ["AVALON_ASSET"]
+        current_asset = get_current_asset_name()
         msg = (
             "Instance asset is not the same as current asset:"
             f"\nInstance: {instance_asset}\nCurrent: {current_asset}"
         )
-        assert instance_asset == current_asset, msg
+
+        formatting_data = {
+            "found": instance_asset,
+            "expected": current_asset
+        }
+        if instance_asset != current_asset:
+            raise PublishXmlValidationError(self, msg,
+                                            formatting_data=formatting_data)

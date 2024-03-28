@@ -21,19 +21,23 @@
         },
         {
             "type": "label",
-            "label": "Additional Ftrack paths"
+            "label": "Additional Ftrack event handlers paths"
         },
         {
-            "type": "list",
+            "type": "path",
             "key": "ftrack_actions_path",
-            "label": "Action paths",
-            "object_type": "text"
+            "label": "User paths",
+            "use_label_wrap": true,
+            "multipath": true,
+            "multiplatform": true
         },
         {
-            "type": "list",
+            "type": "path",
             "key": "ftrack_events_path",
-            "label": "Event paths",
-            "object_type": "text"
+            "label": "Server paths",
+            "use_label_wrap": true,
+            "multipath": true,
+            "multiplatform": true
         },
         {
             "type": "separator"
@@ -46,8 +50,15 @@
             "is_group": true,
             "children": [
                 {
-                    "type": "label",
-                    "label": "Intent"
+                    "type": "boolean",
+                    "key": "allow_empty_intent",
+                    "label": "Allow empty intent"
+                },
+                {
+                    "type": "text",
+                    "key": "empty_intent_label",
+                    "label": "Empty item label",
+                    "placeholder": "< Not set >"
                 },
                 {
                     "type": "dict-modifiable",
@@ -60,7 +71,8 @@
                 {
                     "key": "default",
                     "type": "text",
-                    "label": "Default Intent"
+                    "label": "Default Intent",
+                    "placeholder": "< First available >"
                 },
                 {
                     "type": "separator"

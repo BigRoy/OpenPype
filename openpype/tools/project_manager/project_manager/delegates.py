@@ -1,8 +1,10 @@
-from Qt import QtWidgets, QtCore
+from qtpy import QtWidgets, QtCore
 
 from .widgets import (
     NameTextEdit,
-    FilterComboBox
+    FilterComboBox,
+    SpinBoxScrollFixed,
+    DoubleSpinBoxScrollFixed
 )
 from .multiselection_combobox import MultiSelectionComboBox
 
@@ -81,17 +83,20 @@ class NumberDelegate(QtWidgets.QStyledItemDelegate):
         decimals(int): How many decimal points can be used. Float will be used
             as value if is higher than 0.
     """
-    def __init__(self, minimum, maximum, decimals, *args, **kwargs):
+    def __init__(self, minimum, maximum, decimals, step, *args, **kwargs):
         super(NumberDelegate, self).__init__(*args, **kwargs)
         self.minimum = minimum
         self.maximum = maximum
         self.decimals = decimals
+        self.step = step
 
     def createEditor(self, parent, option, index):
         if self.decimals > 0:
-            editor = QtWidgets.QDoubleSpinBox(parent)
+            editor = DoubleSpinBoxScrollFixed(parent)
+            editor.setSingleStep(self.step)
+            editor.setDecimals(self.decimals)
         else:
-            editor = QtWidgets.QSpinBox(parent)
+            editor = SpinBoxScrollFixed(parent)
 
         editor.setObjectName("NumberEditor")
         # Set min/max
@@ -203,3 +208,9 @@ class ToolsDelegate(QtWidgets.QStyledItemDelegate):
 
     def setModelData(self, editor, model, index):
         model.setData(index, editor.value(), QtCore.Qt.EditRole)
+
+    def displayText(self, value, locale):
+        if value:
+            return ", ".join(value)
+        else:
+            return

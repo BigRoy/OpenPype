@@ -1,22 +1,35 @@
-from avalon import api, style, io
-from avalon.nuke import get_avalon_knob_data
 import nuke
 
+from openpype.client import (
+    get_version_by_id,
+    get_last_version_by_subset_id,
+)
+from openpype.pipeline import (
+    get_current_project_name,
+    load,
+    get_representation_path,
+)
+from openpype.hosts.nuke.api.lib import get_avalon_knob_data
+from openpype.hosts.nuke.api import (
+    containerise,
+    update_container,
+    viewer_update_and_undo_stop
+)
 
-class LinkAsGroup(api.Loader):
+
+class LinkAsGroup(load.LoaderPlugin):
     """Copy the published file to be pasted at the desired location"""
 
-    representations = ["nk"]
     families = ["workfile", "nukenodes"]
+    representations = ["*"]
+    extensions = {"nk"}
 
     label = "Load Precomp"
     order = 0
     icon = "file"
-    color = style.colors.alert
+    color = "#cc0000"
 
     def load(self, context, name, namespace, data):
-
-        from avalon.nuke import containerise
         # for k, v in context.items():
         #     log.info("key: `{}`, value: {}\n".format(k, v))
         version = context['version']
@@ -30,10 +43,8 @@ class LinkAsGroup(api.Loader):
         if namespace is None:
             namespace = context['asset']['name']
 
-        file = self.fname.replace("\\", "/")
-        self.log.info("file: {}\n".format(self.fname))
-
-        precomp_name = context["representation"]["context"]["subset"]
+        file = self.filepath_from_context(context).replace("\\", "/")
+        self.log.info("file: {}\n".format(file))
 
         self.log.info("versionData: {}\n".format(context["version"]["data"]))
 
@@ -49,7 +60,6 @@ class LinkAsGroup(api.Loader):
         }
         for k in add_keys:
             data_imprint.update({k: context["version"]['data'][k]})
-        data_imprint.update({"objectName": precomp_name})
 
         # group context is set to precomp, so back up one level.
         nuke.endGroup()
@@ -57,7 +67,9 @@ class LinkAsGroup(api.Loader):
         # P = nuke.nodes.LiveGroup("file {}".format(file))
         P = nuke.createNode(
             "Precomp",
-            "file {}".format(file))
+            "file {}".format(file),
+            inpanel=False
+        )
 
         # Set colorspace defined in version data
         colorspace = context["version"]["data"].get("colorspace", None)
@@ -67,7 +79,7 @@ class LinkAsGroup(api.Loader):
         P["useOutput"].setValue(True)
 
         with P:
-            # iterate trough all nodes in group node and find pype writes
+            # iterate through all nodes in group node and find pype writes
             writes = [n.name() for n in nuke.allNodes()
                       if n.Class() == "Group"
                       if get_avalon_knob_data(n)]
@@ -103,39 +115,27 @@ class LinkAsGroup(api.Loader):
         inputs:
 
         """
+        node = container["node"]
 
-        from avalon.nuke import (
-            update_container
-        )
-
-        node = nuke.toNode(container['objectName'])
-
-        root = api.get_representation_path(representation).replace("\\", "/")
+        root = get_representation_path(representation).replace("\\", "/")
 
         # Get start frame from version data
-        version = io.find_one({
-            "type": "version",
-            "_id": representation["parent"]
-        })
-
-        # get all versions in list
-        versions = io.find({
-            "type": "version",
-            "parent": version["parent"]
-        }).distinct('name')
-
-        max_version = max(versions)
+        project_name = get_current_project_name()
+        version_doc = get_version_by_id(project_name, representation["parent"])
+        last_version_doc = get_last_version_by_subset_id(
+            project_name, version_doc["parent"], fields=["_id"]
+        )
 
         updated_dict = {}
+        version_data = version_doc["data"]
         updated_dict.update({
             "representation": str(representation["_id"]),
-            "frameEnd": version["data"].get("frameEnd"),
-            "version": version.get("name"),
-            "colorspace": version["data"].get("colorspace"),
-            "source": version["data"].get("source"),
-            "handles": version["data"].get("handles"),
-            "fps": version["data"].get("fps"),
-            "author": version["data"].get("author")
+            "frameEnd": version_data.get("frameEnd"),
+            "version": version_doc.get("name"),
+            "colorspace": version_data.get("colorspace"),
+            "source": version_data.get("source"),
+            "fps": version_data.get("fps"),
+            "author": version_data.get("author")
         })
 
         # Update the imprinted representation
@@ -147,15 +147,15 @@ class LinkAsGroup(api.Loader):
         node["file"].setValue(root)
 
         # change color of node
-        if version.get("name") not in [max_version]:
-            node["tile_color"].setValue(int("0xd84f20ff", 16))
+        if version_doc["_id"] == last_version_doc["_id"]:
+            color_value = "0xff0ff0ff"
         else:
-            node["tile_color"].setValue(int("0xff0ff0ff", 16))
+            color_value = "0xd84f20ff"
+        node["tile_color"].setValue(int(color_value, 16))
 
-        self.log.info("udated to version: {}".format(version.get("name")))
+        self.log.info("updated to version: {}".format(version_doc.get("name")))
 
     def remove(self, container):
-        from avalon.nuke import viewer_update_and_undo_stop
-        node = nuke.toNode(container['objectName'])
+        node = container["node"]
         with viewer_update_and_undo_stop():
             nuke.delete(node)

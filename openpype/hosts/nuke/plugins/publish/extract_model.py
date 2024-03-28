@@ -1,15 +1,19 @@
-import nuke
 import os
-import pyblish.api
-import openpype.api
-from avalon.nuke import lib as anlib
 from pprint import pformat
+import nuke
+import pyblish.api
+
+from openpype.pipeline import publish
+from openpype.hosts.nuke.api.lib import (
+    maintained_selection,
+    select_nodes
+)
 
 
-class ExtractModel(openpype.api.Extractor):
-    """ 3D model exctractor
+class ExtractModel(publish.Extractor):
+    """ 3D model extractor
     """
-    label = 'Exctract Model'
+    label = 'Extract Model'
     order = pyblish.api.ExtractorOrder
     families = ["model"]
     hosts = ["nuke"]
@@ -29,12 +33,13 @@ class ExtractModel(openpype.api.Extractor):
         first_frame = int(nuke.root()["first_frame"].getValue())
         last_frame = int(nuke.root()["last_frame"].getValue())
 
-        self.log.info("instance.data: `{}`".format(
+        self.log.debug("instance.data: `{}`".format(
             pformat(instance.data)))
 
-        rm_nodes = list()
-        model_node = instance[0]
-        self.log.info("Crating additional nodes")
+        rm_nodes = []
+        model_node = instance.data["transientData"]["node"]
+
+        self.log.debug("Creating additional nodes for Extract Model")
         subset = instance.data["subset"]
         staging_dir = self.staging_dir(instance)
 
@@ -49,9 +54,9 @@ class ExtractModel(openpype.api.Extractor):
         filename = subset + ".{}".format(extension)
         file_path = os.path.join(staging_dir, filename).replace("\\", "/")
 
-        with anlib.maintained_selection():
+        with maintained_selection():
             # select model node
-            anlib.select_nodes([model_node])
+            select_nodes([model_node])
 
             # create write geo node
             wg_n = nuke.createNode("WriteGeo")
@@ -71,7 +76,7 @@ class ExtractModel(openpype.api.Extractor):
             for n in rm_nodes:
                 nuke.delete(n)
 
-            self.log.info(file_path)
+            self.log.debug("Filepath: {}".format(file_path))
 
         # create representation data
         if "representations" not in instance.data:
@@ -99,5 +104,5 @@ class ExtractModel(openpype.api.Extractor):
             "frameEndHandle": last_frame,
         })
 
-        self.log.info("Extracted instance '{0}' to: {1}".format(
+        self.log.debug("Extracted instance '{0}' to: {1}".format(
             instance.name, file_path))

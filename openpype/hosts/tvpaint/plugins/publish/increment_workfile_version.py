@@ -1,7 +1,7 @@
 import pyblish.api
 
-from avalon.tvpaint import workio
-from openpype.api import version_up
+from openpype.lib import version_up
+from openpype.pipeline import registered_host
 
 
 class IncrementWorkfileVersion(pyblish.api.ContextPlugin):
@@ -15,8 +15,9 @@ class IncrementWorkfileVersion(pyblish.api.ContextPlugin):
     def process(self, context):
 
         assert all(result["success"] for result in context.data["results"]), (
-            "Publishing not succesfull so version is not increased.")
+            "Publishing not successful so version is not increased.")
 
+        host = registered_host()
         path = context.data["currentFile"]
-        workio.save_file(version_up(path))
+        host.save_workfile(version_up(path))
         self.log.info('Incrementing workfile version')

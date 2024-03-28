@@ -1,16 +1,27 @@
-import getpass
 import os
 
-from avalon.tvpaint import lib, pipeline, get_current_workfile_context
-from avalon import api, io
-from openpype.lib import (
-    get_workfile_template_key_from_context,
-    get_workdir_data
+from openpype.lib import StringTemplate
+from openpype.pipeline import (
+    registered_host,
+    get_current_context,
+    Anatomy,
 )
-from openpype.api import Anatomy
+from openpype.pipeline.workfile import (
+    get_workfile_template_key_from_context,
+    get_last_workfile_with_version,
+)
+from openpype.pipeline.template_data import get_template_data_with_names
+from openpype.hosts.tvpaint.api import plugin
+from openpype.hosts.tvpaint.api.lib import (
+    execute_george_through_file,
+)
+from openpype.hosts.tvpaint.api.pipeline import (
+    get_current_workfile_context,
+)
+from openpype.pipeline.version_start import get_versioning_start
 
 
-class LoadWorkfile(pipeline.Loader):
+class LoadWorkfile(plugin.Loader):
     """Load workfile."""
 
     families = ["workfile"]
@@ -21,82 +32,84 @@ class LoadWorkfile(pipeline.Loader):
     def load(self, context, name, namespace, options):
         # Load context of current workfile as first thing
         #   - which context and extension has
-        host = api.registered_host()
-        current_file = host.current_file()
-
-        context = get_current_workfile_context()
-
-        filepath = self.fname.replace("\\", "/")
+        filepath = self.filepath_from_context(context)
+        filepath = filepath.replace("\\", "/")
 
         if not os.path.exists(filepath):
             raise FileExistsError(
                 "The loaded file does not exist. Try downloading it first."
             )
 
+        host = registered_host()
+        current_file = host.get_current_workfile()
+        work_context = get_current_workfile_context()
+
         george_script = "tv_LoadProject '\"'\"{}\"'\"'".format(
             filepath
         )
-        lib.execute_george_through_file(george_script)
+        execute_george_through_file(george_script)
 
         # Save workfile.
         host_name = "tvpaint"
-        asset_name = context.get("asset")
-        task_name = context.get("task")
-        # Far cases when there is workfile without context
+        project_name = work_context.get("project")
+        asset_name = work_context.get("asset")
+        task_name = work_context.get("task")
+        # Far cases when there is workfile without work_context
         if not asset_name:
-            asset_name = io.Session["AVALON_ASSET"]
-            task_name = io.Session["AVALON_TASK"]
-
-        project_doc = io.find_one({
-            "type": "project"
-        })
-        asset_doc = io.find_one({
-            "type": "asset",
-            "name": asset_name
-        })
-        project_name = project_doc["name"]
+            context = get_current_context()
+            project_name = context["project_name"]
+            asset_name = context["asset_name"]
+            task_name = context["task_name"]
 
         template_key = get_workfile_template_key_from_context(
             asset_name,
             task_name,
             host_name,
-            project_name=project_name,
-            dbcon=io
+            project_name=project_name
         )
         anatomy = Anatomy(project_name)
 
-        data = get_workdir_data(project_doc, asset_doc, task_name, host_name)
+        data = get_template_data_with_names(
+            project_name, asset_name, task_name, host_name
+        )
         data["root"] = anatomy.roots
-        data["user"] = getpass.getuser()
 
-        template = anatomy.templates[template_key]["file"]
+        file_template = anatomy.templates[template_key]["file"]
 
         # Define saving file extension
+        extensions = host.get_workfile_extensions()
         if current_file:
             # Match the extension of current file
             _, extension = os.path.splitext(current_file)
         else:
             # Fall back to the first extension supported for this host.
-            extension = host.file_extensions()[0]
+            extension = extensions[0]
 
         data["ext"] = extension
 
-        work_root = api.format_template_with_optional_keys(
-            data, anatomy.templates[template_key]["folder"]
+        folder_template = anatomy.templates[template_key]["folder"]
+        work_root = StringTemplate.format_strict_template(
+            folder_template, data
         )
-        version = api.last_workfile_with_version(
-            work_root, template, data, host.file_extensions()
+        version = get_last_workfile_with_version(
+            work_root, file_template, data, extensions
         )[1]
 
         if version is None:
-            version = 1
+            version = get_versioning_start(
+                project_name,
+                "tvpaint",
+                task_name=task_name,
+                task_type=data["task"]["type"],
+                family="workfile"
+            )
         else:
             version += 1
 
         data["version"] = version
 
-        path = os.path.join(
-            work_root,
-            api.format_template_with_optional_keys(data, template)
+        filename = StringTemplate.format_strict_template(
+            file_template, data
         )
-        host.save_file(path)
+        path = os.path.join(work_root, filename)
+        host.save_workfile(path)

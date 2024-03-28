@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "OpenPype"
-version = "3.7.0-nightly.11" # OpenPype
+version = "3.18.8" # OpenPype
 description = "Open VFX and Animation pipeline with support."
 authors = ["OpenPype Team <info@openpype.io>"]
 license = "MIT License"
@@ -28,30 +28,35 @@ packages = [
 openpype = 'start:boot'
 
 [tool.poetry.dependencies]
-python = "3.7.*"
+python = ">=3.9.1,<3.10"
 aiohttp = "^3.7"
 aiohttp_json_rpc = "*" # TVPaint server
 acre = { git = "https://github.com/pypeclub/acre.git" }
-opentimelineio = { version = "0.14.0.dev1", source = "openpype" }
-appdirs = "^1.4.3"
+appdirs = { git = "https://github.com/ActiveState/appdirs.git", branch = "master" }
 blessed = "^1.17" # openpype terminal formatting
 coolname = "*"
 clique = "1.6.*"
-Click = "^7"
+Click = "7.1.2"
 dnspython = "^2.1.0"
-ftrack-python-api = "2.0.*"
+ftrack-python-api = "^2.3.3"
+arrow = "^0.17"
+shotgun_api3 = {git = "https://github.com/shotgunsoftware/python-api.git", rev = "v3.3.3"}
+gazu = "^0.9.3"
 google-api-python-client = "^1.12.8" # sync server google support (should be separate?)
-jsonschema = "^3.2.0"
+jsonschema = "^2.6.0"
 keyring = "^22.0.1"
 log4mongo = "^1.7"
 pathlib2= "^2.3.5" # deadline submit publish job only (single place, maybe not needed?)
-Pillow = "^8.3" # only used for slates prototype
-pyblish-base = "^1.8.8"
+Pillow = "^9.0" # used in TVPaint and for slates
+pyblish-base = "^1.8.11"
 pynput = "^1.7.2" # idle manager in tray
 pymongo = "^3.11.2"
 "Qt.py" = "^1.3.3"
+QtPy = "^2.3.0"
+qtawesome = "0.7.3"
 speedcopy = "^2.1"
 six = "^1.15"
+urllib3 = "1.26.16"
 semver = "^2.13.0" # for version resolution
 wsrpc_aiohttp = "^3.1.1" # websocket server
 pywin32 = { version = "301", markers = "sys_platform == 'win32'" }
@@ -62,33 +67,40 @@ jinxed = [
 python3-xlib = { version="*", markers = "sys_platform == 'linux'"}
 enlighten = "^1.9.0"
 slack-sdk = "^3.6.0"
-requests = "2.25.1"
+requests = "^2.25.1"
 pysftp = "^0.2.9"
 dropbox = "^11.20.0"
-
+aiohttp-middlewares = "^2.0.0"
+Unidecode = "1.2.0"
+cryptography = "39.0.0"
 
 [tool.poetry.dev-dependencies]
-flake8 = "^3.7"
-autopep8 = "^1.4"
+flake8 = "^6.0"
+autopep8 = "^2.0"
 coverage = "*"
-cx_freeze = { version = "6.7", source = "openpype" }
+cx_freeze = "6.12.0"
 GitPython = "^3.1.17"
 jedi = "^0.13"
-Jinja2 = "^2.11"
-pycodestyle = "^2.5.0"
-pydocstyle = "^3.0.0"
+Jinja2 = "^3"
+markupsafe = "2.0.1"
+pycodestyle = "*"
+pydocstyle = "*"
+linkify-it-py = "^2.0.0"
+myst-parser = "^0.18.1"
 pylint = "^2.4.4"
 pytest = "^6.1"
 pytest-cov = "*"
 pytest-print = "*"
-Sphinx = "*"
-sphinx-rtd-theme = "*"
-sphinxcontrib-websupport = "*"
-sphinx-qt-documentation = "*"
+Sphinx = "^5.3"
+m2r2 = "^0.3.3.post2"
+sphinx-autoapi = "^2.0.1"
+sphinxcontrib-napoleon = "^0.7"
+revitron-sphinx-theme = { git = "https://github.com/revitron/revitron-sphinx-theme.git", branch = "master" }
 recommonmark = "*"
 wheel = "*"
 enlighten = "*"  # cool terminal progress bars
 toml = "^0.10.2" # for parsing pyproject.toml
+pre-commit = "*"
 
 [tool.poetry.urls]
 "Bug Tracker" = "https://github.com/pypeclub/openpype/issues"
@@ -97,19 +109,36 @@ toml = "^0.10.2" # for parsing pyproject.toml
 [[tool.poetry.source]]
 name = "openpype"
 url = "https://distribute.openpype.io/wheels/"
+secondary = true
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [openpype]
-
-[openpype.pyside2]
 # note: in here we can use pip version specifiers as this is installed with pip until
 # Poetry will support custom location (-t flag for pip)
 # https://pip.pypa.io/en/stable/cli/pip_install/#requirement-specifiers
-version = "==5.15.2"
+[openpype.qtbinding.windows]
+package = "PySide2"
+version = "5.15.2"
 
+[openpype.qtbinding.darwin]
+package = "PySide6"
+version = "6.4.3"
+
+[openpype.qtbinding.linux]
+package = "PySide2"
+version = "5.15.2"
+
+# Python dependencies that will be available only in runtime of
+#   OpenPype process - do not interfere with DCCs dependencies
+[openpype.runtime-deps]
+opencolorio = "2.2.1"
+opentimelineio = "0.14.1"
+
+# TODO: we will need to handle different linux flavours here and
+#       also different macos versions too.
 [openpype.thirdparty.ffmpeg.windows]
 url = "https://distribute.openpype.io/thirdparty/ffmpeg-4.4-windows.zip"
 hash = "dd51ba29d64ee238e7c4c3c7301b19754c3f0ee2e2a729c20a0e2789e72db925"
@@ -123,13 +152,37 @@ url = "https://distribute.openpype.io/thirdparty/ffmpeg-4.4-macos.tgz"
 hash = "95f43568338c275f80dc0cab1e1836a2e2270f856f0e7b204440d881dd74fbdb"
 
 [openpype.thirdparty.oiio.windows]
-url = "https://distribute.openpype.io/thirdparty/oiio_tools-2.2.0-windows.zip"
-hash = "fd2e00278e01e85dcee7b4a6969d1a16f13016ec16700fb0366dbb1b1f3c37ad"
+url = "https://distribute.openpype.io/thirdparty/oiio_tools-2.3.10-windows.zip"
+hash = "b9950f5d2fa3720b52b8be55bacf5f56d33f9e029d38ee86534995f3d8d253d2"
 
 [openpype.thirdparty.oiio.linux]
-url = "https://distribute.openpype.io/thirdparty/oiio_tools-2.2.12-linux.tgz"
-hash = "de63a8bf7f6c45ff59ecafeba13123f710c2cbc1783ec9e0b938e980d4f5c37f"
+url = "https://distribute.openpype.io/thirdparty/oiio_tools-2.2.20-linux-centos7.tgz"
+hash = "3894dec7e4e521463891a869586850e8605f5fd604858b674c87323bf33e273d"
 
-[openpype.thirdparty.oiio.darwin]
-url = "https://distribute.openpype.io/thirdparty/oiio-2.2.0-darwin.tgz"
-hash = "sha256:..."
+[openpype.thirdparty.ocioconfig]
+url = "https://distribute.openpype.io/thirdparty/OpenColorIO-Configs-1.0.2.zip"
+hash = "4ac17c1f7de83465e6f51dd352d7117e07e765b66d00443257916c828e35b6ce"
+
+[tool.pyright]
+include = [
+    "igniter",
+    "openpype",
+    "repos",
+    "vendor"
+]
+exclude = [
+    "**/node_modules",
+    "**/__pycache__"
+]
+ignore = ["website", "docs", ".git"]
+
+reportMissingImports = true
+reportMissingTypeStubs = false
+
+[tool.poetry.extras]
+docs = ["Sphinx", "furo", "sphinxcontrib-napoleon"]
+
+[tool.pydocstyle]
+inherit = false
+convetion = "google"
+match = "(?!test_).*\\.py"

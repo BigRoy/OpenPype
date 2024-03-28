@@ -1,9 +1,10 @@
 import os
 
 import maya.cmds as cmds
-
 import pyblish.api
-import openpype.api
+
+from openpype.pipeline.publish import (
+    PublishValidationError, ValidatePipelineOrder)
 
 
 def is_subdir(path, root_dir):
@@ -28,20 +29,23 @@ def is_subdir(path, root_dir):
 class ValidateSceneSetWorkspace(pyblish.api.ContextPlugin):
     """Validate the scene is inside the currently set Maya workspace"""
 
-    order = openpype.api.ValidatePipelineOrder
+    order = ValidatePipelineOrder
     hosts = ['maya']
-    category = 'scene'
-    version = (0, 1, 0)
     label = 'Maya Workspace Set'
 
     def process(self, context):
 
         scene_name = cmds.file(query=True, sceneName=True)
         if not scene_name:
-            raise RuntimeError("Scene hasn't been saved. Workspace can't be "
-                               "validated.")
+            raise PublishValidationError(
+                "Scene hasn't been saved. Workspace can't be validated.")
 
         root_dir = cmds.workspace(query=True, rootDirectory=True)
 
         if not is_subdir(scene_name, root_dir):
-            raise RuntimeError("Maya workspace is not set correctly.")
+            raise PublishValidationError(
+                "Maya workspace is not set correctly.\n\n"
+                f"Current workfile `{scene_name}` is not inside the "
+                "current Maya project root directory `{root_dir}`.\n\n"
+                "Please use Workfile app to re-save."
+            )

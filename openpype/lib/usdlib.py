@@ -8,7 +8,8 @@ except ImportError:
     # Allow to fall back on Multiverse 6.3.0+ pxr usd library
     from mvpxr import Usd, UsdGeom, Sdf, Kind
 
-from avalon import io, api
+from openpype.client import get_project, get_asset_by_name
+from openpype.pipeline import Anatomy, get_current_project_name
 
 log = logging.getLogger(__name__)
 
@@ -125,7 +126,8 @@ def create_model(filename, asset, variant_subsets):
 
     """
 
-    asset_doc = io.find_one({"name": asset, "type": "asset"})
+    project_name = get_current_project_name()
+    asset_doc = get_asset_by_name(project_name, asset)
     assert asset_doc, "Asset not found: %s" % asset
 
     variants = []
@@ -175,7 +177,8 @@ def create_shade(filename, asset, variant_subsets):
 
     """
 
-    asset_doc = io.find_one({"name": asset, "type": "asset"})
+    project_name = get_current_project_name()
+    asset_doc = get_asset_by_name(project_name, asset)
     assert asset_doc, "Asset not found: %s" % asset
 
     variants = []
@@ -210,7 +213,8 @@ def create_shade_variation(filename, asset, model_variant, shade_variants):
 
     """
 
-    asset_doc = io.find_one({"name": asset, "type": "asset"})
+    project_name = get_current_project_name()
+    asset_doc = get_asset_by_name(project_name, asset)
     assert asset_doc, "Asset not found: %s" % asset
 
     variants = []
@@ -310,22 +314,29 @@ def get_usd_master_path(asset, subset, representation):
 
     """
 
-    project = io.find_one(
-        {"type": "project"}, projection={"config.template.publish": True}
+    project_name = get_current_project_name()
+    anatomy = Anatomy(project_name)
+    project_doc = get_project(
+        project_name,
+        fields=["name", "data.code"]
     )
-    template = project["config"]["template"]["publish"]
 
-    if isinstance(asset, dict) and "silo" in asset and "name" in asset:
+    if isinstance(asset, dict) and "name" in asset:
         # Allow explicitly passing asset document
         asset_doc = asset
     else:
-        asset_doc = io.find_one({"name": asset, "type": "asset"})
+        asset_doc = get_asset_by_name(project_name, asset, fields=["name"])
 
-    path = template.format(
-        **{
-            "root": api.registered_root(),
-            "project": api.Session["AVALON_PROJECT"],
-            "silo": asset_doc["silo"],
+    template_obj = anatomy.templates_obj["publish"]["path"]
+    path = template_obj.format_strict(
+        {
+            "project": {
+                "name": project_name,
+                "code": project_doc.get("data", {}).get("code")
+            },
+            "folder": {
+                "name": asset_doc["name"],
+            },
             "asset": asset_doc["name"],
             "subset": subset,
             "representation": representation,

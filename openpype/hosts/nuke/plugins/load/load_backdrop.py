@@ -1,20 +1,38 @@
-from avalon import api, style, io
 import nuke
 import nukescripts
-from openpype.hosts.nuke.api import lib as pnlib
-from avalon.nuke import lib as anlib
-from avalon.nuke import containerise, update_container
 
-class LoadBackdropNodes(api.Loader):
+from openpype.client import (
+    get_version_by_id,
+    get_last_version_by_subset_id,
+)
+from openpype.pipeline import (
+    load,
+    get_current_project_name,
+    get_representation_path,
+)
+from openpype.hosts.nuke.api.lib import (
+    find_free_space_to_paste_nodes,
+    maintained_selection,
+    reset_selection,
+    select_nodes,
+    get_avalon_knob_data,
+    set_avalon_knob_data
+)
+from openpype.hosts.nuke.api.command import viewer_update_and_undo_stop
+from openpype.hosts.nuke.api import containerise, update_container
+
+
+class LoadBackdropNodes(load.LoaderPlugin):
     """Loading Published Backdrop nodes (workfile, nukenodes)"""
 
-    representations = ["nk"]
     families = ["workfile", "nukenodes"]
+    representations = ["*"]
+    extensions = {"nk"}
 
-    label = "Iport Nuke Nodes"
+    label = "Import Nuke Nodes"
     order = 0
     icon = "eye"
-    color = style.colors.light
+    color = "white"
     node_color = "0x7533c1ff"
 
     def load(self, context, name, namespace, data):
@@ -36,28 +54,24 @@ class LoadBackdropNodes(api.Loader):
         version = context['version']
         version_data = version.get("data", {})
         vname = version.get("name", None)
-        first = version_data.get("frameStart", None)
-        last = version_data.get("frameEnd", None)
         namespace = namespace or context['asset']['name']
         colorspace = version_data.get("colorspace", None)
         object_name = "{}_{}".format(name, namespace)
 
         # prepare data for imprinting
         # add additional metadata from the version to imprint to Avalon knob
-        add_keys = ["frameStart", "frameEnd", "handleStart", "handleEnd",
-                    "source", "author", "fps"]
+        add_keys = ["source", "author", "fps"]
 
-        data_imprint = {"frameStart": first,
-                        "frameEnd": last,
-                        "version": vname,
-                        "colorspaceInput": colorspace,
-                        "objectName": object_name}
+        data_imprint = {
+            "version": vname,
+            "colorspaceInput": colorspace
+        }
 
         for k in add_keys:
             data_imprint.update({k: version_data[k]})
 
         # getting file path
-        file = self.fname.replace("\\", "/")
+        file = self.filepath_from_context(context).replace("\\", "/")
 
         # adding nodes to node graph
         # just in case we are in group lets jump out of it
@@ -66,12 +80,12 @@ class LoadBackdropNodes(api.Loader):
         # Get mouse position
         n = nuke.createNode("NoOp")
         xcursor, ycursor = (n.xpos(), n.ypos())
-        anlib.reset_selection()
+        reset_selection()
         nuke.delete(n)
 
         bdn_frame = 50
 
-        with anlib.maintained_selection():
+        with maintained_selection():
 
             # add group from nk
             nuke.nodePaste(file)
@@ -81,11 +95,13 @@ class LoadBackdropNodes(api.Loader):
             nodes = nuke.selectedNodes()
 
             # get pointer position in DAG
-            xpointer, ypointer = pnlib.find_free_space_to_paste_nodes(nodes, direction="right", offset=200+bdn_frame)
+            xpointer, ypointer = find_free_space_to_paste_nodes(
+                nodes, direction="right", offset=200 + bdn_frame
+            )
 
             # reset position to all nodes and replace inputs and output
             for n in nodes:
-                anlib.reset_selection()
+                reset_selection()
                 xpos = (n.xpos() - xcursor) + xpointer
                 ypos = (n.ypos() - ycursor) + ypointer
                 n.setXYpos(xpos, ypos)
@@ -108,7 +124,7 @@ class LoadBackdropNodes(api.Loader):
                         d.setInput(index, dot)
 
                     # remove Input node
-                    anlib.reset_selection()
+                    reset_selection()
                     nuke.delete(n)
                     continue
 
@@ -127,15 +143,15 @@ class LoadBackdropNodes(api.Loader):
                         dot.setInput(0, dep)
 
                     # remove Input node
-                    anlib.reset_selection()
+                    reset_selection()
                     nuke.delete(n)
                     continue
                 else:
                     new_nodes.append(n)
 
             # reselect nodes with new Dot instead of Inputs and Output
-            anlib.reset_selection()
-            anlib.select_nodes(new_nodes)
+            reset_selection()
+            select_nodes(new_nodes)
             # place on backdrop
             bdn = nukescripts.autoBackdrop()
 
@@ -173,33 +189,28 @@ class LoadBackdropNodes(api.Loader):
 
         # get main variables
         # Get version from io
-        version = io.find_one({
-            "type": "version",
-            "_id": representation["parent"]
-        })
-        # get corresponding node
-        GN = nuke.toNode(container['objectName'])
+        project_name = get_current_project_name()
+        version_doc = get_version_by_id(project_name, representation["parent"])
 
-        file = api.get_representation_path(representation).replace("\\", "/")
-        context = representation["context"]
+        # get corresponding node
+        GN = container["node"]
+
+        file = get_representation_path(representation).replace("\\", "/")
+
         name = container['name']
-        version_data = version.get("data", {})
-        vname = version.get("name", None)
-        first = version_data.get("frameStart", None)
-        last = version_data.get("frameEnd", None)
+        version_data = version_doc.get("data", {})
+        vname = version_doc.get("name", None)
         namespace = container['namespace']
         colorspace = version_data.get("colorspace", None)
         object_name = "{}_{}".format(name, namespace)
 
-        add_keys = ["frameStart", "frameEnd", "handleStart", "handleEnd",
-                    "source", "author", "fps"]
+        add_keys = ["source", "author", "fps"]
 
-        data_imprint = {"representation": str(representation["_id"]),
-                        "frameStart": first,
-                        "frameEnd": last,
-                        "version": vname,
-                        "colorspaceInput": colorspace,
-                        "objectName": object_name}
+        data_imprint = {
+            "representation": str(representation["_id"]),
+            "version": vname,
+            "colorspaceInput": colorspace,
+        }
 
         for k in add_keys:
             data_imprint.update({k: version_data[k]})
@@ -208,34 +219,32 @@ class LoadBackdropNodes(api.Loader):
         # just in case we are in group lets jump out of it
         nuke.endGroup()
 
-        with anlib.maintained_selection():
+        with maintained_selection():
             xpos = GN.xpos()
             ypos = GN.ypos()
-            avalon_data = anlib.get_avalon_knob_data(GN)
+            avalon_data = get_avalon_knob_data(GN)
             nuke.delete(GN)
             # add group from nk
             nuke.nodePaste(file)
 
             GN = nuke.selectedNode()
-            anlib.set_avalon_knob_data(GN, avalon_data)
+            set_avalon_knob_data(GN, avalon_data)
             GN.setXYpos(xpos, ypos)
             GN["name"].setValue(object_name)
 
         # get all versions in list
-        versions = io.find({
-            "type": "version",
-            "parent": version["parent"]
-        }).distinct('name')
-
-        max_version = max(versions)
+        last_version_doc = get_last_version_by_subset_id(
+            project_name, version_doc["parent"], fields=["_id"]
+        )
 
         # change color of node
-        if version.get("name") not in [max_version]:
-            GN["tile_color"].setValue(int("0xd88467ff", 16))
+        if version_doc["_id"] == last_version_doc["_id"]:
+            color_value = self.node_color
         else:
-            GN["tile_color"].setValue(int(self.node_color, 16))
+            color_value = "0xd88467ff"
+        GN["tile_color"].setValue(int(color_value, 16))
 
-        self.log.info("udated to version: {}".format(version.get("name")))
+        self.log.info("updated to version: {}".format(version_doc.get("name")))
 
         return update_container(GN, data_imprint)
 
@@ -243,7 +252,6 @@ class LoadBackdropNodes(api.Loader):
         self.update(container, representation)
 
     def remove(self, container):
-        from avalon.nuke import viewer_update_and_undo_stop
-        node = nuke.toNode(container['objectName'])
+        node = container["node"]
         with viewer_update_and_undo_stop():
             nuke.delete(node)

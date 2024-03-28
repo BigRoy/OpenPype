@@ -1,25 +1,7 @@
-import os
-
 import pyblish.api
 
 
-def get_comp_render_range(comp):
-    """Return comp's start and end render range."""
-    comp_attrs = comp.GetAttrs()
-    start = comp_attrs["COMPN_RenderStart"]
-    end = comp_attrs["COMPN_RenderEnd"]
-
-    # Whenever render ranges are undefined fall back
-    # to the comp's global start and end
-    if start == -1000000000:
-        start = comp_attrs["COMPN_GlobalEnd"]
-    if end == -1000000000:
-        end = comp_attrs["COMPN_GlobalStart"]
-
-    return start, end
-
-
-class CollectInstances(pyblish.api.ContextPlugin):
+class CollectInstanceData(pyblish.api.InstancePlugin):
     """Collect Fusion saver instances
 
     This additionally stores the Comp start and end render range in the
@@ -28,72 +10,92 @@ class CollectInstances(pyblish.api.ContextPlugin):
     """
 
     order = pyblish.api.CollectorOrder
-    label = "Collect Instances"
+    label = "Collect Instances Data"
     hosts = ["fusion"]
 
-    def process(self, context):
+    def process(self, instance):
         """Collect all image sequence tools"""
 
-        from avalon.fusion.lib import get_frame_path
+        context = instance.context
 
-        comp = context.data["currentComp"]
+        # Include creator attributes directly as instance data
+        creator_attributes = instance.data["creator_attributes"]
+        instance.data.update(creator_attributes)
 
-        # Get all savers in the comp
-        tools = comp.GetToolList(False).values()
-        savers = [tool for tool in tools if tool.ID == "Saver"]
+        frame_range_source = creator_attributes.get("frame_range_source")
+        instance.data["frame_range_source"] = frame_range_source
 
-        start, end = get_comp_render_range(comp)
-        context.data["frameStart"] = int(start)
-        context.data["frameEnd"] = int(end)
+        # get asset frame ranges to all instances
+        # render family instances `asset_db` render target
+        start = context.data["frameStart"]
+        end = context.data["frameEnd"]
+        handle_start = context.data["handleStart"]
+        handle_end = context.data["handleEnd"]
+        start_with_handle = start - handle_start
+        end_with_handle = end + handle_end
 
-        for tool in savers:
-            path = tool["Clip"][comp.TIME_UNDEFINED]
+        # conditions for render family instances
+        if frame_range_source == "render_range":
+            # set comp render frame ranges
+            start = context.data["renderFrameStart"]
+            end = context.data["renderFrameEnd"]
+            handle_start = 0
+            handle_end = 0
+            start_with_handle = start
+            end_with_handle = end
 
-            tool_attrs = tool.GetAttrs()
-            active = not tool_attrs["TOOLB_PassThrough"]
+        if frame_range_source == "comp_range":
+            comp_start = context.data["compFrameStart"]
+            comp_end = context.data["compFrameEnd"]
+            render_start = context.data["renderFrameStart"]
+            render_end = context.data["renderFrameEnd"]
+            # set comp frame ranges
+            start = render_start
+            end = render_end
+            handle_start = render_start - comp_start
+            handle_end = comp_end - render_end
+            start_with_handle = comp_start
+            end_with_handle = comp_end
 
-            if not path:
-                self.log.warning("Skipping saver because it "
-                                 "has no path set: {}".format(tool.Name))
-                continue
+        frame = instance.data["creator_attributes"].get("frame")
+        # explicitly publishing only single frame
+        if frame is not None:
+            frame = int(frame)
 
-            filename = os.path.basename(path)
-            head, padding, tail = get_frame_path(filename)
-            ext = os.path.splitext(path)[1]
-            assert tail == ext, ("Tail does not match %s" % ext)
-            subset = head.rstrip("_. ")   # subset is head of the filename
+            start = frame
+            end = frame
+            handle_start = 0
+            handle_end = 0
+            start_with_handle = frame
+            end_with_handle = frame
 
-            # Include start and end render frame in label
-            label = "{subset} ({start}-{end})".format(subset=subset,
-                                                      start=int(start),
-                                                      end=int(end))
+        # Include start and end render frame in label
+        subset = instance.data["subset"]
+        label = (
+            "{subset} ({start}-{end}) [{handle_start}-{handle_end}]"
+        ).format(
+            subset=subset,
+            start=int(start),
+            end=int(end),
+            handle_start=int(handle_start),
+            handle_end=int(handle_end)
+        )
 
-            instance = context.create_instance(subset)
-            instance.data.update({
-                "asset": os.environ["AVALON_ASSET"],  # todo: not a constant
-                "subset": subset,
-                "path": path,
-                "outputDir": os.path.dirname(path),
-                "ext": ext,  # todo: should be redundant
-                "label": label,
-                "frameStart": context.data["frameStart"],
-                "frameEnd": context.data["frameEnd"],
-                "fps": context.data["fps"],
-                "families": ["render", "review", "ftrack"],
-                "family": "render",
-                "active": active,
-                "publish": active   # backwards compatibility
-            })
+        instance.data.update({
+            "label": label,
 
-            instance.append(tool)
+            # todo: Allow custom frame range per instance
+            "frameStart": start,
+            "frameEnd": end,
+            "frameStartHandle": start_with_handle,
+            "frameEndHandle": end_with_handle,
+            "handleStart": handle_start,
+            "handleEnd": handle_end,
+            "fps": context.data["fps"],
+        })
 
-            self.log.info("Found: \"%s\" " % path)
-
-        # Sort/grouped by family (preserving local index)
-        context[:] = sorted(context, key=self.sort_by_family)
-
-        return context
-
-    def sort_by_family(self, instance):
-        """Sort by family"""
-        return instance.data.get("families", instance.data.get("family"))
+        # Add review family if the instance is marked as 'review'
+        # This could be done through a 'review' Creator attribute.
+        if instance.data.get("review", False):
+            self.log.debug("Adding review family..")
+            instance.data["families"].append("review")

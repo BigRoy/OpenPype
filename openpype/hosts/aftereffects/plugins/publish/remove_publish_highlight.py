@@ -1,8 +1,8 @@
-import openpype.api
-from avalon import aftereffects
+from openpype.pipeline import publish
+from openpype.hosts.aftereffects.api import get_stub
 
 
-class RemovePublishHighlight(openpype.api.Extractor):
+class RemovePublishHighlight(publish.Extractor):
     """Clean utf characters which are not working in DL
 
         Published compositions are marked with unicode icon which causes
@@ -10,13 +10,13 @@ class RemovePublishHighlight(openpype.api.Extractor):
         rendering, add it later back to avoid confusion.
     """
 
-    order = openpype.api.Extractor.order - 0.49  # just before save
+    order = publish.Extractor.order - 0.49  # just before save
     label = "Clean render comp"
     hosts = ["aftereffects"]
     families = ["render.farm"]
 
     def process(self, instance):
-        stub = aftereffects.stub()
+        stub = get_stub()
         self.log.debug("instance::{}".format(instance.data))
         item = instance.data
         comp_name = item["comp_name"].replace(stub.PUBLISH_ICON, '')

@@ -1,17 +1,20 @@
 import os
+import re
+
 import nuke
-from avalon.nuke import lib as anlib
-from openpype.api import resources
+
+from openpype import resources
+from qtpy import QtWidgets
 
 
 def set_context_favorites(favorites=None):
-    """ Addig favorite folders to nuke's browser
+    """ Adding favorite folders to nuke's browser
 
-    Argumets:
+    Arguments:
         favorites (dict): couples of {name:path}
     """
     favorites = favorites or {}
-    icon_path = resources.get_resource("icons", "folder-favorite3.png")
+    icon_path = resources.get_resource("icons", "folder-favorite.png")
     for name, path in favorites.items():
         nuke.addFavoriteDir(
             name,
@@ -48,14 +51,17 @@ def gizmo_is_nuke_default(gizmo):
     return gizmo.filename().startswith(plug_dir)
 
 
-def bake_gizmos_recursively(in_group=nuke.Root()):
+def bake_gizmos_recursively(in_group=None):
     """Converting a gizmo to group
 
-    Argumets:
+    Arguments:
         is_group (nuke.Node)[optonal]: group node or all nodes
     """
+    from .lib import maintained_selection
+    if in_group is None:
+        in_group = nuke.Root()
     # preserve selection after all is done
-    with anlib.maintained_selection():
+    with maintained_selection():
         # jump to the group
         with in_group:
             for node in nuke.allNodes():
@@ -79,3 +85,60 @@ def bake_gizmos_recursively(in_group=nuke.Root()):
 
                 if node.Class() == "Group":
                     bake_gizmos_recursively(node)
+
+
+def colorspace_exists_on_node(node, colorspace_name):
+    """ Check if colorspace exists on node
+
+    Look through all options in the colorspace knob, and see if we have an
+    exact match to one of the items.
+
+    Args:
+        node (nuke.Node): nuke node object
+        colorspace_name (str): color profile name
+
+    Returns:
+        bool: True if exists
+    """
+    try:
+        colorspace_knob = node['colorspace']
+    except ValueError:
+        # knob is not available on input node
+        return False
+
+    return colorspace_name in get_colorspace_list(colorspace_knob)
+
+
+def get_colorspace_list(colorspace_knob):
+    """Get available colorspace profile names
+
+    Args:
+        colorspace_knob (nuke.Knob): nuke knob object
+
+    Returns:
+        list: list of strings names of profiles
+    """
+    results = []
+
+    # This pattern is to match with roles which uses an indentation and
+    # parentheses with original colorspace. The value returned from the
+    # colorspace is the string before the indentation, so we'll need to
+    # convert the values to match with value returned from the knob,
+    # ei. knob.value().
+    pattern = r".*\t.* \(.*\)"
+    for colorspace in nuke.getColorspaceList(colorspace_knob):
+        match = re.search(pattern, colorspace)
+        if match:
+            results.append(colorspace.split("\t", 1)[0])
+        else:
+            results.append(colorspace)
+
+    return results
+
+
+def is_headless():
+    """
+    Returns:
+        bool: headless
+    """
+    return QtWidgets.QApplication.instance() is None

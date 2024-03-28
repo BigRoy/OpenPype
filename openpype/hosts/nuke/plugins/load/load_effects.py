@@ -1,19 +1,35 @@
-from avalon import api, style, io
-import nuke
 import json
 from collections import OrderedDict
+import nuke
+import six
+
+from openpype.client import (
+    get_version_by_id,
+    get_last_version_by_subset_id,
+)
+from openpype.pipeline import (
+    load,
+    get_current_project_name,
+    get_representation_path,
+)
+from openpype.hosts.nuke.api import (
+    containerise,
+    update_container,
+    viewer_update_and_undo_stop
+)
 
 
-class LoadEffects(api.Loader):
+class LoadEffects(load.LoaderPlugin):
     """Loading colorspace soft effect exported from nukestudio"""
 
-    representations = ["effectJson"]
     families = ["effect"]
+    representations = ["*"]
+    extensions = {"json"}
 
     label = "Load Effects - nodes"
     order = 0
     icon = "cc"
-    color = style.colors.light
+    color = "white"
     ignore_attr = ["useLifetime"]
 
 
@@ -30,9 +46,6 @@ class LoadEffects(api.Loader):
         Returns:
             nuke node: containerised nuke node object
         """
-        # import dependencies
-        from avalon.nuke import containerise
-
         # get main variables
         version = context['version']
         version_data = version.get("data", {})
@@ -49,22 +62,23 @@ class LoadEffects(api.Loader):
         add_keys = ["frameStart", "frameEnd", "handleStart", "handleEnd",
                     "source", "author", "fps"]
 
-        data_imprint = {"frameStart": first,
-                        "frameEnd": last,
-                        "version": vname,
-                        "colorspaceInput": colorspace,
-                        "objectName": object_name}
+        data_imprint = {
+            "frameStart": first,
+            "frameEnd": last,
+            "version": vname,
+            "colorspaceInput": colorspace,
+        }
 
         for k in add_keys:
             data_imprint.update({k: version_data[k]})
 
         # getting file path
-        file = self.fname.replace("\\", "/")
+        file = self.filepath_from_context(context).replace("\\", "/")
 
         # getting data from json file with unicode conversion
         with open(file, "r") as f:
             json_f = {self.byteify(key): self.byteify(value)
-                      for key, value in json.load(f).iteritems()}
+                      for key, value in json.load(f).items()}
 
         # get correct order of nodes by positions on track and subtrack
         nodes_order = self.reorder_nodes(json_f)
@@ -75,7 +89,9 @@ class LoadEffects(api.Loader):
 
         GN = nuke.createNode(
             "Group",
-            "name {}_1".format(object_name))
+            "name {}_1".format(object_name),
+            inpanel=False
+        )
 
         # adding content to the group node
         with GN:
@@ -138,23 +154,18 @@ class LoadEffects(api.Loader):
         inputs:
 
         """
-
-        from avalon.nuke import (
-            update_container
-        )
         # get main variables
         # Get version from io
-        version = io.find_one({
-            "type": "version",
-            "_id": representation["parent"]
-        })
-        # get corresponding node
-        GN = nuke.toNode(container['objectName'])
+        project_name = get_current_project_name()
+        version_doc = get_version_by_id(project_name, representation["parent"])
 
-        file = api.get_representation_path(representation).replace("\\", "/")
+        # get corresponding node
+        GN = container["node"]
+
+        file = get_representation_path(representation).replace("\\", "/")
         name = container['name']
-        version_data = version.get("data", {})
-        vname = version.get("name", None)
+        version_data = version_doc.get("data", {})
+        vname = version_doc.get("name", None)
         first = version_data.get("frameStart", None)
         last = version_data.get("frameEnd", None)
         workfile_first_frame = int(nuke.root()["first_frame"].getValue())
@@ -165,12 +176,13 @@ class LoadEffects(api.Loader):
         add_keys = ["frameStart", "frameEnd", "handleStart", "handleEnd",
                     "source", "author", "fps"]
 
-        data_imprint = {"representation": str(representation["_id"]),
-                        "frameStart": first,
-                        "frameEnd": last,
-                        "version": vname,
-                        "colorspaceInput": colorspace,
-                        "objectName": object_name}
+        data_imprint = {
+            "representation": str(representation["_id"]),
+            "frameStart": first,
+            "frameEnd": last,
+            "version": vname,
+            "colorspaceInput": colorspace
+        }
 
         for k in add_keys:
             data_imprint.update({k: version_data[k]})
@@ -184,7 +196,7 @@ class LoadEffects(api.Loader):
         # getting data from json file with unicode conversion
         with open(file, "r") as f:
             json_f = {self.byteify(key): self.byteify(value)
-                      for key, value in json.load(f).iteritems()}
+                      for key, value in json.load(f).items()}
 
         # get correct order of nodes by positions on track and subtrack
         nodes_order = self.reorder_nodes(json_f)
@@ -202,7 +214,7 @@ class LoadEffects(api.Loader):
             pre_node = nuke.createNode("Input")
             pre_node["name"].setValue("rgb")
 
-            for ef_name, ef_val in nodes_order.items():
+            for _, ef_val in nodes_order.items():
                 node = nuke.createNode(ef_val["class"])
                 for k, v in ef_val["node"].items():
                     if k in self.ignore_attr:
@@ -239,21 +251,19 @@ class LoadEffects(api.Loader):
         # try to find parent read node
         self.connect_read_node(GN, namespace, json_f["assignTo"])
 
-        # get all versions in list
-        versions = io.find({
-            "type": "version",
-            "parent": version["parent"]
-        }).distinct('name')
-
-        max_version = max(versions)
+        last_version_doc = get_last_version_by_subset_id(
+            project_name, version_doc["parent"], fields=["_id"]
+        )
 
         # change color of node
-        if version.get("name") not in [max_version]:
-            GN["tile_color"].setValue(int("0xd84f20ff", 16))
+        if version_doc["_id"] == last_version_doc["_id"]:
+            color_value = "0x3469ffff"
         else:
-            GN["tile_color"].setValue(int("0x3469ffff", 16))
+            color_value = "0xd84f20ff"
 
-        self.log.info("udated to version: {}".format(version.get("name")))
+        GN["tile_color"].setValue(int(color_value, 16))
+
+        self.log.info("updated to version: {}".format(version_doc.get("name")))
 
     def connect_read_node(self, group_node, asset, subset):
         """
@@ -314,7 +324,7 @@ class LoadEffects(api.Loader):
     def byteify(self, input):
         """
         Converts unicode strings to strings
-        It goes trought all dictionary
+        It goes through all dictionary
 
         Arguments:
             input (dict/str): input
@@ -326,11 +336,11 @@ class LoadEffects(api.Loader):
 
         if isinstance(input, dict):
             return {self.byteify(key): self.byteify(value)
-                    for key, value in input.iteritems()}
+                    for key, value in input.items()}
         elif isinstance(input, list):
             return [self.byteify(element) for element in input]
-        elif isinstance(input, unicode):
-            return input.encode('utf-8')
+        elif isinstance(input, six.text_type):
+            return str(input)
         else:
             return input
 
@@ -338,7 +348,6 @@ class LoadEffects(api.Loader):
         self.update(container, representation)
 
     def remove(self, container):
-        from avalon.nuke import viewer_update_and_undo_stop
-        node = nuke.toNode(container['objectName'])
+        node = container["node"]
         with viewer_update_and_undo_stop():
             nuke.delete(node)

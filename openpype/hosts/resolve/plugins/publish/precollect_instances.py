@@ -1,8 +1,15 @@
-import pyblish
-from openpype.hosts import resolve
-
-# # developer reload modules
 from pprint import pformat
+
+import pyblish
+
+from openpype.hosts.resolve.api.lib import (
+    get_current_timeline_items,
+    get_timeline_item_pype_tag,
+    publish_clip_color,
+    get_publish_attribute,
+    get_otio_clip_instance_data,
+)
+from openpype import AYON_SERVER_ENABLED
 
 
 class PrecollectInstances(pyblish.api.ContextPlugin):
@@ -14,8 +21,8 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
 
     def process(self, context):
         otio_timeline = context.data["otioTimeline"]
-        selected_timeline_items = resolve.get_current_timeline_items(
-            filter=True, selecting_color=resolve.publish_clip_color)
+        selected_timeline_items = get_current_timeline_items(
+            filter=True, selecting_color=publish_clip_color)
 
         self.log.info(
             "Processing enabled track items: {}".format(
@@ -23,11 +30,11 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
 
         for timeline_item_data in selected_timeline_items:
 
-            data = dict()
+            data = {}
             timeline_item = timeline_item_data["clip"]["item"]
 
             # get pype tag data
-            tag_data = resolve.get_timeline_item_pype_tag(timeline_item)
+            tag_data = get_timeline_item_pype_tag(timeline_item)
             self.log.debug(f"__ tag_data: {pformat(tag_data)}")
 
             if not tag_data:
@@ -54,27 +61,28 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
                 if k not in ("id", "applieswhole", "label")
             })
 
-            asset = tag_data["asset"]
+            if AYON_SERVER_ENABLED:
+                asset = tag_data["folder_path"]
+            else:
+                asset = tag_data["asset_name"]
+
             subset = tag_data["subset"]
 
-            # insert family into families
-            family = tag_data["family"]
-            families = [str(f) for f in tag_data["families"]]
-            families.insert(0, str(family))
-
             data.update({
-                "name": "{} {} {}".format(asset, subset, families),
+                "name": "{}_{}".format(asset, subset),
+                "label": "{} {}".format(asset, subset),
                 "asset": asset,
                 "item": timeline_item,
-                "families": families,
-                "publish": resolve.get_publish_attribute(timeline_item),
+                "publish": get_publish_attribute(timeline_item),
                 "fps": context.data["fps"],
                 "handleStart": handle_start,
-                "handleEnd": handle_end
+                "handleEnd": handle_end,
+                "newAssetPublishing": True,
+                "families": ["clip"],
             })
 
             # otio clip data
-            otio_data = resolve.get_otio_clip_instance_data(
+            otio_data = get_otio_clip_instance_data(
                 otio_timeline, timeline_item_data) or {}
             data.update(otio_data)
 
@@ -128,12 +136,13 @@ class PrecollectInstances(pyblish.api.ContextPlugin):
         family = "shot"
 
         data.update({
-            "name": "{} {} {}".format(asset, subset, family),
+            "name": "{}_{}".format(asset, subset),
+            "label": "{} {}".format(asset, subset),
             "subset": subset,
             "asset": asset,
             "family": family,
             "families": [],
-            "publish": resolve.get_publish_attribute(timeline_item)
+            "publish": get_publish_attribute(timeline_item)
         })
 
         context.create_instance(**data)

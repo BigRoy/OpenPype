@@ -1,10 +1,11 @@
 import pyblish.api
 
-from avalon import io
-
-import openpype.api
 import openpype.hosts.maya.api.action
+from openpype.client import get_assets
 from openpype.hosts.maya.api import lib
+from openpype.pipeline import legacy_io
+from openpype.pipeline.publish import (
+    PublishValidationError, ValidatePipelineOrder)
 
 
 class ValidateNodeIdsInDatabase(pyblish.api.InstancePlugin):
@@ -18,7 +19,7 @@ class ValidateNodeIdsInDatabase(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidatePipelineOrder
+    order = ValidatePipelineOrder
     label = 'Node Ids in Database'
     hosts = ['maya']
     families = ["*"]
@@ -29,9 +30,9 @@ class ValidateNodeIdsInDatabase(pyblish.api.InstancePlugin):
     def process(self, instance):
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Found asset IDs which are not related to "
-                               "current project in instance: "
-                               "`%s`" % instance.name)
+            raise PublishValidationError(
+                ("Found asset IDs which are not related to "
+                 "current project in instance: `{}`").format(instance.name))
 
     @classmethod
     def get_invalid(cls, instance):
@@ -43,8 +44,12 @@ class ValidateNodeIdsInDatabase(pyblish.api.InstancePlugin):
                                                       nodes=instance[:])
 
         # check ids against database ids
-        db_asset_ids = io.find({"type": "asset"}).distinct("_id")
-        db_asset_ids = set(str(i) for i in db_asset_ids)
+        project_name = legacy_io.active_project()
+        asset_docs = get_assets(project_name, fields=["_id"])
+        db_asset_ids = {
+            str(asset_doc["_id"])
+            for asset_doc in asset_docs
+        }
 
         # Get all asset IDs
         for node in id_required_nodes:

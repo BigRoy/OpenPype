@@ -1,15 +1,30 @@
-import re
 import nuke
 
-from avalon.vendor import qargparse
-from avalon import api, io
+import qargparse
 
+from openpype.client import (
+    get_version_by_id,
+    get_last_version_by_subset_id,
+)
+from openpype.pipeline import (
+    load,
+    get_current_project_name,
+    get_representation_path,
+)
 from openpype.hosts.nuke.api.lib import (
     get_imageio_input_colorspace
 )
+from openpype.hosts.nuke.api import (
+    containerise,
+    update_container,
+    viewer_update_and_undo_stop
+)
+from openpype.lib.transcoding import (
+    IMAGE_EXTENSIONS
+)
 
 
-class LoadImage(api.Loader):
+class LoadImage(load.LoaderPlugin):
     """Load still image into Nuke"""
 
     families = [
@@ -21,12 +36,18 @@ class LoadImage(api.Loader):
         "review",
         "image"
     ]
-    representations = ["exr", "dpx", "jpg", "jpeg", "png", "psd", "tiff"]
+    representations = ["*"]
+    extensions = set(
+        ext.lstrip(".") for ext in IMAGE_EXTENSIONS
+    )
 
     label = "Load Image"
     order = -10
     icon = "image"
     color = "white"
+
+    # Loaded from settings
+    _representations = []
 
     node_name_template = "{class_name}_{ext}"
 
@@ -43,15 +64,13 @@ class LoadImage(api.Loader):
 
     @classmethod
     def get_representations(cls):
-        return cls.representations + cls._representations
+        return cls._representations or cls.representations
 
     def load(self, context, name, namespace, options):
-        from avalon.nuke import (
-            containerise,
-            viewer_update_and_undo_stop
-        )
         self.log.info("__ options: `{}`".format(options))
-        frame_number = options.get("frame_number", 1)
+        frame_number = options.get(
+            "frame_number", int(nuke.root()["first_frame"].getValue())
+        )
 
         version = context['version']
         version_data = version.get("data", {})
@@ -67,7 +86,7 @@ class LoadImage(api.Loader):
         if namespace is None:
             namespace = context['asset']['name']
 
-        file = self.fname
+        file = self.filepath_from_context(context)
 
         if not file:
             repr_id = context["representation"]["_id"]
@@ -77,7 +96,8 @@ class LoadImage(api.Loader):
 
         file = file.replace("\\", "/")
 
-        repr_cont = context["representation"]["context"]
+        representation = context["representation"]
+        repr_cont = representation["context"]
         frame = repr_cont.get("frame")
         if frame:
             padding = len(frame)
@@ -85,22 +105,16 @@ class LoadImage(api.Loader):
                 frame,
                 format(frame_number, "0{}".format(padding)))
 
-        name_data = {
-            "asset": repr_cont["asset"],
-            "subset": repr_cont["subset"],
-            "representation": context["representation"]["name"],
-            "ext": repr_cont["representation"],
-            "id": context["representation"]["_id"],
-            "class_name": self.__class__.__name__
-        }
-
-        read_name = self.node_name_template.format(**name_data)
+        read_name = self._get_node_name(representation)
 
         # Create the Loader with the filename path set
         with viewer_update_and_undo_stop():
             r = nuke.createNode(
                 "Read",
-                "name {}".format(read_name))
+                "name {}".format(read_name),
+                inpanel=False
+            )
+
             r["file"].setValue(file)
 
             # Set colorspace defined in version data
@@ -132,8 +146,6 @@ class LoadImage(api.Loader):
                     data_imprint.update(
                         {k: context["version"]['data'].get(k, str(None))})
 
-            data_imprint.update({"objectName": read_name})
-
             r["tile_color"].setValue(int("0x4ecd25ff", 16))
 
             return containerise(r,
@@ -154,19 +166,14 @@ class LoadImage(api.Loader):
         inputs:
 
         """
-
-        from avalon.nuke import (
-            update_container
-        )
-
-        node = nuke.toNode(container["objectName"])
+        node = container["node"]
         frame_number = node["first"].value()
 
         assert node.Class() == "Read", "Must be Read"
 
         repr_cont = representation["context"]
 
-        file = api.get_representation_path(representation)
+        file = get_representation_path(representation)
 
         if not file:
             repr_id = representation["_id"]
@@ -184,20 +191,13 @@ class LoadImage(api.Loader):
                 format(frame_number, "0{}".format(padding)))
 
         # Get start frame from version data
-        version = io.find_one({
-            "type": "version",
-            "_id": representation["parent"]
-        })
+        project_name = get_current_project_name()
+        version_doc = get_version_by_id(project_name, representation["parent"])
+        last_version_doc = get_last_version_by_subset_id(
+            project_name, version_doc["parent"], fields=["_id"]
+        )
 
-        # get all versions in list
-        versions = io.find({
-            "type": "version",
-            "parent": version["parent"]
-        }).distinct('name')
-
-        max_version = max(versions)
-
-        version_data = version.get("data", {})
+        version_data = version_doc.get("data", {})
 
         last = first = int(frame_number)
 
@@ -213,7 +213,7 @@ class LoadImage(api.Loader):
             "representation": str(representation["_id"]),
             "frameStart": str(first),
             "frameEnd": str(last),
-            "version": str(version.get("name")),
+            "version": str(version_doc.get("name")),
             "colorspace": version_data.get("colorspace"),
             "source": version_data.get("source"),
             "fps": str(version_data.get("fps")),
@@ -221,24 +221,36 @@ class LoadImage(api.Loader):
         })
 
         # change color of node
-        if version.get("name") not in [max_version]:
-            node["tile_color"].setValue(int("0xd84f20ff", 16))
+        if version_doc["_id"] == last_version_doc["_id"]:
+            color_value = "0x4ecd25ff"
         else:
-            node["tile_color"].setValue(int("0x4ecd25ff", 16))
+            color_value = "0xd84f20ff"
+        node["tile_color"].setValue(int(color_value, 16))
 
         # Update the imprinted representation
         update_container(
             node,
             updated_dict
         )
-        self.log.info("udated to version: {}".format(version.get("name")))
+        self.log.info("updated to version: {}".format(version_doc.get("name")))
 
     def remove(self, container):
-
-        from avalon.nuke import viewer_update_and_undo_stop
-
-        node = nuke.toNode(container['objectName'])
+        node = container["node"]
         assert node.Class() == "Read", "Must be Read"
 
         with viewer_update_and_undo_stop():
             nuke.delete(node)
+
+    def _get_node_name(self, representation):
+
+        repre_cont = representation["context"]
+        name_data = {
+            "asset": repre_cont["asset"],
+            "subset": repre_cont["subset"],
+            "representation": representation["name"],
+            "ext": repre_cont["representation"],
+            "id": representation["_id"],
+            "class_name": self.__class__.__name__
+        }
+
+        return self.node_name_template.format(**name_data)

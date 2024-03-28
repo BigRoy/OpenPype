@@ -1,5 +1,15 @@
-from avalon import api
-from avalon.houdini import pipeline, lib
+from openpype.pipeline import (
+    load,
+    get_representation_path,
+)
+from openpype.hosts.houdini.api import pipeline
+
+from openpype.hosts.houdini.api.lib import (
+    set_camera_resolution,
+    get_camera_from_container
+)
+
+import hou
 
 
 ARCHIVE_EXPRESSION = ('__import__("_alembic_hom_extensions")'
@@ -22,7 +32,15 @@ def transfer_non_default_values(src, dest, ignore=None):
     channel expression and ignore certain Parm types.
 
     """
-    import hou
+
+    ignore_types = {
+        hou.parmTemplateType.Toggle,
+        hou.parmTemplateType.Menu,
+        hou.parmTemplateType.Button,
+        hou.parmTemplateType.FolderSet,
+        hou.parmTemplateType.Separator,
+        hou.parmTemplateType.Label,
+    }
 
     src.updateParmStates()
 
@@ -59,14 +77,6 @@ def transfer_non_default_values(src, dest, ignore=None):
             continue
 
         # Ignore folders, separators, etc.
-        ignore_types = {
-            hou.parmTemplateType.Toggle,
-            hou.parmTemplateType.Menu,
-            hou.parmTemplateType.Button,
-            hou.parmTemplateType.FolderSet,
-            hou.parmTemplateType.Separator,
-            hou.parmTemplateType.Label,
-        }
         if parm.parmTemplate().type() in ignore_types:
             continue
 
@@ -74,8 +84,8 @@ def transfer_non_default_values(src, dest, ignore=None):
         dest_parm.setFromParm(parm)
 
 
-class CameraLoader(api.Loader):
-    """Specific loader of Alembic for the avalon.animation family"""
+class CameraLoader(load.LoaderPlugin):
+    """Load camera from an Alembic file"""
 
     families = ["camera"]
     label = "Load Camera (abc)"
@@ -87,43 +97,32 @@ class CameraLoader(api.Loader):
 
     def load(self, context, name=None, namespace=None, data=None):
 
-        import os
-        import hou
-
         # Format file name, Houdini only wants forward slashes
-        file_path = os.path.normpath(self.fname)
-        file_path = file_path.replace("\\", "/")
+        file_path = self.filepath_from_context(context).replace("\\", "/")
 
         # Get the root node
         obj = hou.node("/obj")
 
-        # Create a unique name
-        counter = 1
-        asset_name = context["asset"]["name"]
-
-        namespace = namespace or asset_name
-        formatted = "{}_{}".format(namespace, name) if namespace else name
-        node_name = "{0}_{1:03d}".format(formatted, counter)
-
-        children = lib.children_as_string(hou.node("/obj"))
-        while node_name in children:
-            counter += 1
-            node_name = "{0}_{1:03d}".format(formatted, counter)
+        # Define node name
+        namespace = namespace if namespace else context["asset"]["name"]
+        node_name = "{}_{}".format(namespace, name) if namespace else name
 
         # Create a archive node
-        container = self.create_and_connect(obj, "alembicarchive", node_name)
+        node = self.create_and_connect(obj, "alembicarchive", node_name)
 
         # TODO: add FPS of project / asset
-        container.setParms({"fileName": file_path,
-                            "channelRef": True})
+        node.setParms({"fileName": file_path, "channelRef": True})
 
         # Apply some magic
-        container.parm("buildHierarchy").pressButton()
-        container.moveToGoodPosition()
+        node.parm("buildHierarchy").pressButton()
+        node.moveToGoodPosition()
 
         # Create an alembic xform node
-        nodes = [container]
+        nodes = [node]
 
+        camera = get_camera_from_container(node)
+        self._match_maya_render_mask(camera)
+        set_camera_resolution(camera, asset_doc=context["asset"])
         self[:] = nodes
 
         return pipeline.containerise(node_name,
@@ -138,7 +137,7 @@ class CameraLoader(api.Loader):
         node = container["node"]
 
         # Update the file path
-        file_path = api.get_representation_path(representation)
+        file_path = get_representation_path(representation)
         file_path = file_path.replace("\\", "/")
 
         # Update attributes
@@ -148,14 +147,14 @@ class CameraLoader(api.Loader):
         # Store the cam temporarily next to the Alembic Archive
         # so that we can preserve parm values the user set on it
         # after build hierarchy was triggered.
-        old_camera = self._get_camera(node)
+        old_camera = get_camera_from_container(node)
         temp_camera = old_camera.copyTo(node.parent())
 
         # Rebuild
         node.parm("buildHierarchy").pressButton()
 
         # Apply values to the new camera
-        new_camera = self._get_camera(node)
+        new_camera = get_camera_from_container(node)
         transfer_non_default_values(temp_camera,
                                     new_camera,
                                     # The hidden uniform scale attribute
@@ -163,21 +162,15 @@ class CameraLoader(api.Loader):
                                     # "icon_scale" just skip that completely
                                     ignore={"scale"})
 
+        self._match_maya_render_mask(new_camera)
+        set_camera_resolution(new_camera)
+
         temp_camera.destroy()
 
     def remove(self, container):
 
         node = container["node"]
         node.destroy()
-
-    def _get_camera(self, node):
-        import hou
-        cameras = node.recursiveGlob("*",
-                                     filter=hou.nodeTypeFilter.ObjCamera,
-                                     include_subnets=False)
-
-        assert len(cameras) == 1, "Camera instance must have only one camera"
-        return cameras[0]
 
     def create_and_connect(self, node, node_type, name=None):
         """Create a node within a node which and connect it to the input
@@ -198,3 +191,21 @@ class CameraLoader(api.Loader):
 
         new_node.moveToGoodPosition()
         return new_node
+
+    def _match_maya_render_mask(self, camera):
+        """Workaround to match Maya render mask in Houdini"""
+
+        # print("Setting match maya render mask ")
+        parm = camera.parm("aperture")
+        expression = parm.expression()
+        expression = expression.replace("return ", "aperture = ")
+        expression += """
+# Match maya render mask (logic from Houdini's own FBX importer)
+node = hou.pwd()
+resx = node.evalParm('resx')
+resy = node.evalParm('resy')
+aspect = node.evalParm('aspect')
+aperture *= min(1, (resx / resy * aspect) / 1.5)
+return aperture
+"""
+        parm.setExpression(expression, language=hou.exprLanguage.Python)

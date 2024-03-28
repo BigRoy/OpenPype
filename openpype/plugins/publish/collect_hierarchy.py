@@ -1,5 +1,4 @@
 import pyblish.api
-import avalon.api as avalon
 
 
 class CollectHierarchy(pyblish.api.ContextPlugin):
@@ -13,30 +12,27 @@ class CollectHierarchy(pyblish.api.ContextPlugin):
     """
 
     label = "Collect Hierarchy"
-    order = pyblish.api.CollectorOrder - 0.47
+    order = pyblish.api.CollectorOrder - 0.076
     families = ["shot"]
-    hosts = ["resolve", "hiero"]
+    hosts = ["resolve", "hiero", "flame"]
 
     def process(self, context):
         temp_context = {}
-        project_name = avalon.Session["AVALON_PROJECT"]
+        project_name = context.data["projectName"]
         final_context = {}
         final_context[project_name] = {}
         final_context[project_name]['entity_type'] = 'Project'
 
         for instance in context:
-            self.log.info("Processing instance: `{}` ...".format(instance))
+            self.log.debug("Processing instance: `{}` ...".format(instance))
 
             # shot data dict
             shot_data = {}
-            family = instance.data.get("family")
-
-            # filter out all unepropriate instances
-            if not instance.data["publish"]:
-                continue
+            family = instance.data["family"]
+            families = instance.data["families"]
 
             # exclude other families then self.families with intersection
-            if not set(self.families).intersection([family]):
+            if not set(self.families).intersection(set(families + [family])):
                 continue
 
             # exclude if not masterLayer True
@@ -60,13 +56,14 @@ class CollectHierarchy(pyblish.api.ContextPlugin):
                 "frameEnd": instance.data["frameEnd"],
                 "clipIn": instance.data["clipIn"],
                 "clipOut": instance.data["clipOut"],
-                'fps': instance.context.data["fps"],
+                "fps": instance.data["fps"],
                 "resolutionWidth": instance.data["resolutionWidth"],
                 "resolutionHeight": instance.data["resolutionHeight"],
                 "pixelAspect": instance.data["pixelAspect"]
             }
-
-            actual = {instance.data["asset"]: shot_data}
+            # Split by '/' for AYON where asset is a path
+            name = instance.data["asset"].split("/")[-1]
+            actual = {name: shot_data}
 
             for parent in reversed(instance.data["parents"]):
                 next_dict = {}

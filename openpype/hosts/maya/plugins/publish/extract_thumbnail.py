@@ -1,17 +1,12 @@
 import os
-import contextlib
 import glob
+import tempfile
 
-import capture
-
+from openpype.pipeline import publish
 from openpype.hosts.maya.api import lib
-import openpype.api
-
-from maya import cmds
-import pymel.core as pm
 
 
-class ExtractThumbnail(openpype.api.Extractor):
+class ExtractThumbnail(publish.Extractor):
     """Extract viewport thumbnail.
 
     Takes review camera and creates a thumbnail based on viewport
@@ -24,31 +19,37 @@ class ExtractThumbnail(openpype.api.Extractor):
     families = ["review"]
 
     def process(self, instance):
-        self.log.info("Extracting capture..")
+        self.log.debug("Extracting thumbnail..")
 
-        camera = instance.data['review_camera']
+        camera = instance.data["review_camera"]
 
-        capture_preset = ""
-        capture_preset = (
-            instance.context.data["project_settings"]['maya']['publish']['ExtractPlayblast']['capture_preset']
+        task_data = instance.data["anatomyData"].get("task", {})
+        capture_preset = lib.get_capture_preset(
+            task_data.get("name"),
+            task_data.get("type"),
+            instance.data["subset"],
+            instance.context.data["project_settings"],
+            self.log
         )
-        override_viewport_options = (
-            capture_preset['Viewport Options']['override_viewport_options']
+
+        # Create temp directory for thumbnail
+        # - this is to avoid "override" of source file
+        dst_staging = tempfile.mkdtemp(prefix="pyblish_tmp_thumbnail")
+        self.log.debug(
+            "Create temp directory {} for thumbnail".format(dst_staging)
         )
+        # Store new staging to cleanup paths
+        filename = instance.name
+        path = os.path.join(dst_staging, filename)
 
-        try:
-            preset = lib.load_capture_preset(data=capture_preset)
-        except KeyError as ke:
-            self.log.error('Error loading capture presets: {}'.format(str(ke)))
-            preset = {}
-        self.log.info('Using viewport preset: {}'.format(preset))
+        self.log.debug("Outputting images to %s" % path)
 
-        # preset["off_screen"] =  False
+        preset = lib.generate_capture_preset(
+            instance, camera, path,
+            start=1, end=1,
+            capture_preset=capture_preset)
 
-        preset['camera'] = camera
-        preset['start_frame'] = instance.data["frameStart"]
-        preset['end_frame'] = instance.data["frameStart"]
-        preset['camera_options'] = {
+        preset["camera_options"].update({
             "displayGateMask": False,
             "displayResolution": False,
             "displayFilmGate": False,
@@ -58,58 +59,23 @@ class ExtractThumbnail(openpype.api.Extractor):
             "displayFilmPivot": False,
             "displayFilmOrigin": False,
             "overscan": 1.0,
-            "depthOfField": cmds.getAttr("{0}.depthOfField".format(camera)),
-        }
+        })
+        path = lib.render_capture_preset(preset)
 
-        stagingDir = self.staging_dir(instance)
-        filename = "{0}".format(instance.name)
-        path = os.path.join(stagingDir, filename)
-
-        self.log.info("Outputting images to %s" % path)
-
-        preset['filename'] = path
-        preset['overwrite'] = True
-
-        pm.refresh(f=True)
-
-        refreshFrameInt = int(pm.playbackOptions(q=True, minTime=True))
-        pm.currentTime(refreshFrameInt - 1, edit=True)
-        pm.currentTime(refreshFrameInt, edit=True)
-
-        # Isolate view is requested by having objects in the set besides a
-        # camera.
-        if preset.pop("isolate_view", False) and instance.data.get("isolate"):
-            preset["isolate"] = instance.data["setMembers"]
-
-        with maintained_time():
-            filename = preset.get("filename", "%TEMP%")
-
-            # Force viewer to False in call to capture because we have our own
-            # viewer opening call to allow a signal to trigger between
-            # playblast and viewer
-            preset['viewer'] = False
-
-            # Update preset with current panel setting
-            # if override_viewport_options is turned off
-            if not override_viewport_options:
-                panel_preset = capture.parse_active_view()
-                preset.update(panel_preset)
-
-            path = capture.capture(**preset)
-            playblast = self._fix_playblast_output_path(path)
+        playblast = self._fix_playblast_output_path(path)
 
         _, thumbnail = os.path.split(playblast)
 
-        self.log.info("file list  {}".format(thumbnail))
+        self.log.debug("file list  {}".format(thumbnail))
 
         if "representations" not in instance.data:
             instance.data["representations"] = []
 
         representation = {
-            'name': 'thumbnail',
-            'ext': 'jpg',
-            'files': thumbnail,
-            "stagingDir": stagingDir,
+            "name": "thumbnail",
+            "ext": "jpg",
+            "files": thumbnail,
+            "stagingDir": dst_staging,
             "thumbnail": True
         }
         instance.data["representations"].append(representation)
@@ -152,12 +118,3 @@ class ExtractThumbnail(openpype.api.Extractor):
             filepath = max(files, key=os.path.getmtime)
 
         return filepath
-
-
-@contextlib.contextmanager
-def maintained_time():
-    ct = cmds.currentTime(query=True)
-    try:
-        yield
-    finally:
-        cmds.currentTime(ct, edit=True)

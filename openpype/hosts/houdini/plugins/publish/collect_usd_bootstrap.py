@@ -1,6 +1,10 @@
 import pyblish.api
 
-from avalon import io
+from openpype.client import (
+    get_subset_by_name,
+    get_asset_by_name,
+    get_asset_name_identifier,
+)
 import openpype.lib.usdlib as usdlib
 
 
@@ -50,8 +54,10 @@ class CollectUsdBootstrap(pyblish.api.InstancePlugin):
 
         self.log.debug("Add bootstrap for: %s" % bootstrap)
 
-        asset = io.find_one({"name": instance.data["asset"], "type": "asset"})
-        assert asset, "Asset must exist: %s" % asset
+        project_name = instance.context.data["projectName"]
+        asset_name = instance.data["asset"]
+        asset_doc = get_asset_by_name(project_name, asset_name)
+        assert asset_doc, "Asset must exist: %s" % asset_name
 
         # Check which are not about to be created and don't exist yet
         required = {"shot": ["usdShot"], "asset": ["usdAsset"]}.get(bootstrap)
@@ -66,19 +72,21 @@ class CollectUsdBootstrap(pyblish.api.InstancePlugin):
                 required += list(layers)
 
         self.log.debug("Checking required bootstrap: %s" % required)
-        for subset in required:
-            if self._subset_exists(instance, subset, asset):
+        for subset_name in required:
+            if self._subset_exists(
+                project_name, instance, subset_name, asset_doc
+            ):
                 continue
 
             self.log.debug(
                 "Creating {0} USD bootstrap: {1} {2}".format(
-                    bootstrap, asset["name"], subset
+                    bootstrap, asset_name, subset_name
                 )
             )
 
-            new = instance.context.create_instance(subset)
-            new.data["subset"] = subset
-            new.data["label"] = "{0} ({1})".format(subset, asset["name"])
+            new = instance.context.create_instance(subset_name)
+            new.data["subset"] = subset_name
+            new.data["label"] = "{0} ({1})".format(subset_name, asset_name)
             new.data["family"] = "usd.bootstrap"
             new.data["comment"] = "Automated bootstrap USD file."
             new.data["publishFamilies"] = ["usd"]
@@ -90,21 +98,23 @@ class CollectUsdBootstrap(pyblish.api.InstancePlugin):
             for key in ["asset"]:
                 new.data[key] = instance.data[key]
 
-    def _subset_exists(self, instance, subset, asset):
+    def _subset_exists(self, project_name, instance, subset_name, asset_doc):
         """Return whether subset exists in current context or in database."""
         # Allow it to be created during this publish session
         context = instance.context
+
+        asset_doc_name = get_asset_name_identifier(asset_doc)
         for inst in context:
             if (
-                inst.data["subset"] == subset
-                and inst.data["asset"] == asset["name"]
+                inst.data["subset"] == subset_name
+                and inst.data["asset"] == asset_doc_name
             ):
                 return True
 
         # Or, if they already exist in the database we can
         # skip them too.
-        return bool(
-            io.find_one(
-                {"name": subset, "type": "subset", "parent": asset["_id"]}
-            )
-        )
+        if get_subset_by_name(
+            project_name, subset_name, asset_doc["_id"], fields=["_id"]
+        ):
+            return True
+        return False

@@ -1,14 +1,16 @@
-from avalon import api
 import nuke
+from openpype.pipeline import load
 
 
-class MatchmoveLoader(api.Loader):
+class MatchmoveLoader(load.LoaderPlugin):
     """
     This will run matchmove script to create track in script.
     """
 
     families = ["matchmove"]
-    representations = ["py"]
+    representations = ["*"]
+    extensions = {"py"}
+
     defaults = ["Camera", "Object"]
 
     label = "Run matchmove script"
@@ -16,8 +18,9 @@ class MatchmoveLoader(api.Loader):
     color = "orange"
 
     def load(self, context, name, namespace, data):
-        if self.fname.lower().endswith(".py"):
-            exec(open(self.fname).read())
+        path = self.filepath_from_context(context)
+        if path.lower().endswith(".py"):
+            exec(open(path).read())
 
         else:
             msg = "Unsupported script type"

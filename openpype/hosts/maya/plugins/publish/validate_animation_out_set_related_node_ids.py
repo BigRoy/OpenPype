@@ -1,9 +1,13 @@
 import maya.cmds as cmds
 
 import pyblish.api
-import openpype.api
 import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api import lib
+from openpype.pipeline.publish import (
+    RepairAction,
+    ValidateContentsOrder,
+    PublishValidationError
+)
 
 
 class ValidateOutRelatedNodeIds(pyblish.api.InstancePlugin):
@@ -16,13 +20,13 @@ class ValidateOutRelatedNodeIds(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
-    families = ['animation', "pointcache"]
+    order = ValidateContentsOrder
+    families = ['animation', "pointcache", "proxyAbc"]
     hosts = ['maya']
     label = 'Animation Out Set Related Node Ids'
     actions = [
         openpype.hosts.maya.api.action.SelectInvalidAction,
-        openpype.api.RepairAction
+        RepairAction
     ]
 
     def process(self, instance):
@@ -32,8 +36,10 @@ class ValidateOutRelatedNodeIds(pyblish.api.InstancePlugin):
         # if a deformer has been created on the shape
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Nodes found with non-related "
-                               "asset IDs: {0}".format(invalid))
+            # TODO: Message formatting can be improved
+            raise PublishValidationError("Nodes found with mismatching "
+                                         "IDs: {0}".format(invalid),
+                                         title="Invalid node ids")
 
     @classmethod
     def get_invalid(cls, instance):
@@ -65,7 +71,7 @@ class ValidateOutRelatedNodeIds(pyblish.api.InstancePlugin):
                 invalid.append(node)
                 continue
 
-            history_id = lib.get_id_from_history(node)
+            history_id = lib.get_id_from_sibling(node)
             if history_id is not None and node_id != history_id:
                 invalid.append(node)
 
@@ -76,7 +82,7 @@ class ValidateOutRelatedNodeIds(pyblish.api.InstancePlugin):
 
         for node in cls.get_invalid(instance):
             # Get the original id from history
-            history_id = lib.get_id_from_history(node)
+            history_id = lib.get_id_from_sibling(node)
             if not history_id:
                 cls.log.error("Could not find ID in history for '%s'", node)
                 continue

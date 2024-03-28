@@ -36,7 +36,7 @@ All context filters are lists which may contain strings or Regular expressions (
 - **families** - Main family of processed instance. `["plate", "model"]`
 
 :::important Filtering
-Filters are optional and may not be set. In case when multiple profiles match current context, profile with filters has higher priority that profile without filters.
+Filters are optional and may not be set. In case when multiple profiles match current context, profile with filters has higher priority than profile without filters.
 :::
 
 #### Profile outputs
@@ -53,7 +53,7 @@ Profile may have multiple outputs from one input and that's why **outputs** is d
 | **filter** | Filters definition. | dict | [here](#output-filters-filter) |
 
 :::note
-As metioned above **all keys are optional**. If they are not filled at all, then **"ext"** is filled with input's file extension and resolution keys **"width"** and **"heigh"** are filled from instance data, or from input resolution if instance doesn't have set them.
+As mentioned above **all keys are optional**. If they are not filled at all, then **"ext"** is filled with input's file extension and resolution keys **"width"** and **"height"** are filled from instance data, or from input resolution if instance doesn't have set them.
 :::
 
 :::important resolution
@@ -61,7 +61,7 @@ It is not possible to enter only **"width"** or only **"height"**. In that case 
 :::
 
 #### New representation tags (`tags`)
-You can add tags to representation created during extracting process. This might help to define what should happen with representation in upcomming plugins.
+You can add tags to representation created during extracting process. This might help to define what should happen with representation in upcoming plugins.
 
 | Tag | Description |
 | --- | --- |
@@ -69,7 +69,7 @@ You can add tags to representation created during extracting process. This might
 | **preview** | Will be used as preview in Ftrack. |
 | **reformat** | Rescale to format based on width and height keys. |
 | **bake-lut** | Bake LUT into the output (if is available path in data). |
-| **slate-frame** | Add slate frame at the beggining of video. |
+| **slate-frame** | Add slate frame at the beginning of video. |
 | **no-handles** | Remove the shot handles from the output. |
 | **sequence** | Generate a sequence of images instead of single frame.<br />Is applied only if **"ext"** of output is image extension e.g.: png or jpg/jpeg. |
 
@@ -293,6 +293,7 @@ If source representation has suffix **"h264"** and burnin suffix is **"client"**
 - It is allowed to use [Anatomy templates](admin_config#anatomy) themselves in burnins if they can be filled with available data.
 
 - Additional keys in burnins:
+
   | Burnin key | Description |
   | --- | --- |
   | frame_start | First frame number. |
@@ -303,6 +304,7 @@ If source representation has suffix **"h264"** and burnin suffix is **"client"**
   | resolution_height | Resolution height. |
   | fps | Fps of an output. |
   | timecode | Timecode by frame start and fps. |
+  | focalLength | **Only available in Maya and Houdini**<br /><br />Camera focal length per frame. Use syntax `{focalLength:.2f}` for decimal truncating. Eg. `35.234985` with `{focalLength:.2f}` would produce `35.23`, whereas `{focalLength:.0f}` would produce `35`. |
 
 :::warning
 `timecode` is specific key that can be **only at the end of content**. (`"BOTTOM_RIGHT": "TC: {timecode}"`)
@@ -331,7 +333,7 @@ If source representation has suffix **"h264"** and burnin suffix is **"client"**
 
 
 #### Default content values (`fields`)
-If you want to set position content values for all or most of burnin definitions, you can set them in **"fields"**. They will be added to every burnin definition in all profiles. Value can be overriden if same position key is filled in burnin definiton.
+If you want to set position content values for all or most of burnin definitions, you can set them in **"fields"**. They will be added to every burnin definition in all profiles. Value can be overridden if same position key is filled in burnin definition.
 
 ```json
 {
@@ -348,7 +350,7 @@ If you want to set position content values for all or most of burnin definitions
 
             /* example2 has 2 overrides. */
             "example2": {
-                /* Top left value is overriden with asset name. */
+                /* Top left value is overridden with asset name. */
                 "TOP_LEFT": "{asset}",
                 /* Top center will be skipped. */
                 "TOP_CENTERED": null
@@ -532,8 +534,7 @@ Plugin responsible for generating thumbnails with colorspace controlled by Nuke.
 }
 ```
 
-### `ExtractReviewDataMov`
-
+### `ExtractReviewIntermediates`
 `viewer_lut_raw` **true** will publish the baked mov file without any colorspace conversion. It will be baked with the workfile workspace. This can happen in case the Viewer input process uses baked screen space luts.
 
 #### baking with controlled colorspace

@@ -1,5 +1,4 @@
-from openpype.lib import PreLaunchHook
-import os
+from openpype.lib.applications import PreLaunchHook, LaunchTypes
 
 
 class SetPath(PreLaunchHook):
@@ -7,7 +6,8 @@ class SetPath(PreLaunchHook):
 
     Hook `GlobalHostDataHook` must be executed before this hook.
     """
-    app_groups = ["houdini"]
+    app_groups = {"houdini"}
+    launch_types = {LaunchTypes.local}
 
     def execute(self):
         workdir = self.launch_context.env.get("AVALON_WORKDIR", "")
@@ -15,4 +15,4 @@ class SetPath(PreLaunchHook):
             self.log.warning("BUG: Workdir is not filled.")
             return
 
-        os.chdir(workdir)
+        self.launch_context.kwargs["cwd"] = workdir

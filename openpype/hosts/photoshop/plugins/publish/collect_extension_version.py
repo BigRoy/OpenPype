@@ -2,7 +2,7 @@ import os
 import re
 import pyblish.api
 
-from avalon import photoshop
+from openpype.hosts.photoshop import api as photoshop
 
 
 class CollectExtensionVersion(pyblish.api.ContextPlugin):
@@ -43,7 +43,7 @@ class CollectExtensionVersion(pyblish.api.ContextPlugin):
         with open(manifest_url) as fp:
             content = fp.read()
 
-            found = re.findall(r'(ExtensionBundleVersion=")([0-10\.]+)(")',
+            found = re.findall(r'(ExtensionBundleVersion=")([0-9\.]+)(")',
                                content)
             if found:
                 expected_version = found[0][1]

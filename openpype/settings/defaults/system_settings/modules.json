@@ -13,18 +13,27 @@
         }
     },
     "ftrack": {
-        "enabled": true,
+        "enabled": false,
         "ftrack_server": "",
-        "ftrack_actions_path": [],
-        "ftrack_events_path": [],
+        "ftrack_actions_path": {
+            "windows": [],
+            "darwin": [],
+            "linux": []
+        },
+        "ftrack_events_path": {
+            "windows": [],
+            "darwin": [],
+            "linux": []
+        },
         "intent": {
+            "allow_empty_intent": true,
+            "empty_intent_label": "",
             "items": {
-                "-": "-",
                 "wip": "WIP",
                 "final": "Final",
                 "test": "Test"
             },
-            "default": "-"
+            "default": ""
         },
         "custom_attributes": {
             "show": {
@@ -51,13 +60,11 @@
                 "applications": {
                     "write_security_roles": [
                         "API",
-                        "Administrator",
-                        "Pypeclub"
+                        "Administrator"
                     ],
                     "read_security_roles": [
                         "API",
-                        "Administrator",
-                        "Pypeclub"
+                        "Administrator"
                     ]
                 }
             },
@@ -65,25 +72,21 @@
                 "tools_env": {
                     "write_security_roles": [
                         "API",
-                        "Administrator",
-                        "Pypeclub"
+                        "Administrator"
                     ],
                     "read_security_roles": [
                         "API",
-                        "Administrator",
-                        "Pypeclub"
+                        "Administrator"
                     ]
                 },
                 "avalon_mongo_id": {
                     "write_security_roles": [
                         "API",
-                        "Administrator",
-                        "Pypeclub"
+                        "Administrator"
                     ],
                     "read_security_roles": [
                         "API",
-                        "Administrator",
-                        "Pypeclub"
+                        "Administrator"
                     ]
                 },
                 "fps": {
@@ -129,6 +132,17 @@
             }
         }
     },
+    "kitsu": {
+        "enabled": false,
+        "server": ""
+    },
+    "shotgrid": {
+        "enabled": false,
+        "leecher_manager_url": "http://127.0.0.1:3000",
+        "leecher_backend_url": "http://127.0.0.1:8090",
+        "filter_projects_by_login": true,
+        "shotgrid_settings": {}
+    },
     "timers_manager": {
         "enabled": true,
         "auto_stop": true,
@@ -150,30 +164,13 @@
             "default": "http://127.0.0.1:8082"
         }
     },
-    "muster": {
-        "enabled": false,
-        "MUSTER_REST_URL": "http://127.0.0.1:9890",
-        "templates_mapping": {
-            "file_layers": 7,
-            "mentalray": 2,
-            "mentalray_sf": 6,
-            "redshift": 55,
-            "renderman": 29,
-            "software": 1,
-            "software_sf": 5,
-            "turtle": 10,
-            "vector": 4,
-            "vray": 37,
-            "ffmpeg": 48
-        }
-    },
     "royalrender": {
         "enabled": false,
         "rr_paths": {
             "default": {
-                "windows": "",
-                "darwin": "",
-                "linux": ""
+                "windows": "C:\\RR8",
+                "darwin": "/Volumes/share/RR8",
+                "linux": "/mnt/studio/RR8"
             }
         }
     },
@@ -181,7 +178,7 @@
         "enabled": true
     },
     "standalonepublish_tool": {
-        "enabled": true
+        "enabled": false
     },
     "project_manager": {
         "enabled": true
@@ -196,5 +193,8 @@
             "darwin": "",
             "linux": ""
         }
+    },
+    "asset_reporter": {
+        "enabled": false
     }
 }

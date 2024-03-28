@@ -1,26 +1,31 @@
 import os
-from avalon import api
-from openpype.api import get_project_settings
 
-class GpuCacheLoader(api.Loader):
-    """Load model Alembic as gpuCache"""
+import maya.cmds as cmds
 
-    families = ["model"]
-    representations = ["abc"]
+from openpype.hosts.maya.api.pipeline import containerise
+from openpype.hosts.maya.api.lib import unique_namespace
+from openpype.pipeline import (
+    load,
+    get_representation_path
+)
+from openpype.settings import get_project_settings
 
-    label = "Import Gpu Cache"
+
+class GpuCacheLoader(load.LoaderPlugin):
+    """Load Alembic as gpuCache"""
+
+    families = ["model", "animation", "proxyAbc", "pointcache"]
+    representations = ["abc", "gpu_cache"]
+
+    label = "Load Gpu Cache"
     order = -5
     icon = "code-fork"
     color = "orange"
 
     def load(self, context, name, namespace, data):
 
-        import maya.cmds as cmds
-        import avalon.maya.lib as lib
-        from avalon.maya.pipeline import containerise
-
         asset = context['asset']['name']
-        namespace = namespace or lib.unique_namespace(
+        namespace = namespace or unique_namespace(
             asset + "_",
             prefix="_" if asset[0].isdigit() else "",
             suffix="_",
@@ -32,15 +37,15 @@ class GpuCacheLoader(api.Loader):
         label = "{}:{}".format(namespace, name)
         root = cmds.group(name=label, empty=True)
 
-        settings = get_project_settings(os.environ['AVALON_PROJECT'])
+        project_name = context["project"]["name"]
+        settings = get_project_settings(project_name)
         colors = settings['maya']['load']['colors']
         c = colors.get('model')
         if c is not None:
             cmds.setAttr(root + ".useOutlinerColor", 1)
-            cmds.setAttr(root + ".outlinerColor",
-                (float(c[0])/255),
-                (float(c[1])/255),
-                (float(c[2])/255)
+            cmds.setAttr(
+                root + ".outlinerColor",
+                (float(c[0]) / 255), (float(c[1]) / 255), (float(c[2]) / 255)
             )
 
         # Create transform with shape
@@ -52,7 +57,8 @@ class GpuCacheLoader(api.Loader):
                                 name="{0}Shape".format(transform_name))
 
         # Set the cache filepath
-        cmds.setAttr(cache + '.cacheFileName', self.fname, type="string")
+        path = self.filepath_from_context(context)
+        cmds.setAttr(cache + '.cacheFileName', path, type="string")
         cmds.setAttr(cache + '.cacheGeomPath', "|", type="string")    # root
 
         # Lock parenting of the transform and cache
@@ -69,10 +75,7 @@ class GpuCacheLoader(api.Loader):
             loader=self.__class__.__name__)
 
     def update(self, container, representation):
-
-        import maya.cmds as cmds
-
-        path = api.get_representation_path(representation)
+        path = get_representation_path(representation)
 
         # Update the cache
         members = cmds.sets(container['objectName'], query=True)
@@ -91,7 +94,6 @@ class GpuCacheLoader(api.Loader):
         self.update(container, representation)
 
     def remove(self, container):
-        import maya.cmds as cmds
         members = cmds.sets(container['objectName'], query=True)
         cmds.lockNode(members, lock=False)
         cmds.delete([container['objectName']] + members)

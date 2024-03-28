@@ -3,14 +3,14 @@
 import os
 import re
 
-import avalon.maya
-import openpype.api
+from openpype.pipeline import publish
 from openpype.hosts.maya.api.render_setup_tools import export_in_rs_layer
+from openpype.hosts.maya.api.lib import maintained_selection
 
 from maya import cmds
 
 
-class ExtractVrayscene(openpype.api.Extractor):
+class ExtractVrayscene(publish.Extractor):
     """Extractor for vrscene."""
 
     label = "VRay Scene (.vrscene)"
@@ -20,13 +20,13 @@ class ExtractVrayscene(openpype.api.Extractor):
     def process(self, instance):
         """Plugin entry point."""
         if instance.data.get("exportOnFarm"):
-            self.log.info("vrayscenes will be exported on farm.")
+            self.log.debug("vrayscenes will be exported on farm.")
             raise NotImplementedError(
                 "exporting vrayscenes is not implemented")
 
         # handle sequence
         if instance.data.get("vraySceneMultipleFiles"):
-            self.log.info("vrayscenes will be exported on farm.")
+            self.log.debug("vrayscenes will be exported on farm.")
             raise NotImplementedError(
                 "exporting vrayscene sequences not implemented yet")
 
@@ -36,11 +36,10 @@ class ExtractVrayscene(openpype.api.Extractor):
         else:
             node = vray_settings[0]
 
-        # setMembers on vrayscene_layer shoudl contain layer name.
+        # setMembers on vrayscene_layer should contain layer name.
         layer_name = instance.data.get("layer")
 
         staging_dir = self.staging_dir(instance)
-        self.log.info("staging: {}".format(staging_dir))
         template = cmds.getAttr("{}.vrscene_filename".format(node))
         start_frame = instance.data.get(
             "frameStartHandle") if instance.data.get(
@@ -56,21 +55,21 @@ class ExtractVrayscene(openpype.api.Extractor):
             staging_dir, "vrayscene", *formatted_name.split("/"))
 
         # Write out vrscene file
-        self.log.info("Writing: '%s'" % file_path)
-        with avalon.maya.maintained_selection():
+        self.log.debug("Writing: '%s'" % file_path)
+        with maintained_selection():
             if "*" not in instance.data["setMembers"]:
-                self.log.info(
+                self.log.debug(
                     "Exporting: {}".format(instance.data["setMembers"]))
                 set_members = instance.data["setMembers"]
                 cmds.select(set_members, noExpand=True)
             else:
-                self.log.info("Exporting all ...")
+                self.log.debug("Exporting all ...")
                 set_members = cmds.ls(
                     long=True, objectsOnly=True,
                     geometry=True, lights=True, cameras=True)
                 cmds.select(set_members, noExpand=True)
 
-            self.log.info("Appending layer name {}".format(layer_name))
+            self.log.debug("Appending layer name {}".format(layer_name))
             set_members.append(layer_name)
 
             export_in_rs_layer(
@@ -93,8 +92,8 @@ class ExtractVrayscene(openpype.api.Extractor):
         }
         instance.data["representations"].append(representation)
 
-        self.log.info("Extracted instance '%s' to: %s"
-                      % (instance.name, staging_dir))
+        self.log.debug("Extracted instance '%s' to: %s"
+                       % (instance.name, staging_dir))
 
     @staticmethod
     def format_vray_output_filename(
@@ -111,7 +110,7 @@ class ExtractVrayscene(openpype.api.Extractor):
             layer (str): layer name.
             template (str): token template.
             start_frame (int, optional): start frame - if set we use
-                mutliple files export mode.
+                multiple files export mode.
 
         Returns:
             str: formatted path.

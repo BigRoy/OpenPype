@@ -1,21 +1,18 @@
 """Host API required Work Files tool"""
 
 import os
-from openpype.api import Logger
-from .. import (
+from openpype.lib import Logger
+from .lib import (
     get_project_manager,
-    get_current_project,
-    set_project_manager_to_folder_name
+    get_current_project
 )
 
 
-log = Logger().get_logger(__name__)
-
-exported_projet_ext = ".drp"
+log = Logger.get_logger(__name__)
 
 
 def file_extensions():
-    return [exported_projet_ext]
+    return [".drp"]
 
 
 def has_unsaved_changes():
@@ -30,37 +27,43 @@ def save_file(filepath):
     project = get_current_project()
     name = project.GetName()
 
-    if "Untitled Project" not in name:
-        log.info("Saving project: `{}` as '{}'".format(name, file))
-        pm.ExportProject(name, filepath)
-    else:
-        log.info("Creating new project...")
-        pm.CreateProject(fname)
-        pm.ExportProject(name, filepath)
+    response = False
+    if name == "Untitled Project":
+        response = pm.CreateProject(fname)
+        log.info("New project created: {}".format(response))
+        pm.SaveProject()
+    elif name != fname:
+        response = project.SetName(fname)
+        log.info("Project renamed: {}".format(response))
+
+    exported = pm.ExportProject(fname, filepath)
+    log.info("Project exported: {}".format(exported))
 
 
 def open_file(filepath):
     """
     Loading project
     """
+
+    from . import bmdvr
+
     pm = get_project_manager()
+    page = bmdvr.GetCurrentPage()
+    if page is not None:
+        # Save current project only if Resolve has an active page, otherwise
+        # we consider Resolve being in a pre-launch state (no open UI yet)
+        project = pm.GetCurrentProject()
+        print(f"Saving current project: {project}")
+        pm.SaveProject()
+
     file = os.path.basename(filepath)
     fname, _ = os.path.splitext(file)
-    dname, _ = fname.split("_v")
-
-    # deal with current project
-    project = pm.GetCurrentProject()
-    log.info(f"Test `pm`: {pm}")
-    pm.SaveProject()
 
     try:
-        log.info(f"Test `dname`: {dname}")
-        if not set_project_manager_to_folder_name(dname):
-            raise
         # load project from input path
         project = pm.LoadProject(fname)
         log.info(f"Project {project.GetName()} opened...")
-        return True
+
     except AttributeError:
         log.warning((f"Project with name `{fname}` does not exist! It will "
                      f"be imported from {filepath} and then loaded..."))
@@ -69,24 +72,24 @@ def open_file(filepath):
             project = pm.LoadProject(fname)
             log.info(f"Project imported/loaded {project.GetName()}...")
             return True
-        else:
-            return False
+        return False
+    return True
 
 
 def current_file():
     pm = get_project_manager()
-    current_dir = os.getenv("AVALON_WORKDIR")
+    file_ext = file_extensions()[0]
+    workdir_path = os.getenv("AVALON_WORKDIR")
     project = pm.GetCurrentProject()
-    name = project.GetName()
-    fname = name + exported_projet_ext
-    current_file = os.path.join(current_dir, fname)
-    normalised = os.path.normpath(current_file)
+    project_name = project.GetName()
+    file_name = project_name + file_ext
 
-    # Unsaved current file
-    if normalised == "":
-        return None
+    # create current file path
+    current_file_path = os.path.join(workdir_path, file_name)
 
-    return normalised
+    # return current file path if it exists
+    if os.path.exists(current_file_path):
+        return os.path.normpath(current_file_path)
 
 
 def work_root(session):

@@ -1,5 +1,5 @@
 import sys
-from Qt import QtWidgets, QtCore, QtGui
+from qtpy import QtWidgets, QtCore, QtGui
 
 from openpype import (
     resources,
@@ -7,6 +7,7 @@ from openpype import (
 )
 from openpype.tools.utils import host_tools
 from openpype.tools.utils.lib import qt_app_context
+from openpype.hosts.unreal.api import rendering
 
 
 class ToolsBtnsWidget(QtWidgets.QWidget):
@@ -16,27 +17,27 @@ class ToolsBtnsWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(ToolsBtnsWidget, self).__init__(parent)
 
-        create_btn = QtWidgets.QPushButton("Create...", self)
         load_btn = QtWidgets.QPushButton("Load...", self)
-        publish_btn = QtWidgets.QPushButton("Publish...", self)
+        publish_btn = QtWidgets.QPushButton("Publisher...", self)
         manage_btn = QtWidgets.QPushButton("Manage...", self)
+        render_btn = QtWidgets.QPushButton("Render...", self)
         experimental_tools_btn = QtWidgets.QPushButton(
             "Experimental tools...", self
         )
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(create_btn, 0)
         layout.addWidget(load_btn, 0)
         layout.addWidget(publish_btn, 0)
         layout.addWidget(manage_btn, 0)
+        layout.addWidget(render_btn, 0)
         layout.addWidget(experimental_tools_btn, 0)
         layout.addStretch(1)
 
-        create_btn.clicked.connect(self._on_create)
         load_btn.clicked.connect(self._on_load)
         publish_btn.clicked.connect(self._on_publish)
         manage_btn.clicked.connect(self._on_manage)
+        render_btn.clicked.connect(self._on_render)
         experimental_tools_btn.clicked.connect(self._on_experimental)
 
     def _on_create(self):
@@ -46,10 +47,13 @@ class ToolsBtnsWidget(QtWidgets.QWidget):
         self.tool_required.emit("loader")
 
     def _on_publish(self):
-        self.tool_required.emit("publish")
+        self.tool_required.emit("publisher")
 
     def _on_manage(self):
         self.tool_required.emit("sceneinventory")
+
+    def _on_render(self):
+        rendering.start_rendering()
 
     def _on_experimental(self):
         self.tool_required.emit("experimental_tools")
@@ -60,7 +64,7 @@ class ToolsDialog(QtWidgets.QDialog):
     def __init__(self, *args, **kwargs):
         super(ToolsDialog, self).__init__(*args, **kwargs)
 
-        self.setWindowTitle("OpenPype tools")
+        self.setWindowTitle("Ayon tools")
         icon = QtGui.QIcon(resources.get_openpype_icon_filepath())
         self.setWindowIcon(icon)
 

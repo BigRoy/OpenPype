@@ -1,8 +1,9 @@
 import pyblish.api
 
 import openpype.hosts.maya.api.action
-from avalon import io
-import openpype.api
+from openpype.client import get_subset_by_name
+from openpype.pipeline import legacy_io
+from openpype.pipeline.publish import PublishValidationError
 
 
 class ValidateRenderLayerAOVs(pyblish.api.InstancePlugin):
@@ -30,29 +31,27 @@ class ValidateRenderLayerAOVs(pyblish.api.InstancePlugin):
     def process(self, instance):
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Found unregistered subsets: {}".format(invalid))
+            raise PublishValidationError(
+                "Found unregistered subsets: {}".format(invalid))
 
     def get_invalid(self, instance):
-
         invalid = []
 
-        asset_name = instance.data["asset"]
-        render_passses = instance.data.get("renderPasses", [])
-        for render_pass in render_passses:
-            is_valid = self.validate_subset_registered(asset_name, render_pass)
+        project_name = legacy_io.active_project()
+        asset_doc = instance.data["assetEntity"]
+        render_passes = instance.data.get("renderPasses", [])
+        for render_pass in render_passes:
+            is_valid = self.validate_subset_registered(
+                project_name, asset_doc, render_pass
+            )
             if not is_valid:
                 invalid.append(render_pass)
 
         return invalid
 
-    def validate_subset_registered(self, asset_name, subset_name):
+    def validate_subset_registered(self, project_name, asset_doc, subset_name):
         """Check if subset is registered in the database under the asset"""
 
-        asset = io.find_one({"type": "asset", "name": asset_name})
-        is_valid = io.find_one({
-            "type": "subset",
-            "name": subset_name,
-            "parent": asset["_id"]
-        })
-
-        return is_valid
+        return get_subset_by_name(
+            project_name, subset_name, asset_doc["_id"], fields=["_id"]
+        )

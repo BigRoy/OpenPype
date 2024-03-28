@@ -1,16 +1,11 @@
 """Load an animation in Blender."""
 
-import logging
 from typing import Dict, List, Optional
 
 import bpy
 
-from avalon.blender.pipeline import AVALON_PROPERTY
 from openpype.hosts.blender.api import plugin
-
-
-logger = logging.getLogger("openpype").getChild(
-    "blender").getChild("load_animation")
+from openpype.hosts.blender.api.pipeline import AVALON_PROPERTY
 
 
 class BlendAnimationLoader(plugin.AssetLoader):
@@ -39,7 +34,7 @@ class BlendAnimationLoader(plugin.AssetLoader):
             context: Full parenthood of representation to load
             options: Additional settings dictionary
         """
-        libpath = self.fname
+        libpath = self.filepath_from_context(context)
 
         with bpy.data.libraries.load(
             libpath, link=True, relative=False
@@ -66,5 +61,10 @@ class BlendAnimationLoader(plugin.AssetLoader):
 
         bpy.data.objects.remove(container)
 
-        library = bpy.data.libraries.get(bpy.path.basename(libpath))
+        filename = bpy.path.basename(libpath)
+        # Blender has a limit of 63 characters for any data name.
+        # If the filename is longer, it will be truncated.
+        if len(filename) > 63:
+            filename = filename[:63]
+        library = bpy.data.libraries.get(filename)
         bpy.data.libraries.remove(library)

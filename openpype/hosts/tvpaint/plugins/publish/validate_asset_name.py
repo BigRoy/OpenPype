@@ -1,5 +1,13 @@
 import pyblish.api
-from avalon.tvpaint import pipeline
+from openpype import AYON_SERVER_ENABLED
+from openpype.pipeline import (
+    PublishXmlValidationError,
+    OptionalPyblishPluginMixin,
+)
+from openpype.hosts.tvpaint.api.pipeline import (
+    list_instances,
+    write_instances,
+)
 
 
 class FixAssetNames(pyblish.api.Action):
@@ -14,21 +22,31 @@ class FixAssetNames(pyblish.api.Action):
 
     def process(self, context, plugin):
         context_asset_name = context.data["asset"]
-        old_instance_items = pipeline.list_instances()
+        old_instance_items = list_instances()
         new_instance_items = []
         for instance_item in old_instance_items:
-            instance_asset_name = instance_item.get("asset")
+            if AYON_SERVER_ENABLED:
+                instance_asset_name = instance_item.get("folderPath")
+            else:
+                instance_asset_name = instance_item.get("asset")
+
             if (
                 instance_asset_name
                 and instance_asset_name != context_asset_name
             ):
-                instance_item["asset"] = context_asset_name
+                if AYON_SERVER_ENABLED:
+                    instance_item["folderPath"] = context_asset_name
+                else:
+                    instance_item["asset"] = context_asset_name
             new_instance_items.append(instance_item)
-        pipeline._write_instances(new_instance_items)
+        write_instances(new_instance_items)
 
 
-class ValidateMissingLayers(pyblish.api.ContextPlugin):
-    """Validate assset name present on instance.
+class ValidateAssetName(
+    OptionalPyblishPluginMixin,
+    pyblish.api.ContextPlugin
+):
+    """Validate asset name present on instance.
 
     Asset name on instance should be the same as context's.
     """
@@ -39,6 +57,8 @@ class ValidateMissingLayers(pyblish.api.ContextPlugin):
     actions = [FixAssetNames]
 
     def process(self, context):
+        if not self.is_active(context.data):
+            return
         context_asset_name = context.data["asset"]
         for instance in context:
             asset_name = instance.data.get("asset")
@@ -48,8 +68,18 @@ class ValidateMissingLayers(pyblish.api.ContextPlugin):
             instance_label = (
                 instance.data.get("label") or instance.data["name"]
             )
-            raise AssertionError((
-                "Different asset name on instance then context's."
-                " Instance \"{}\" has asset name: \"{}\""
-                " Context asset name is: \"{}\""
-            ).format(instance_label, asset_name, context_asset_name))
+
+            raise PublishXmlValidationError(
+                self,
+                (
+                    "Different asset name on instance then context's."
+                    " Instance \"{}\" has asset name: \"{}\""
+                    " Context asset name is: \"{}\""
+                ).format(
+                    instance_label, asset_name, context_asset_name
+                ),
+                formatting_data={
+                    "expected_asset": context_asset_name,
+                    "found_asset": asset_name
+                }
+            )

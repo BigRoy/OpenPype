@@ -7,25 +7,32 @@
     "children": [
         {
             "type": "schema",
+            "name": "schema_houdini_general"
+        },
+        {
+            "key": "imageio",
+            "type": "dict",
+            "label": "Color Management (OCIO managed)",
+            "collapsible": true,
+            "is_group": true,
+            "children": [
+                {
+                    "type": "template",
+                    "name": "template_host_color_management_ocio"
+                }
+            ]
+        },
+        {
+            "type": "schema",
+            "name": "schema_houdini_scriptshelf"
+        },
+        {
+            "type": "schema",
             "name": "schema_houdini_create"
         },
         {
-            "type": "dict",
-            "collapsible": true,
-            "key": "publish",
-            "label": "Publish plugins",
-            "children": [
-                {
-                    "type": "schema_template",
-                    "name": "template_publish_plugin",
-                    "template_data": [
-                        {
-                            "key": "ValidateContainers",
-                            "label": "ValidateContainers"
-                        }
-                    ]
-                }
-            ]
+            "type": "schema",
+            "name": "schema_houdini_publish"
         }
     ]
 }

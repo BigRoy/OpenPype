@@ -1,11 +1,10 @@
 from openpype.hosts.maya.api import plugin
 
 
-class CreateXgen(plugin.Creator):
-    """Xgen interactive export"""
+class CreateXgen(plugin.MayaCreator):
+    """Xgen"""
 
-    name = "xgen"
-    label = "Xgen Interactive"
+    identifier = "io.openpype.creators.maya.xgen"
+    label = "Xgen"
     family = "xgen"
     icon = "pagelines"
-    defaults = ['Main']

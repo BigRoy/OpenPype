@@ -1,19 +1,24 @@
 # -*- coding: utf-8 -*-
 """Validate model nodes names."""
-from maya import cmds
+import os
+import platform
+import re
+
+import gridfs
 import pyblish.api
-import openpype.api
-import avalon.api
+from maya import cmds
+
 import openpype.hosts.maya.api.action
+from openpype.client.mongo import OpenPypeMongoConnection
 from openpype.hosts.maya.api.shader_definition_editor import (
     DEFINITION_FILENAME)
-from openpype.lib.mongo import OpenPypeMongoConnection
-import gridfs
-import re
-import os
+from openpype.pipeline import legacy_io
+from openpype.pipeline.publish import (
+    OptionalPyblishPluginMixin, PublishValidationError, ValidateContentsOrder)
 
 
-class ValidateModelName(pyblish.api.InstancePlugin):
+class ValidateModelName(pyblish.api.InstancePlugin,
+                        OptionalPyblishPluginMixin):
     """Validate name of model
 
     starts with (somename)_###_(materialID)_GEO
@@ -22,7 +27,7 @@ class ValidateModelName(pyblish.api.InstancePlugin):
 
     """
     optional = True
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ["maya"]
     families = ["model"]
     label = "Model Name"
@@ -43,7 +48,7 @@ class ValidateModelName(pyblish.api.InstancePlugin):
                     if not cmds.ls(child, transforms=True):
                         return False
                 return True
-            except:
+            except Exception:
                 return False
 
         invalid = []
@@ -62,13 +67,15 @@ class ValidateModelName(pyblish.api.InstancePlugin):
         regex = cls.top_level_regex
         r = re.compile(regex)
         m = r.match(top_group)
+        project_name = instance.context.data["projectName"]
+        current_asset_name = instance.context.data["asset"]
         if m is None:
             cls.log.error("invalid name on: {}".format(top_group))
             cls.log.error("name doesn't match regex {}".format(regex))
             invalid.append(top_group)
         else:
             if "asset" in r.groupindex:
-                if m.group("asset") != avalon.api.Session["AVALON_ASSET"]:
+                if m.group("asset") != current_asset_name:
                     cls.log.error("Invalid asset name in top level group.")
                     return top_group
             if "subset" in r.groupindex:
@@ -76,7 +83,7 @@ class ValidateModelName(pyblish.api.InstancePlugin):
                     cls.log.error("Invalid subset name in top level group.")
                     return top_group
             if "project" in r.groupindex:
-                if m.group("project") != avalon.api.Session["AVALON_PROJECT"]:
+                if m.group("project") != project_name:
                     cls.log.error("Invalid project name in top level group.")
                     return top_group
 
@@ -93,9 +100,10 @@ class ValidateModelName(pyblish.api.InstancePlugin):
         # load shader list file as utf-8
         shaders = []
         if not use_db:
-            if cls.material_file:
-                if os.path.isfile(cls.material_file):
-                    shader_file = open(cls.material_file, "r")
+            material_file = cls.material_file[platform.system().lower()]
+            if material_file:
+                if os.path.isfile(material_file):
+                    shader_file = open(material_file, "r")
                     shaders = shader_file.readlines()
                     shader_file.close()
             else:
@@ -112,14 +120,14 @@ class ValidateModelName(pyblish.api.InstancePlugin):
             shader_file.close()
 
         # strip line endings from list
-        shaders = map(lambda s: s.rstrip(), shaders)
+        shaders = [s.rstrip() for s in shaders if s.rstrip()]
 
         # compile regex for testing names
         regex = cls.regex
         r = re.compile(regex)
 
         for obj in filtered:
-            cls.log.info("testing: {}".format(obj))
+            cls.log.debug("testing: {}".format(obj))
             m = r.match(obj)
             if m is None:
                 cls.log.error("invalid name on: {}".format(obj))
@@ -144,7 +152,11 @@ class ValidateModelName(pyblish.api.InstancePlugin):
 
     def process(self, instance):
         """Plugin entry point."""
+        if not self.is_active(instance.data):
+            return
+
         invalid = self.get_invalid(instance)
 
         if invalid:
-            raise RuntimeError("Model naming is invalid. See the log.")
+            raise PublishValidationError(
+                "Model naming is invalid. See the log.")

@@ -1,5 +1,4 @@
 import os
-import re
 import json
 import copy
 import tempfile
@@ -8,22 +7,22 @@ import shutil
 
 import clique
 import six
-import pyblish
+import pyblish.api
 
-import openpype
-import openpype.api
+from openpype import resources, PACKAGE_DIR
+from openpype.pipeline import publish
 from openpype.lib import (
-    get_pype_execute_args,
+    run_openpype_process,
 
     get_transcode_temp_directory,
-    convert_for_ffmpeg,
-    should_convert_for_ffmpeg,
-
-    CREATE_NO_WINDOW
+    convert_input_paths_for_ffmpeg,
+    should_convert_for_ffmpeg
 )
+from openpype.lib.profiles_filtering import filter_profiles
+from openpype.pipeline.publish.lib import add_repre_files_for_cleanup
 
 
-class ExtractBurnin(openpype.api.Extractor):
+class ExtractBurnin(publish.Extractor):
     """
     Extractor to create video with pre-defined burnins from
     existing extracted video representation.
@@ -34,6 +33,7 @@ class ExtractBurnin(openpype.api.Extractor):
 
     label = "Extract burnins"
     order = pyblish.api.ExtractorOrder + 0.03
+
     families = ["review", "burnin"]
     hosts = [
         "nuke",
@@ -41,6 +41,7 @@ class ExtractBurnin(openpype.api.Extractor):
         "shell",
         "hiero",
         "premiere",
+        "traypublisher",
         "standalonepublisher",
         "harmony",
         "fusion",
@@ -48,9 +49,14 @@ class ExtractBurnin(openpype.api.Extractor):
         "tvpaint",
         "webpublisher",
         "aftereffects",
-        "photoshop"
-        # "resolve"
+        "photoshop",
+        "flame",
+        "houdini",
+        "max",
+        "blender",
+        "unreal"
     ]
+
     optional = True
 
     positions = [
@@ -67,19 +73,24 @@ class ExtractBurnin(openpype.api.Extractor):
         "y_offset": 5
     }
 
-    # Preset attributes
+    # Configurable by Settings
     profiles = None
     options = None
 
     def process(self, instance):
-        # QUESTION what is this for and should we raise an exception?
-        if "representations" not in instance.data:
-            raise RuntimeError("Burnin needs already created mov to work on.")
+        if not self.profiles:
+            self.log.warning("No profiles present for create burnin")
+            return
+
+        if not instance.data.get("representations"):
+            self.log.debug(
+                "Instance does not have filled representations. Skipping")
+            return
 
         self.main_process(instance)
 
-        # Remove any representations tagged for deletion.
-        # QUESTION Is possible to have representation with "delete" tag?
+        # Remove only representation tagged with both
+        # tags `delete` and `burnin`
         for repre in tuple(instance.data["representations"]):
             if all(x in repre.get("tags", []) for x in ['delete', 'burnin']):
                 self.log.debug("Removing representation: {}".format(repre))
@@ -124,39 +135,49 @@ class ExtractBurnin(openpype.api.Extractor):
                 burnin_defs, repre["tags"]
             )
             if not repre_burnin_defs:
-                self.log.info((
+                self.log.debug(
                     "Skipped representation. All burnin definitions from"
-                    " selected profile does not match to representation's"
-                    " tags. \"{}\""
-                ).format(str(repre["tags"])))
+                    " selected profile do not match to representation's"
+                    " tags. \"{}\"".format(repre["tags"])
+                )
                 continue
             filtered_repres.append((repre, repre_burnin_defs))
 
         return filtered_repres
 
     def main_process(self, instance):
-        # TODO get these data from context
         host_name = instance.context.data["hostName"]
-        task_name = os.environ["AVALON_TASK"]
-        family = self.main_family_from_instance(instance)
+        family = instance.data["family"]
+        task_data = instance.data["anatomyData"].get("task", {})
+        task_name = task_data.get("name")
+        task_type = task_data.get("type")
+        subset = instance.data["subset"]
 
-        # Find profile most matching current host, task and instance family
-        profile = self.find_matching_profile(host_name, task_name, family)
+        filtering_criteria = {
+            "hosts": host_name,
+            "families": family,
+            "task_names": task_name,
+            "task_types": task_type,
+            "subset": subset
+        }
+        profile = filter_profiles(self.profiles, filtering_criteria,
+                                  logger=self.log)
+
         if not profile:
-            self.log.info((
+            self.log.debug((
                 "Skipped instance. None of profiles in presets are for"
-                " Host: \"{}\" | Family: \"{}\" | Task \"{}\""
-            ).format(host_name, family, task_name))
+                " Host: \"{}\" | Families: \"{}\" | Task \"{}\""
+                " | Task type \"{}\" | Subset \"{}\" "
+            ).format(host_name, family, task_name, task_type, subset))
             return
-
-        self.log.debug("profile: {}".format(profile))
 
         # Pre-filter burnin definitions by instance families
         burnin_defs = self.filter_burnins_defs(profile, instance)
         if not burnin_defs:
-            self.log.info((
+            self.log.debug((
                 "Skipped instance. Burnin definitions are not set for profile"
-                " Host: \"{}\" | Family: \"{}\" | Task \"{}\" | Profile \"{}\""
+                " Host: \"{}\" | Families: \"{}\" | Task \"{}\""
+                " | Profile \"{}\""
             ).format(host_name, family, task_name, profile))
             return
 
@@ -168,9 +189,8 @@ class ExtractBurnin(openpype.api.Extractor):
         anatomy = instance.context.data["anatomy"]
         scriptpath = self.burnin_script_path()
 
-        # Executable args that will execute the script
-        # [pype executable, *pype script, "run"]
-        executable_args = get_pype_execute_args("run", scriptpath)
+        # Args that will execute the script
+        executable_args = ["run", scriptpath]
         burnins_per_repres = self._get_burnins_per_representations(
             instance, burnin_defs
         )
@@ -187,8 +207,13 @@ class ExtractBurnin(openpype.api.Extractor):
             repre_files = repre["files"]
             if isinstance(repre_files, (tuple, list)):
                 filename = repre_files[0]
+                src_filepaths = [
+                    os.path.join(src_repre_staging_dir, filename)
+                    for filename in repre_files
+                ]
             else:
                 filename = repre_files
+                src_filepaths = [os.path.join(src_repre_staging_dir, filename)]
 
             first_input_path = os.path.join(src_repre_staging_dir, filename)
             # Determine if representation requires pre conversion for ffmpeg
@@ -196,10 +221,10 @@ class ExtractBurnin(openpype.api.Extractor):
             # If result is None the requirement of conversion can't be
             #   determined
             if do_convert is None:
-                self.log.info((
+                self.log.debug(
                     "Can't determine if representation requires conversion."
                     " Skipped."
-                ))
+                )
                 continue
 
             # Do conversion if needed
@@ -209,11 +234,9 @@ class ExtractBurnin(openpype.api.Extractor):
                 new_staging_dir = get_transcode_temp_directory()
                 repre["stagingDir"] = new_staging_dir
 
-                convert_for_ffmpeg(
-                    first_input_path,
+                convert_input_paths_for_ffmpeg(
+                    src_filepaths,
                     new_staging_dir,
-                    _temp_data["frameStart"],
-                    _temp_data["frameEnd"],
                     self.log
                 )
 
@@ -221,10 +244,19 @@ class ExtractBurnin(openpype.api.Extractor):
             filled_anatomy = anatomy.format_all(burnin_data)
             burnin_data["anatomy"] = filled_anatomy.get_solved()
 
-            # Add context data burnin_data.
-            burnin_data["custom"] = (
+            custom_data = copy.deepcopy(
+                instance.data.get("customData") or {}
+            )
+            # Backwards compatibility (since 2022/04/07)
+            custom_data.update(
                 instance.data.get("custom_burnin_data") or {}
             )
+
+            # Add context data burnin_data.
+            burnin_data["custom"] = custom_data
+
+            # Add data members.
+            burnin_data.update(instance.data.get("burninDataMembers", {}))
 
             # Add source camera name to burnin data
             camera_name = repre.get("camera_name")
@@ -234,6 +266,16 @@ class ExtractBurnin(openpype.api.Extractor):
             first_output = True
 
             files_to_delete = []
+
+            repre_burnin_options = copy.deepcopy(burnin_options)
+            # Use fps from representation for output in options
+            fps = repre.get("fps")
+            if fps is not None:
+                repre_burnin_options["fps"] = fps
+                # TODO Should we use fps from source representation to fill
+                #  it in review?
+                # burnin_data["fps"] = fps
+
             for filename_suffix, burnin_def in repre_burnin_defs.items():
                 new_repre = copy.deepcopy(repre)
                 new_repre["stagingDir"] = src_repre_staging_dir
@@ -276,7 +318,7 @@ class ExtractBurnin(openpype.api.Extractor):
                     "input": temp_data["full_input_path"],
                     "output": temp_data["full_output_path"],
                     "burnin_data": burnin_data,
-                    "options": copy.deepcopy(burnin_options),
+                    "options": repre_burnin_options,
                     "values": burnin_values,
                     "full_input_path": temp_data["full_input_paths"][0],
                     "first_frame": temp_data["first_frame"],
@@ -307,13 +349,10 @@ class ExtractBurnin(openpype.api.Extractor):
 
                 # Run burnin script
                 process_kwargs = {
-                    "logger": self.log,
-                    "env": {}
+                    "logger": self.log
                 }
-                if platform.system().lower() == "windows":
-                    process_kwargs["creationflags"] = CREATE_NO_WINDOW
 
-                openpype.api.run_subprocess(args, **process_kwargs)
+                run_openpype_process(*args, **process_kwargs)
                 # Remove the temporary json
                 os.remove(temporary_json_filepath)
 
@@ -324,6 +363,8 @@ class ExtractBurnin(openpype.api.Extractor):
 
                 # Add new representation to instance
                 instance.data["representations"].append(new_repre)
+
+                add_repre_files_for_cleanup(instance, new_repre)
 
             # Cleanup temp staging dir after procesisng of output definitions
             if do_convert:
@@ -390,7 +431,7 @@ class ExtractBurnin(openpype.api.Extractor):
 
         # Use OpenPype default font
         if not font_filepath:
-            font_filepath = openpype.api.resources.get_liberation_font_path()
+            font_filepath = resources.get_liberation_font_path()
 
         burnin_options["font"] = font_filepath
 
@@ -407,7 +448,7 @@ class ExtractBurnin(openpype.api.Extractor):
                 filling burnin strings. `temp_data` are for repre pre-process
                 preparation.
         """
-        self.log.debug("Prepring basic data for burnins")
+        self.log.debug("Preparing basic data for burnins")
         context = instance.context
 
         version = instance.data.get("version")
@@ -430,23 +471,13 @@ class ExtractBurnin(openpype.api.Extractor):
             frame_end = 1
         frame_end = int(frame_end)
 
-        handles = instance.data.get("handles")
-        if handles is None:
-            handles = context.data.get("handles")
-            if handles is None:
-                handles = 0
-
         handle_start = instance.data.get("handleStart")
         if handle_start is None:
-            handle_start = context.data.get("handleStart")
-            if handle_start is None:
-                handle_start = handles
+            handle_start = context.data.get("handleStart") or 0
 
         handle_end = instance.data.get("handleEnd")
         if handle_end is None:
-            handle_end = context.data.get("handleEnd")
-            if handle_end is None:
-                handle_end = handles
+            handle_end = context.data.get("handleEnd") or 0
 
         frame_start_handle = frame_start - handle_start
         frame_end_handle = frame_end + handle_end
@@ -458,7 +489,7 @@ class ExtractBurnin(openpype.api.Extractor):
 
         burnin_data.update({
             "version": int(version),
-            "comment": context.data.get("comment") or ""
+            "comment": instance.data["comment"]
         })
 
         intent_label = context.data.get("intent") or ""
@@ -495,8 +526,8 @@ class ExtractBurnin(openpype.api.Extractor):
         """
 
         if "burnin" not in (repre.get("tags") or []):
-            self.log.info((
-                "Representation \"{}\" don't have \"burnin\" tag. Skipped."
+            self.log.debug((
+                "Representation \"{}\" does not have \"burnin\" tag. Skipped."
             ).format(repre["name"]))
             return False
 
@@ -683,130 +714,6 @@ class ExtractBurnin(openpype.api.Extractor):
             )
         })
 
-    def find_matching_profile(self, host_name, task_name, family):
-        """ Filter profiles by Host name, Task name and main Family.
-
-        Filtering keys are "hosts" (list), "tasks" (list), "families" (list).
-        If key is not find or is empty than it's expected to match.
-
-        Args:
-            profiles (list): Profiles definition from presets.
-            host_name (str): Current running host name.
-            task_name (str): Current context task name.
-            family (str): Main family of current Instance.
-
-        Returns:
-            dict/None: Return most matching profile or None if none of profiles
-                match at least one criteria.
-        """
-
-        matching_profiles = None
-        highest_points = -1
-        for profile in self.profiles or tuple():
-            profile_points = 0
-            profile_value = []
-
-            # Host filtering
-            host_names = profile.get("hosts")
-            match = self.validate_value_by_regexes(host_name, host_names)
-            if match == -1:
-                continue
-            profile_points += match
-            profile_value.append(bool(match))
-
-            # Task filtering
-            task_names = profile.get("tasks")
-            match = self.validate_value_by_regexes(task_name, task_names)
-            if match == -1:
-                continue
-            profile_points += match
-            profile_value.append(bool(match))
-
-            # Family filtering
-            families = profile.get("families")
-            match = self.validate_value_by_regexes(family, families)
-            if match == -1:
-                continue
-            profile_points += match
-            profile_value.append(bool(match))
-
-            if profile_points > highest_points:
-                matching_profiles = []
-                highest_points = profile_points
-
-            if profile_points == highest_points:
-                profile["__value__"] = profile_value
-                matching_profiles.append(profile)
-
-        if not matching_profiles:
-            return
-
-        if len(matching_profiles) == 1:
-            return matching_profiles[0]
-
-        return self.profile_exclusion(matching_profiles)
-
-    def profile_exclusion(self, matching_profiles):
-        """Find out most matching profile by host, task and family match.
-
-        Profiles are selectivelly filtered. Each profile should have
-        "__value__" key with list of booleans. Each boolean represents
-        existence of filter for specific key (host, taks, family).
-        Profiles are looped in sequence. In each sequence are split into
-        true_list and false_list. For next sequence loop are used profiles in
-        true_list if there are any profiles else false_list is used.
-
-        Filtering ends when only one profile left in true_list. Or when all
-        existence booleans loops passed, in that case first profile from left
-        profiles is returned.
-
-        Args:
-            matching_profiles (list): Profiles with same values.
-
-        Returns:
-            dict: Most matching profile.
-        """
-        self.log.info(
-            "Search for first most matching profile in match order:"
-            " Host name -> Task name -> Family."
-        )
-        # Filter all profiles with highest points value. First filter profiles
-        # with matching host if there are any then filter profiles by task
-        # name if there are any and lastly filter by family. Else use first in
-        # list.
-        idx = 0
-        final_profile = None
-        while True:
-            profiles_true = []
-            profiles_false = []
-            for profile in matching_profiles:
-                value = profile["__value__"]
-                # Just use first profile when idx is greater than values.
-                if not idx < len(value):
-                    final_profile = profile
-                    break
-
-                if value[idx]:
-                    profiles_true.append(profile)
-                else:
-                    profiles_false.append(profile)
-
-            if final_profile is not None:
-                break
-
-            if profiles_true:
-                matching_profiles = profiles_true
-            else:
-                matching_profiles = profiles_false
-
-            if len(matching_profiles) == 1:
-                final_profile = matching_profiles[0]
-                break
-            idx += 1
-
-        final_profile.pop("__value__")
-        return final_profile
-
     def filter_burnins_defs(self, profile, instance):
         """Filter outputs by their values from settings.
 
@@ -825,7 +732,6 @@ class ExtractBurnin(openpype.api.Extractor):
             return filtered_burnin_defs
 
         families = self.families_from_instance(instance)
-        low_families = [family.lower() for family in families]
 
         for filename_suffix, orig_burnin_def in burnin_defs.items():
             burnin_def = copy.deepcopy(orig_burnin_def)
@@ -836,7 +742,7 @@ class ExtractBurnin(openpype.api.Extractor):
 
             families_filters = def_filter["families"]
             if not self.families_filter_validation(
-                low_families, families_filters
+                families, families_filters
             ):
                 self.log.debug((
                     "Skipped burnin definition \"{}\". Family"
@@ -873,81 +779,19 @@ class ExtractBurnin(openpype.api.Extractor):
         return filtered_burnin_defs
 
     def families_filter_validation(self, families, output_families_filter):
-        """Determine if entered families intersect with families filters.
+        """Determines if entered families intersect with families filters.
 
         All family values are lowered to avoid unexpected results.
         """
-        if not output_families_filter:
+
+        families_filter_lower = set(family.lower() for family in
+                                    output_families_filter
+                                    # Exclude empty filter values
+                                    if family)
+        if not families_filter_lower:
             return True
-
-        for family_filter in output_families_filter:
-            if not family_filter:
-                continue
-
-            if not isinstance(family_filter, (list, tuple)):
-                if family_filter.lower() not in families:
-                    continue
-                return True
-
-            valid = True
-            for family in family_filter:
-                if family.lower() not in families:
-                    valid = False
-                    break
-
-            if valid:
-                return True
-        return False
-
-    def compile_list_of_regexes(self, in_list):
-        """Convert strings in entered list to compiled regex objects."""
-        regexes = []
-        if not in_list:
-            return regexes
-
-        for item in in_list:
-            if not item:
-                continue
-
-            try:
-                regexes.append(re.compile(item))
-            except TypeError:
-                self.log.warning((
-                    "Invalid type \"{}\" value \"{}\"."
-                    " Expected string based object. Skipping."
-                ).format(str(type(item)), str(item)))
-
-        return regexes
-
-    def validate_value_by_regexes(self, value, in_list):
-        """Validate in any regexe from list match entered value.
-
-        Args:
-            in_list (list): List with regexes.
-            value (str): String where regexes is checked.
-
-        Returns:
-            int: Returns `0` when list is not set or is empty. Returns `1` when
-                any regex match value and returns `-1` when none of regexes
-                match value entered.
-        """
-        if not in_list:
-            return 0
-
-        output = -1
-        regexes = self.compile_list_of_regexes(in_list)
-        for regex in regexes:
-            if re.match(regex, value):
-                output = 1
-                break
-        return output
-
-    def main_family_from_instance(self, instance):
-        """Return main family of entered instance."""
-        family = instance.data.get("family")
-        if not family:
-            family = instance.data["families"][0]
-        return family
+        return any(family.lower() in families_filter_lower
+                   for family in families)
 
     def families_from_instance(self, instance):
         """Return all families of entered instance."""
@@ -965,7 +809,7 @@ class ExtractBurnin(openpype.api.Extractor):
         """Return path to python script for burnin processing."""
         scriptpath = os.path.normpath(
             os.path.join(
-                openpype.PACKAGE_DIR,
+                PACKAGE_DIR,
                 "scripts",
                 "otio_burnin.py"
             )

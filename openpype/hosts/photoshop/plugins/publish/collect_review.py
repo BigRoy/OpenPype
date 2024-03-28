@@ -1,30 +1,32 @@
+"""
+Requires:
+    None
+
+Provides:
+    instance     -> family ("review")
+"""
+
 import os
 
 import pyblish.api
 
+from openpype.pipeline.create import get_subset_name
+
 
 class CollectReview(pyblish.api.ContextPlugin):
-    """Gather the active document as review instance."""
+    """Adds review to families for instances marked to be reviewable.
+    """
 
+    label = "Collect Review"
     label = "Review"
-    order = pyblish.api.CollectorOrder
     hosts = ["photoshop"]
+    order = pyblish.api.CollectorOrder + 0.1
+
+    publish = True
 
     def process(self, context):
-        family = "review"
-        task = os.getenv("AVALON_TASK", None)
-        subset = family + task.capitalize()
-
-        file_path = context.data["currentFile"]
-        base_name = os.path.basename(file_path)
-
-        instance = context.create_instance(subset)
-        instance.data.update({
-            "subset": subset,
-            "label": base_name,
-            "name": base_name,
-            "family": family,
-            "families": ["ftrack"],
-            "representations": [],
-            "asset": os.environ["AVALON_ASSET"]
-        })
+        for instance in context:
+            creator_attributes = instance.data["creator_attributes"]
+            if (creator_attributes.get("mark_for_review") and
+                    "review" not in instance.data["families"]):
+                instance.data["families"].append("review")

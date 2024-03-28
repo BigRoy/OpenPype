@@ -2,7 +2,10 @@ import os
 from collections import defaultdict
 
 import pyblish.api
-import openpype.api
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    PublishValidationError
+)
 
 
 class ValidateResources(pyblish.api.InstancePlugin):
@@ -17,7 +20,7 @@ class ValidateResources(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     label = "Resources Unique"
 
     def process(self, instance):
@@ -54,4 +57,4 @@ class ValidateResources(pyblish.api.InstancePlugin):
                 )
 
         if invalid_resources:
-            raise RuntimeError("Invalid resources in instance.")
+            raise PublishValidationError("Invalid resources in instance.")

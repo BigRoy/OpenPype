@@ -1,11 +1,16 @@
 from maya import cmds
 
 import pyblish.api
-import openpype.api
 import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    RepairAction,
+    ValidateMeshOrder,
+    OptionalPyblishPluginMixin
+)
 
 
-class ValidateMeshUVSetMap1(pyblish.api.InstancePlugin):
+class ValidateMeshUVSetMap1(pyblish.api.InstancePlugin,
+                            OptionalPyblishPluginMixin):
     """Validate model's default set exists and is named 'map1'.
 
     In Maya meshes by default have a uv set named "map1" that cannot be
@@ -15,13 +20,13 @@ class ValidateMeshUVSetMap1(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateMeshOrder
+    order = ValidateMeshOrder
     hosts = ['maya']
     families = ['model']
     optional = True
     label = "Mesh has map1 UV Set"
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction,
-               openpype.api.RepairAction]
+               RepairAction]
 
     @staticmethod
     def get_invalid(instance):
@@ -45,6 +50,8 @@ class ValidateMeshUVSetMap1(pyblish.api.InstancePlugin):
 
     def process(self, instance):
         """Process all the nodes in the instance 'objectSet'"""
+        if not self.is_active(instance.data):
+            return
 
         invalid = self.get_invalid(instance)
         if invalid:

@@ -5,7 +5,32 @@ from openpype.settings import get_local_settings
 LOCAL_EXPERIMENTAL_KEY = "experimental_tools"
 
 
-class ExperimentalTool:
+class ExperimentalTool(object):
+    """Definition of experimental tool.
+
+    Definition is used in local settings.
+
+    Args:
+        identifier (str): String identifier of tool (unique).
+        label (str): Label shown in UI.
+    """
+    def __init__(self, identifier, label, tooltip):
+        self.identifier = identifier
+        self.label = label
+        self.tooltip = tooltip
+        self._enabled = True
+
+    @property
+    def enabled(self):
+        """Is tool enabled and button is clickable."""
+        return self._enabled
+
+    def set_enabled(self, enabled=True):
+        """Change if tool is enabled."""
+        self._enabled = enabled
+
+
+class ExperimentalHostTool(ExperimentalTool):
     """Definition of experimental tool.
 
     Definition is used in local settings and in experimental tools dialog.
@@ -19,12 +44,10 @@ class ExperimentalTool:
             Some tools may not be available in all hosts.
     """
     def __init__(
-        self, identifier, label, callback, tooltip, hosts_filter=None
+        self, identifier, label, tooltip, callback, hosts_filter=None
     ):
-        self.identifier = identifier
-        self.label = label
+        super(ExperimentalHostTool, self).__init__(identifier, label, tooltip)
         self.callback = callback
-        self.tooltip = tooltip
         self.hosts_filter = hosts_filter
         self._enabled = True
 
@@ -33,18 +56,9 @@ class ExperimentalTool:
             return host_name in self.hosts_filter
         return True
 
-    @property
-    def enabled(self):
-        """Is tool enabled and button is clickable."""
-        return self._enabled
-
-    def set_enabled(self, enabled=True):
-        """Change if tool is enabled."""
-        self._enabled = enabled
-
-    def execute(self):
-        """Trigger registerd callback."""
-        self.callback()
+    def execute(self, *args, **kwargs):
+        """Trigger registered callback."""
+        self.callback(*args, **kwargs)
 
 
 class ExperimentalTools:
@@ -53,56 +67,33 @@ class ExperimentalTools:
     To add/remove experimental tool just add/remove tool to
     `experimental_tools` variable in __init__ function.
 
-    Args:
-        parent (QtWidgets.QWidget): Parent widget for tools.
-        host_name (str): Name of host in which context we're now. Environment
-            value 'AVALON_APP' is used when not passed.
-        filter_hosts (bool): Should filter tools. By default is set to 'True'
-            when 'host_name' is passed. Is always set to 'False' if 'host_name'
-            is not defined.
+    --- Example tool (callback will just print on click) ---
+    def example_callback(*args):
+        print("Triggered tool")
+
+    experimental_tools = [
+        ExperimentalHostTool(
+            "example",
+            "Example experimental tool",
+            example_callback,
+            "Example tool tooltip."
+        )
+    ]
+    ---
     """
-    def __init__(self, parent=None, host_name=None, filter_hosts=None):
+    def __init__(self, parent_widget=None, refresh=True):
         # Definition of experimental tools
         experimental_tools = [
-            ExperimentalTool(
+            ExperimentalHostTool(
                 "publisher",
                 "New publisher",
+                "Combined creation and publishing into one tool.",
                 self._show_publisher,
-                "Combined creation and publishing into one tool."
+                hosts_filter=["blender", "maya", "nuke", "celaction", "flame",
+                              "fusion", "harmony", "hiero", "resolve",
+                              "tvpaint", "unreal"]
             )
         ]
-
-        # --- Example tool (callback will just print on click) ---
-        # def example_callback(*args):
-        #     print("Triggered tool")
-        #
-        # experimental_tools = [
-        #     ExperimentalTool(
-        #         "example",
-        #         "Example experimental tool",
-        #         example_callback,
-        #         "Example tool tooltip."
-        #     )
-        # ]
-
-        # Try to get host name from env variable `AVALON_APP`
-        if not host_name:
-            host_name = os.environ.get("AVALON_APP")
-
-        # Decide if filtering by host name should happen
-        if filter_hosts is None:
-            filter_hosts = host_name is not None
-
-        if filter_hosts and not host_name:
-            filter_hosts = False
-
-        # Filter tools by host name
-        if filter_hosts:
-            experimental_tools = [
-                tool
-                for tool in experimental_tools
-                if tool.is_available_for_host(host_name)
-            ]
 
         # Store tools by identifier
         tools_by_identifier = {}
@@ -115,9 +106,12 @@ class ExperimentalTools:
 
         self._tools_by_identifier = tools_by_identifier
         self._tools = experimental_tools
-        self._parent_widget = parent
 
+        self._parent_widget = parent_widget
         self._publisher_tool = None
+
+        if refresh:
+            self.refresh_availability()
 
     @property
     def tools(self):
@@ -139,6 +133,22 @@ class ExperimentalTools:
         """
         return self._tools_by_identifier
 
+    def get(self, tool_identifier):
+        """Get tool by identifier."""
+        return self.tools_by_identifier.get(tool_identifier)
+
+    def get_tools_for_host(self, host_name=None):
+        if not host_name:
+            host_name = os.environ.get("AVALON_APP")
+        tools = []
+        for tool in self.tools:
+            if (
+                isinstance(tool, ExperimentalHostTool)
+                and tool.is_available_for_host(host_name)
+            ):
+                tools.append(tool)
+        return tools
+
     def refresh_availability(self):
         """Reload local settings and check if any tool changed ability."""
         local_settings = get_local_settings()
@@ -152,9 +162,9 @@ class ExperimentalTools:
 
     def _show_publisher(self):
         if self._publisher_tool is None:
-            from openpype.tools import publisher
+            from openpype.tools.publisher.window import PublisherWindow
 
-            self._publisher_tool = publisher.PublisherWindow(
+            self._publisher_tool = PublisherWindow(
                 parent=self._parent_widget
             )
 

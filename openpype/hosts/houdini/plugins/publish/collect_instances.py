@@ -2,7 +2,7 @@ import hou
 
 import pyblish.api
 
-from avalon.houdini import lib
+from openpype.hosts.houdini.api import lib
 
 
 class CollectInstances(pyblish.api.ContextPlugin):
@@ -47,10 +47,17 @@ class CollectInstances(pyblish.api.ContextPlugin):
             if node.evalParm("id") != "pyblish.avalon.instance":
                 continue
 
+            # instance was created by new creator code, skip it as
+            # it is already collected.
+            if node.parm("creator_identifier"):
+                continue
+
             has_family = node.evalParm("family")
             assert has_family, "'%s' is missing 'family'" % node.name()
 
-            self.log.info("processing {}".format(node))
+            self.log.info(
+                "Processing legacy instance node {}".format(node.path())
+            )
 
             data = lib.read(node)
             # Check bypass state and reverse
@@ -58,23 +65,22 @@ class CollectInstances(pyblish.api.ContextPlugin):
                 data.update({"active": not node.isBypassed()})
 
             # temporarily translation of `active` to `publish` till issue has
-            # been resolved, https://github.com/pyblish/pyblish-base/issues/307
+            # been resolved.
+            # https://github.com/pyblish/pyblish-base/issues/307
             if "active" in data:
                 data["publish"] = data["active"]
-
-            data.update(self.get_frame_data(node))
 
             # Create nice name if the instance has a frame range.
             label = data.get("name", node.name())
             label += " (%s)" % data["asset"]  # include asset in name
 
-            if "frameStart" in data and "frameEnd" in data:
-                frames = "[{frameStart} - {frameEnd}]".format(**data)
-                label = "{} {}".format(label, frames)
-
             instance = context.create_instance(label)
 
+            # Include `families` using `family` data
+            instance.data["families"] = [instance.data["family"]]
+
             instance[:] = [node]
+            instance.data["instance_node"] = node.path()
             instance.data.update(data)
 
         def sort_by_family(instance):
@@ -85,27 +91,3 @@ class CollectInstances(pyblish.api.ContextPlugin):
         context[:] = sorted(context, key=sort_by_family)
 
         return context
-
-    def get_frame_data(self, node):
-        """Get the frame data: start frame, end frame and steps
-        Args:
-            node(hou.Node)
-
-        Returns:
-            dict
-
-        """
-
-        data = {}
-
-        if node.parm("trange") is None:
-            return data
-
-        if node.evalParm("trange") == 0:
-            return data
-
-        data["frameStart"] = node.evalParm("f1")
-        data["frameEnd"] = node.evalParm("f2")
-        data["steps"] = node.evalParm("f3")
-
-        return data

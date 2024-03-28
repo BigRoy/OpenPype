@@ -5,18 +5,23 @@ import nuke
 class CollectSlate(pyblish.api.InstancePlugin):
     """Check if SLATE node is in scene and connected to rendering tree"""
 
-    order = pyblish.api.CollectorOrder + 0.09
+    order = pyblish.api.CollectorOrder + 0.002
     label = "Collect Slate Node"
     hosts = ["nuke"]
-    families = ["render", "render.local", "render.farm"]
+    families = ["render"]
 
     def process(self, instance):
-        node = instance[0]
+        node = instance.data["transientData"]["node"]
 
-        slate = next((n for n in nuke.allNodes()
-                      if "slate" in n.name().lower()
-                      if not n["disable"].getValue()),
-                     None)
+        slate = next(
+            (
+                n_ for n_ in nuke.allNodes()
+                if "slate" in n_.name().lower()
+                if not n_["disable"].getValue() and
+                "publish_instance" not in n_.knobs()  # Exclude instance nodes.
+            ),
+            None
+        )
 
         if slate:
             # check if slate node is connected to write node tree
@@ -33,9 +38,9 @@ class CollectSlate(pyblish.api.InstancePlugin):
 
             if slate_node:
                 instance.data["slateNode"] = slate_node
+                instance.data["slate"] = True
                 instance.data["families"].append("slate")
-                instance.data["versionData"]["families"].append("slate")
-                self.log.info(
+                self.log.debug(
                     "Slate node is in node graph: `{}`".format(slate.name()))
                 self.log.debug(
                     "__ instance.data: `{}`".format(instance.data))

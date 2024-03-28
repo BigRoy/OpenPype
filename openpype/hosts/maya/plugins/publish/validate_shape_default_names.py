@@ -3,15 +3,21 @@ import re
 from maya import cmds
 
 import pyblish.api
-import openpype.api
+
 import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    RepairAction,
+    OptionalPyblishPluginMixin
+)
 
 
 def short_name(node):
     return node.rsplit("|", 1)[-1].rsplit(":", 1)[-1]
 
 
-class ValidateShapeDefaultNames(pyblish.api.InstancePlugin):
+class ValidateShapeDefaultNames(pyblish.api.InstancePlugin,
+                                OptionalPyblishPluginMixin):
     """Validates that Shape names are using Maya's default format.
 
     When you create a new polygon cube Maya will name the transform
@@ -31,15 +37,13 @@ class ValidateShapeDefaultNames(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     hosts = ['maya']
     families = ['model']
-    category = 'cleanup'
     optional = True
-    version = (0, 1, 0)
     label = "Shape Default Naming"
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction,
-               openpype.api.RepairAction]
+               RepairAction]
 
     @staticmethod
     def _define_default_name(shape):
@@ -75,6 +79,8 @@ class ValidateShapeDefaultNames(pyblish.api.InstancePlugin):
 
     def process(self, instance):
         """Process all the shape nodes in the instance"""
+        if not self.is_active(instance.data):
+            return
 
         invalid = self.get_invalid(instance)
         if invalid:

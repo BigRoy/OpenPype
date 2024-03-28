@@ -101,7 +101,7 @@ class OverrideState:
     - DEFAULTS - Entity cares only about default values. It is not
         possible to set higher state if any entity does not have filled
         default value.
-    - STUDIO - First layer of overrides. Hold only studio overriden values
+    - STUDIO - First layer of overrides. Hold only studio overridden values
         that are applied on top of defaults.
     - PROJECT - Second layer of overrides. Hold only project overrides that are
         applied on top of defaults and studio overrides.
@@ -323,7 +323,10 @@ class SchemasHub:
         filled_template = self._fill_template(
             schema_data, template_def
         )
-        return filled_template
+        new_template_def = []
+        for item in filled_template:
+            new_template_def.extend(self.resolve_schema_data(item))
+        return new_template_def
 
     def create_schema_object(self, schema_data, *args, **kwargs):
         """Create entity for passed schema data.

@@ -1,35 +1,43 @@
 from typing import List
 
+import bpy
+
 import pyblish.api
+from openpype.pipeline.publish import (
+    OptionalPyblishPluginMixin,
+    PublishValidationError
+)
 import openpype.hosts.blender.api.action
 
 
-class ValidateObjectIsInObjectMode(pyblish.api.InstancePlugin):
-    """Validate that the current object is in Object Mode."""
+class ValidateObjectIsInObjectMode(
+        pyblish.api.InstancePlugin,
+        OptionalPyblishPluginMixin,
+):
+    """Validate that the objects in the instance are in Object Mode."""
 
     order = pyblish.api.ValidatorOrder - 0.01
     hosts = ["blender"]
-    families = ["model", "rig"]
-    category = "geometry"
-    label = "Object is in Object Mode"
+    families = ["model", "rig", "layout"]
+    label = "Validate Object Mode"
     actions = [openpype.hosts.blender.api.action.SelectInvalidAction]
-    optional = True
+    optional = False
 
-    @classmethod
-    def get_invalid(cls, instance) -> List:
+    @staticmethod
+    def get_invalid(instance) -> List:
         invalid = []
-        for obj in [obj for obj in instance]:
-            try:
-                if obj.type == 'MESH' or obj.type == 'ARMATURE':
-                    # Check if the object is in object mode.
-                    if not obj.mode == 'OBJECT':
-                        invalid.append(obj)
-            except Exception:
-                continue
+        for obj in instance:
+            if isinstance(obj, bpy.types.Object) and obj.mode != "OBJECT":
+                invalid.append(obj)
         return invalid
 
     def process(self, instance):
+        if not self.is_active(instance.data):
+            return
+
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError(
-                f"Object found in instance is not in Object Mode: {invalid}")
+            names = ", ".join(obj.name for obj in invalid)
+            raise PublishValidationError(
+                f"Object found in instance is not in Object Mode: {names}"
+            )

@@ -1,5 +1,6 @@
 import os
-from openpype.lib.pype_info import is_running_staging
+from openpype import AYON_SERVER_ENABLED
+from openpype.lib.openpype_version import is_staging_enabled
 
 RESOURCES_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -12,6 +13,15 @@ def get_resource(*args):
     :type *args: list
     """
     return os.path.normpath(os.path.join(RESOURCES_DIR, *args))
+
+
+def get_image_path(*args):
+    """Helper function to get images.
+
+    Args:
+        *<str>: Filepath part items.
+    """
+    return get_resource("images", *args)
 
 
 def get_liberation_font_path(bold=False, italic=False):
@@ -30,22 +40,44 @@ def get_liberation_font_path(bold=False, italic=False):
     return font_path
 
 
+def get_openpype_production_icon_filepath():
+    filename = "openpype_icon.png"
+    if AYON_SERVER_ENABLED:
+        filename = "AYON_icon.png"
+    return get_resource("icons", filename)
+
+
+def get_openpype_staging_icon_filepath():
+    filename = "openpype_icon_staging.png"
+    if AYON_SERVER_ENABLED:
+        filename = "AYON_icon_staging.png"
+    return get_resource("icons", filename)
+
+
 def get_openpype_icon_filepath(staging=None):
+    if AYON_SERVER_ENABLED and os.getenv("AYON_USE_DEV") == "1":
+        return get_resource("icons", "AYON_icon_dev.png")
+
     if staging is None:
-        staging = is_running_staging()
+        staging = is_staging_enabled()
 
     if staging:
-        icon_file_name = "openpype_icon_staging.png"
-    else:
-        icon_file_name = "openpype_icon.png"
-    return get_resource("icons", icon_file_name)
+        return get_openpype_staging_icon_filepath()
+    return get_openpype_production_icon_filepath()
 
 
 def get_openpype_splash_filepath(staging=None):
     if staging is None:
-        staging = is_running_staging()
+        staging = is_staging_enabled()
 
-    if staging:
+    if AYON_SERVER_ENABLED:
+        if os.getenv("AYON_USE_DEV") == "1":
+            splash_file_name = "AYON_splash_dev.png"
+        elif staging:
+            splash_file_name = "AYON_splash_staging.png"
+        else:
+            splash_file_name = "AYON_splash.png"
+    elif staging:
         splash_file_name = "openpype_splash_staging.png"
     else:
         splash_file_name = "openpype_splash.png"

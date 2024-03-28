@@ -1,7 +1,10 @@
 import pyblish.api
-import openpype.api
-import openpype.hosts.maya.api.action
 
+from openpype.pipeline.publish import (
+    ValidatePipelineOrder,
+    PublishXmlValidationError
+)
+import openpype.hosts.maya.api.action
 from openpype.hosts.maya.api import lib
 
 
@@ -14,7 +17,7 @@ class ValidateNodeIDs(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidatePipelineOrder
+    order = ValidatePipelineOrder
     label = 'Instance Nodes Have ID'
     hosts = ['maya']
     families = ["model",
@@ -34,8 +37,14 @@ class ValidateNodeIDs(pyblish.api.InstancePlugin):
         # Ensure all nodes have a cbId
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError("Nodes found without "
-                               "IDs: {0}".format(invalid))
+            names = "\n".join(
+                "- {}".format(node) for node in invalid
+            )
+            raise PublishXmlValidationError(
+                plugin=self,
+                message="Nodes found without IDs: {}".format(invalid),
+                formatting_data={"nodes": names}
+            )
 
     @classmethod
     def get_invalid(cls, instance):

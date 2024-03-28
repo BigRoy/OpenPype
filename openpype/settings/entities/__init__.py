@@ -57,7 +57,7 @@ from .exceptions import (
     SchemaError,
     DefaultsNotDefined,
     StudioDefaultsNotDefined,
-    BaseInvalidValueType,
+    BaseInvalidValue,
     InvalidValueType,
     InvalidKeySymbols,
     SchemaMissingFileInfo,
@@ -106,7 +106,9 @@ from .enum_entity import (
     ToolsEnumEntity,
     TaskTypeEnumEntity,
     DeadlineUrlEnumEntity,
-    AnatomyTemplatesEnumEntity
+    AnatomyTemplatesEnumEntity,
+    ShotgridUrlEnumEntity,
+    RoyalRenderRootEnumEntity
 )
 
 from .list_entity import ListEntity
@@ -122,12 +124,12 @@ from .dict_conditional import (
 )
 
 from .anatomy_entities import AnatomyEntity
-
+from .op_version_entity import VersionsInputEntity
 
 __all__ = (
     "DefaultsNotDefined",
     "StudioDefaultsNotDefined",
-    "BaseInvalidValueType",
+    "BaseInvalidValue",
     "InvalidValueType",
     "InvalidKeySymbols",
     "SchemaMissingFileInfo",
@@ -168,6 +170,8 @@ __all__ = (
     "ToolsEnumEntity",
     "TaskTypeEnumEntity",
     "DeadlineUrlEnumEntity",
+    "ShotgridUrlEnumEntity",
+    "RoyalRenderRootEnumEntity",
     "AnatomyTemplatesEnumEntity",
 
     "ListEntity",
@@ -181,5 +185,7 @@ __all__ = (
     "DictConditionalEntity",
     "SyncServerProviders",
 
-    "AnatomyEntity"
+    "AnatomyEntity",
+
+    "VersionsInputEntity",
 )

@@ -1,14 +1,13 @@
+import os
 import json
 
-import os
-
-import openpype.api
+from openpype.pipeline import publish
 from openpype.hosts.maya.api.lib import extract_alembic
 
 from maya import cmds
 
 
-class ExtractAssembly(openpype.api.Extractor):
+class ExtractAssembly(publish.Extractor):
     """Produce an alembic of just point positions and normals.
 
     Positions and normals are preserved, but nothing more,
@@ -28,12 +27,12 @@ class ExtractAssembly(openpype.api.Extractor):
         json_filename = "{}.json".format(instance.name)
         json_path = os.path.join(staging_dir, json_filename)
 
-        self.log.info("Dumping scene data for debugging ..")
+        self.log.debug("Dumping scene data for debugging ..")
         with open(json_path, "w") as filepath:
             json.dump(instance.data["scenedata"], filepath, ensure_ascii=False)
 
-        self.log.info("Extracting point cache ..")
-        cmds.select(instance.data["hierarchy"])
+        self.log.debug("Extracting pointcache ..")
+        cmds.select(instance.data["nodesHierarchy"])
 
         # Run basic alembic exporter
         extract_alembic(file=hierarchy_path,

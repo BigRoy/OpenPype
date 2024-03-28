@@ -1,7 +1,10 @@
-
 from collections import OrderedDict
-from avalon import io
+
+from bson.objectid import ObjectId
 import pyblish.api
+
+from openpype import AYON_SERVER_ENABLED
+from openpype.pipeline import legacy_io
 
 
 class IntegrateInputLinks(pyblish.api.ContextPlugin):
@@ -32,6 +35,7 @@ class IntegrateInputLinks(pyblish.api.ContextPlugin):
             plugin.
 
         """
+
         workfile = None
         publishing = []
 
@@ -104,7 +108,7 @@ class IntegrateInputLinks(pyblish.api.ContextPlugin):
         # future.
         link = OrderedDict()
         link["type"] = link_type
-        link["id"] = io.ObjectId(input_id)
+        link["id"] = ObjectId(input_id)
         link["linkedBy"] = "publish"
 
         if "inputLinks" not in version_doc["data"]:
@@ -127,5 +131,11 @@ class IntegrateInputLinks(pyblish.api.ContextPlugin):
             if input_links is None:
                 continue
 
-            io.update_one({"_id": version_doc["_id"]},
-                          {"$set": {"data.inputLinks": input_links}})
+            legacy_io.update_one(
+                {"_id": version_doc["_id"]},
+                {"$set": {"data.inputLinks": input_links}}
+            )
+
+
+if AYON_SERVER_ENABLED:
+    del IntegrateInputLinks

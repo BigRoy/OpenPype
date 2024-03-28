@@ -8,15 +8,12 @@ in global space here until are required or used.
 """
 
 import os
-import click
 
 from openpype.modules import (
+    click_wrap,
     JsonFilesSettingsDef,
     OpenPypeAddOn,
-    ModulesManager
-)
-# Import interface defined by this addon to be able find other addons using it
-from openpype_interfaces import (
+    ModulesManager,
     IPluginPaths,
     ITrayAction
 )
@@ -47,7 +44,7 @@ class AddonSettingsDef(JsonFilesSettingsDef):
 
 
 class ExampleAddon(OpenPypeAddOn, IPluginPaths, ITrayAction):
-    """This Addon has defined it's settings and interface.
+    """This Addon has defined its settings and interface.
 
     This example has system settings with an enabled option. And use
     few other interfaces:
@@ -118,10 +115,12 @@ class ExampleAddon(OpenPypeAddOn, IPluginPaths, ITrayAction):
         }
 
     def cli(self, click_group):
-        click_group.add_command(cli_main)
+        click_group.add_command(cli_main.to_click_obj())
 
 
-@click.group(ExampleAddon.name, help="Example addon dynamic cli commands.")
+@click_wrap.group(
+    ExampleAddon.name,
+    help="Example addon dynamic cli commands.")
 def cli_main():
     pass
 

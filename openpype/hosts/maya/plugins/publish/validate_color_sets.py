@@ -1,11 +1,17 @@
 from maya import cmds
 
 import pyblish.api
-import openpype.api
 import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    ValidateMeshOrder,
+    OptionalPyblishPluginMixin,
+    PublishValidationError,
+    RepairAction
+)
 
 
-class ValidateColorSets(pyblish.api.Validator):
+class ValidateColorSets(pyblish.api.Validator,
+                        OptionalPyblishPluginMixin):
     """Validate all meshes in the instance have unlocked normals
 
     These can be removed manually through:
@@ -13,13 +19,13 @@ class ValidateColorSets(pyblish.api.Validator):
 
     """
 
-    order = openpype.api.ValidateMeshOrder
+    order = ValidateMeshOrder
     hosts = ['maya']
     families = ['model']
-    category = 'geometry'
     label = 'Mesh ColorSets'
-    actions = [openpype.hosts.maya.api.action.SelectInvalidAction,
-               openpype.api.RepairAction]
+    actions = [
+        openpype.hosts.maya.api.action.SelectInvalidAction, RepairAction
+    ]
     optional = True
 
     @staticmethod
@@ -38,12 +44,15 @@ class ValidateColorSets(pyblish.api.Validator):
 
     def process(self, instance):
         """Raise invalid when any of the meshes have ColorSets"""
+        if not self.is_active(instance.data):
+            return
 
         invalid = self.get_invalid(instance)
 
         if invalid:
-            raise ValueError("Meshes found with "
-                             "Color Sets: {0}".format(invalid))
+            raise PublishValidationError(
+                message="Meshes found with Color Sets: {0}".format(invalid)
+            )
 
     @classmethod
     def repair(cls, instance):

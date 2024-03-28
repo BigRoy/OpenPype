@@ -1,4 +1,4 @@
-from Qt import QtWidgets
+from qtpy import QtWidgets
 
 from .widgets import (
     ExpandingWidget,
@@ -183,7 +183,7 @@ class DictConditionalWidget(BaseWidget):
         content_widget.setObjectName("ContentWidget")
 
         if self.entity.highlight_content:
-            content_state = "hightlighted"
+            content_state = "highlighted"
             bottom_margin = 5
         else:
             content_state = ""

@@ -1,7 +1,7 @@
 from .lib import STRING_TYPE
 from .input_entities import InputEntity
 from .exceptions import (
-    BaseInvalidValueType,
+    BaseInvalidValue,
     InvalidValueType
 )
 
@@ -11,8 +11,10 @@ class ColorEntity(InputEntity):
 
     def _item_initialization(self):
         self.valid_value_types = (list, )
-        self.value_on_not_set = [0, 0, 0, 255]
         self.use_alpha = self.schema_data.get("use_alpha", True)
+        self.value_on_not_set = self.convert_to_valid_type(
+            self.schema_data.get("default", [0, 0, 0, 255])
+        )
 
     def set_override_state(self, *args, **kwargs):
         super(ColorEntity, self).set_override_state(*args, **kwargs)
@@ -47,7 +49,7 @@ class ColorEntity(InputEntity):
             reason = "Color entity expect 4 items in list got {}".format(
                 len(value)
             )
-            raise BaseInvalidValueType(reason, self.path)
+            raise BaseInvalidValue(reason, self.path)
 
         new_value = []
         for item in value:
@@ -60,7 +62,7 @@ class ColorEntity(InputEntity):
                 reason = (
                     "Color entity expect 4 integers in range 0-255 got {}"
                 ).format(value)
-                raise BaseInvalidValueType(reason, self.path)
+                raise BaseInvalidValue(reason, self.path)
             new_value.append(item)
 
         # Make sure

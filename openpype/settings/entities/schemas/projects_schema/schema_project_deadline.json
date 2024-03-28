@@ -20,6 +20,37 @@
                 {
                     "type": "dict",
                     "collapsible": true,
+                    "key": "CollectDefaultDeadlineServer",
+                    "label": "Default Deadline Webservice",
+                    "children": [
+                        {
+                            "type": "boolean",
+                            "key": "pass_mongo_url",
+                            "label": "Pass Mongo url to job"
+                        }
+                    ]
+                },
+                {
+                    "type": "dict",
+                    "collapsible": true,
+                    "key": "CollectDeadlinePools",
+                    "label": "Default Deadline Pools",
+                    "children": [
+                        {
+                            "type": "text",
+                            "key": "primary_pool",
+                            "label": "Primary Pool"
+                        },
+                        {
+                            "type": "text",
+                            "key": "secondary_pool",
+                            "label": "Secondary Pool"
+                        }
+                    ]
+                },
+                {
+                    "type": "dict",
+                    "collapsible": true,
                     "key": "ValidateExpectedFiles",
                     "label": "Validate Expected Files",
                     "checkbox_key": "enabled",
@@ -61,103 +92,8 @@
                 {
                     "type": "dict",
                     "collapsible": true,
-                    "key": "ProcessSubmittedJobOnFarm",
-                    "label": "ProcessSubmittedJobOnFarm",
-                    "checkbox_key": "enabled",
-                    "is_group": true,
-                    "children": [
-                        {
-                            "type": "boolean",
-                            "key": "enabled",
-                            "label": "Enabled"
-                        },
-                        {
-                            "type": "text",
-                            "key": "deadline_department",
-                            "label": "Deadline department"
-                        },
-                        {
-                            "type": "text",
-                            "key": "deadline_pool",
-                            "label": "Deadline Pool"
-                        },
-                        {
-                            "type": "text",
-                            "key": "deadline_group",
-                            "label": "Deadline Group"
-                        },
-                        {
-                            "type": "number",
-                            "key": "deadline_chunk_size",
-                            "label": "Deadline Chunk Size"
-                        },
-                        {
-                            "type": "number",
-                            "key": "deadline_priority",
-                            "label": "Deadline Priotity"
-                        },
-                        {
-                            "type": "splitter"
-                        },
-                        {
-                            "type": "text",
-                            "key": "publishing_script",
-                            "label": "Publishing script path"
-                        },
-                        {
-                            "type": "list",
-                            "key": "skip_integration_repre_list",
-                            "label": "Skip integration of representation with ext",
-                            "object_type": {
-                                "type": "text"
-                            }
-                        },
-                        {
-                            "type": "dict",
-                            "key": "aov_filter",
-                            "label": "Reviewable subsets filter",
-                            "children": [
-                                {
-                                    "type": "list",
-                                    "key": "maya",
-                                    "label": "Maya",
-                                    "object_type": {
-                                        "type": "text"
-                                    }
-                                },
-                                {
-                                    "type": "list",
-                                    "key": "nuke",
-                                    "label": "Nuke",
-                                    "object_type": {
-                                        "type": "text"
-                                    }
-                                },
-                                {
-                                    "type": "list",
-                                    "key": "aftereffects",
-                                    "label": "After Effects",
-                                    "object_type": {
-                                        "type": "text"
-                                    }
-                                },
-                                {
-                                    "type": "list",
-                                    "key": "celaction",
-                                    "label": "Celaction",
-                                    "object_type": {
-                                        "type": "text"
-                                    }
-                                }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "type": "dict",
-                    "collapsible": true,
                     "key": "MayaSubmitDeadline",
-                    "label": "Submit Maya job to Deadline",
+                    "label": "Maya Submit to Deadline",
                     "checkbox_key": "enabled",
                     "children": [
                         {
@@ -185,7 +121,7 @@
                                     "DraftTileAssembler": "Draft Tile Assembler"
                                 },
                                 {
-                                    "oiio": "Open Image IO"
+                                    "OpenPypeTileAssembler": "OpenPype Tile Assembler"
                                 }
                             ]
                         },
@@ -196,8 +132,23 @@
                         },
                         {
                             "type": "boolean",
+                            "key": "import_reference",
+                            "label": "Use Scene with Imported Reference"
+                        },
+                        {
+                            "type": "boolean",
                             "key": "asset_dependencies",
                             "label": "Use Asset dependencies"
+                        },
+                        {
+                            "type": "number",
+                            "key": "priority",
+                            "label": "Priority"
+                        },
+                        {
+                            "type": "number",
+                            "key": "tile_priority",
+                            "label": "Tile Assembler Priority"
                         },
                         {
                             "type": "text",
@@ -244,14 +195,20 @@
                                 ]
 
                             }
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "strict_error_checking",
+                            "label": "Strict Error Checking",
+                            "default": true
                         }
                     ]
                 },
                 {
                     "type": "dict",
                     "collapsible": true,
-                    "key": "NukeSubmitDeadline",
-                    "label": "Nuke Submit to Deadline",
+                    "key": "MaxSubmitDeadline",
+                    "label": "3dsMax Submit to Deadline",
                     "checkbox_key": "enabled",
                     "children": [
                         {
@@ -282,22 +239,118 @@
                         {
                             "type": "number",
                             "key": "chunk_size",
+                            "label": "Frame per Task"
+                        },
+                        {
+                            "type": "text",
+                            "key": "group",
+                            "label": "Group Name"
+                        }
+                    ]
+                },
+                {
+                    "type": "dict",
+                    "collapsible": true,
+                    "key": "FusionSubmitDeadline",
+                    "label": "Fusion submit to Deadline",
+                    "checkbox_key": "enabled",
+                    "children": [
+                        {
+                            "type": "boolean",
+                            "key": "enabled",
+                            "label": "Enabled"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "optional",
+                            "label": "Optional"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "active",
+                            "label": "Active"
+                        },
+                        {
+                            "type": "number",
+                            "key": "priority",
+                            "label": "Priority"
+                        },
+                        {
+                            "type": "number",
+                            "key": "chunk_size",
+                            "label": "Frame per Task"
+                        },
+                        {
+                            "type": "number",
+                            "key": "concurrent_tasks",
+                            "label": "Number of concurrent tasks"
+                        },
+                        {
+                            "type": "text",
+                            "key": "group",
+                            "label": "Group Name"
+                        },
+                        {
+                            "type": "enum",
+                            "key": "plugin",
+                            "label": "Deadline Plugin",
+                            "enum_items": [
+                                {"Fusion": "Fusion"},
+                                {"FusionCmd": "FusionCmd"}
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "dict",
+                    "collapsible": true,
+                    "key": "NukeSubmitDeadline",
+                    "label": "Nuke Submit to Deadline",
+                    "checkbox_key": "enabled",
+                    "children": [
+                        {
+                            "type": "boolean",
+                            "key": "enabled",
+                            "label": "Enabled"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "optional",
+                            "label": "Optional"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "active",
+                            "label": "Active"
+                        },
+                        {
+                            "type": "splitter"
+                        },
+                        {
+                            "type": "number",
+                            "key": "priority",
+                            "label": "Priority"
+                        },
+                        {
+                            "type": "number",
+                            "key": "chunk_size",
                             "label": "Chunk Size"
                         },
                         {
-                            "type": "text",
-                            "key": "primary_pool",
-                            "label": "Primary Pool"
+                            "type": "number",
+                            "key": "concurrent_tasks",
+                            "label": "Number of concurrent tasks"
                         },
                         {
-                            "type": "text",
-                            "key": "secondary_pool",
-                            "label": "Secondary Pool"
+                            "type": "splitter"
                         },
                         {
                             "type": "text",
                             "key": "group",
                             "label": "Group"
+                        },
+                        {
+                            "type": "splitter"
                         },
                         {
                             "type": "text",
@@ -308,6 +361,16 @@
                             "type": "boolean",
                             "key": "use_gpu",
                             "label": "Use GPU"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "workfile_dependency",
+                            "label": "Workfile Dependency"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "use_published_workfile",
+                            "label": "Use Published Workfile"
                         },
                         {
                             "type": "list",
@@ -373,16 +436,6 @@
                         },
                         {
                             "type": "text",
-                            "key": "primary_pool",
-                            "label": "Primary Pool"
-                        },
-                        {
-                            "type": "text",
-                            "key": "secondary_pool",
-                            "label": "Secondary Pool"
-                        },
-                        {
-                            "type": "text",
                             "key": "group",
                             "label": "Group"
                         },
@@ -432,16 +485,6 @@
                         },
                         {
                             "type": "text",
-                            "key": "primary_pool",
-                            "label": "Primary Pool"
-                        },
-                        {
-                            "type": "text",
-                            "key": "secondary_pool",
-                            "label": "Secondary Pool"
-                        },
-                        {
-                            "type": "text",
                             "key": "group",
                             "label": "Group"
                         },
@@ -449,6 +492,224 @@
                             "type": "text",
                             "key": "department",
                             "label": "Department"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "multiprocess",
+                            "label": "Multiprocess"
+                        }
+                    ]
+                },
+                {
+                    "type": "dict",
+                    "collapsible": true,
+                    "checkbox_key": "enabled",
+                    "key": "CelactionSubmitDeadline",
+                    "label": "Celaction Submit Deadline",
+                    "is_group": true,
+                    "children": [
+                        {
+                            "type": "boolean",
+                            "key": "enabled",
+                            "label": "Enabled"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_department",
+                            "label": "Deadline apartment"
+                        },
+                        {
+                            "type": "number",
+                            "key": "deadline_priority",
+                            "label": "Deadline priority"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_pool",
+                            "label": "Deadline pool"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_pool_secondary",
+                            "label": "Deadline pool (secondary)"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_group",
+                            "label": "Deadline Group"
+                        },
+                        {
+                            "type": "number",
+                            "key": "deadline_chunk_size",
+                            "label": "Deadline Chunk size"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_job_delay",
+                            "label": "Delay job (timecode dd:hh:mm:ss)"
+                        }
+                    ]
+                },
+                {
+                    "type": "dict",
+                    "collapsible": true,
+                    "key": "BlenderSubmitDeadline",
+                    "label": "Blender Submit to Deadline",
+                    "checkbox_key": "enabled",
+                    "children": [
+                        {
+                            "type": "boolean",
+                            "key": "enabled",
+                            "label": "Enabled"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "optional",
+                            "label": "Optional"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "active",
+                            "label": "Active"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "use_published",
+                            "label": "Use Published scene"
+                        },
+                        {
+                            "type": "number",
+                            "key": "priority",
+                            "label": "Priority"
+                        },
+                        {
+                            "type": "number",
+                            "key": "chunk_size",
+                            "label": "Frame per Task"
+                        },
+                        {
+                            "type": "text",
+                            "key": "group",
+                            "label": "Group Name"
+                        },
+                        {
+                            "type": "text",
+                            "key": "job_delay",
+                            "label": "Delay job (timecode dd:hh:mm:ss)"
+                        }
+                    ]
+                },
+                {
+                    "type": "dict",
+                    "collapsible": true,
+                    "key": "ProcessSubmittedCacheJobOnFarm",
+                    "label": "ProcessSubmittedCacheJobOnFarm",
+                    "checkbox_key": "enabled",
+                    "is_group": true,
+                    "children": [
+                        {
+                            "type": "boolean",
+                            "key": "enabled",
+                            "label": "Enabled"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_department",
+                            "label": "Deadline department"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_pool",
+                            "label": "Deadline Pool"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_group",
+                            "label": "Deadline Group"
+                        },
+                        {
+                            "type": "number",
+                            "key": "deadline_chunk_size",
+                            "label": "Deadline Chunk Size"
+                        },
+                        {
+                            "type": "number",
+                            "key": "deadline_priority",
+                            "label": "Deadline Priotity"
+                        }
+                    ]
+                },
+                {
+                    "type": "dict",
+                    "collapsible": true,
+                    "key": "ProcessSubmittedJobOnFarm",
+                    "label": "ProcessSubmittedJobOnFarm",
+                    "checkbox_key": "enabled",
+                    "is_group": true,
+                    "children": [
+                        {
+                            "type": "boolean",
+                            "key": "enabled",
+                            "label": "Enabled"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_department",
+                            "label": "Deadline department"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_pool",
+                            "label": "Deadline Pool"
+                        },
+                        {
+                            "type": "text",
+                            "key": "deadline_group",
+                            "label": "Deadline Group"
+                        },
+                        {
+                            "type": "number",
+                            "key": "deadline_chunk_size",
+                            "label": "Deadline Chunk Size"
+                        },
+                        {
+                            "type": "number",
+                            "key": "deadline_priority",
+                            "label": "Deadline Priotity"
+                        },
+                        {
+                            "type": "splitter"
+                        },
+                        {
+                            "type": "text",
+                            "key": "publishing_script",
+                            "label": "Publishing script path"
+                        },
+                        {
+                            "type": "list",
+                            "key": "skip_integration_repre_list",
+                            "label": "Skip integration of representation with ext",
+                            "object_type": {
+                                "type": "text"
+                            }
+                        },
+                        {
+                            "type": "list",
+                            "key": "families_transfer",
+                            "label": "List of family names to transfer\nto generated instances (AOVs for example).",
+                            "object_type": {
+                                "type": "text"
+                            }
+                        },
+                        {
+                            "type": "dict-modifiable",
+                            "docstring": "Regular expression to filter for which subset review should be created in publish job.",
+                            "key": "aov_filter",
+                            "label": "Reviewable subsets filter",
+                            "object_type": {
+                                "type": "list",
+                                "object_type": "text"
+                            }
                         }
                     ]
                 }

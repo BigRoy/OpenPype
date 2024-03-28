@@ -44,12 +44,6 @@ def _profile_exclusion(matching_profiles, logger):
     Returns:
         dict: Most matching profile.
     """
-
-    logger.info(
-        "Search for first most matching profile in match order:"
-        " Host name -> Task name -> Family."
-    )
-
     if not matching_profiles:
         return None
 
@@ -168,6 +162,15 @@ def filter_profiles(profiles_data, key_values, keys_order=None, logger=None):
                 _keys_order.append(key)
         keys_order = tuple(_keys_order)
 
+    log_parts = " | ".join([
+        "{}: \"{}\"".format(*item)
+        for item in key_values.items()
+    ])
+
+    logger.debug(
+        "Looking for matching profile for: {}".format(log_parts)
+    )
+
     matching_profiles = None
     highest_profile_points = -1
     # Each profile get 1 point for each matching filter. Profile with most
@@ -205,20 +208,20 @@ def filter_profiles(profiles_data, key_values, keys_order=None, logger=None):
         if profile_points == highest_profile_points:
             matching_profiles.append((profile, profile_scores))
 
-    log_parts = " | ".join([
-        "{}: \"{}\"".format(*item)
-        for item in key_values.items()
-    ])
-
     if not matching_profiles:
-        logger.info(
+        logger.debug(
             "None of profiles match your setup. {}".format(log_parts)
         )
         return None
 
     if len(matching_profiles) > 1:
-        logger.info(
+        logger.debug(
             "More than one profile match your setup. {}".format(log_parts)
         )
 
-    return _profile_exclusion(matching_profiles, logger)
+    profile = _profile_exclusion(matching_profiles, logger)
+    if profile:
+        logger.debug(
+            "Profile selected: {}".format(profile)
+        )
+    return profile

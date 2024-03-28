@@ -1,7 +1,6 @@
-import pyblish.api
-import openpype.api
-
 import os
+import pyblish.api
+from openpype.pipeline.publish import ValidateContentsOrder
 
 
 class ValidateResources(pyblish.api.InstancePlugin):
@@ -17,8 +16,8 @@ class ValidateResources(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
-    label = "Resources"
+    order = ValidateContentsOrder
+    label = "Validate Resources"
 
     def process(self, instance):
 

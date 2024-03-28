@@ -5,7 +5,6 @@ import tempfile
 import contextlib
 
 import pyblish
-import pyblish.cli
 import pyblish.plugin
 from pyblish.vendor import six
 
@@ -78,3 +77,12 @@ def tempdir():
         yield tempdir
     finally:
         shutil.rmtree(tempdir)
+
+
+def is_in_tests():
+    """Returns if process is running in automatic tests mode.
+
+    In tests mode different source DB is used, some plugins might be disabled
+    etc.
+    """
+    return os.environ.get("IS_TEST") == '1'

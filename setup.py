@@ -1,16 +1,67 @@
 # -*- coding: utf-8 -*-
 """Setup info for building OpenPype 3.0."""
 import os
-import sys
 import re
+import platform
+import distutils.spawn
 from pathlib import Path
 
 from cx_Freeze import setup, Executable
 from sphinx.setup_command import BuildDoc
 
-version = {}
-
 openpype_root = Path(os.path.dirname(__file__))
+
+
+def validate_thirdparty_binaries():
+    """Check existence of thirdpart executables."""
+    low_platform = platform.system().lower()
+    binary_vendors_dir = os.path.join(
+        openpype_root,
+        "vendor",
+        "bin"
+    )
+
+    error_msg = (
+        "Missing binary dependency {}. Please fetch thirdparty dependencies."
+    )
+    # Validate existence of FFmpeg
+    ffmpeg_dir = os.path.join(binary_vendors_dir, "ffmpeg", low_platform)
+    if low_platform == "windows":
+        ffmpeg_dir = os.path.join(ffmpeg_dir, "bin")
+    ffmpeg_executable = os.path.join(ffmpeg_dir, "ffmpeg")
+    ffmpeg_result = distutils.spawn.find_executable(ffmpeg_executable)
+    if ffmpeg_result is None:
+        raise RuntimeError(error_msg.format("FFmpeg"))
+
+    # Validate existence of OpenImageIO (not on MacOs)
+    oiio_tool_path = None
+    if low_platform == "linux":
+        oiio_tool_path = os.path.join(
+            binary_vendors_dir,
+            "oiio",
+            low_platform,
+            "bin",
+            "oiiotool"
+        )
+    elif low_platform == "windows":
+        oiio_tool_path = os.path.join(
+            binary_vendors_dir,
+            "oiio",
+            low_platform,
+            "oiiotool"
+        )
+    oiio_result = None
+    if oiio_tool_path is not None:
+        oiio_result = distutils.spawn.find_executable(oiio_tool_path)
+        if oiio_result is None:
+            raise RuntimeError(error_msg.format("OpenImageIO"))
+
+
+# Give ability to skip vaidation
+if not os.getenv("SKIP_THIRD_PARTY_VALIDATION"):
+    validate_thirdparty_binaries()
+
+version = {}
 
 with open(openpype_root / "openpype" / "version.py") as fp:
     exec(fp.read(), version)
@@ -18,8 +69,13 @@ with open(openpype_root / "openpype" / "version.py") as fp:
 version_match = re.search(r"(\d+\.\d+.\d+).*", version["__version__"])
 __version__ = version_match.group(1)
 
+low_platform_name = platform.system().lower()
+IS_WINDOWS = low_platform_name == "windows"
+IS_LINUX = low_platform_name == "linux"
+IS_MACOS = low_platform_name == "darwin"
+
 base = None
-if sys.platform == "win32":
+if IS_WINDOWS:
     base = "Win32GUI"
 
 # -----------------------------------------------------------------------
@@ -32,7 +88,6 @@ install_requires = [
     "keyring",
     "clique",
     "jsonschema",
-    "opentimelineio",
     "pathlib2",
     "pkg_resources",
     "PIL",
@@ -41,6 +96,7 @@ install_requires = [
     "jinxed",
     "blessed",
     "Qt",
+    "qtpy",
     "speedcopy",
     "googleapiclient",
     "httplib2",
@@ -49,7 +105,9 @@ install_requires = [
     "dns",
     # Python defaults (cx_Freeze skip them by default)
     "dbm",
-    "sqlite3"
+    "sqlite3",
+    "dataclasses",
+    "timeit"
 ]
 
 includes = []
@@ -66,13 +124,11 @@ bin_includes = [
 include_files = [
     "igniter",
     "openpype",
-    "repos",
-    "schema",
     "LICENSE",
     "README.md"
 ]
 
-if sys.platform == "win32":
+if IS_WINDOWS:
     install_requires.extend([
         # `pywin32` packages
         "win32ctypes",
@@ -94,16 +150,34 @@ build_exe_options = dict(
 )
 
 bdist_mac_options = dict(
-    bundle_name="OpenPype",
+    bundle_name=f"OpenPype {__version__}",
     iconfile=mac_icon_path
 )
 
 executables = [
-    Executable("start.py", base=base,
-               target_name="openpype_gui", icon=icon_path.as_posix()),
-    Executable("start.py", base=None,
-               target_name="openpype_console", icon=icon_path.as_posix())
+    Executable(
+        "start.py",
+        base=base,
+        target_name="openpype_gui",
+        icon=icon_path.as_posix()
+    ),
+    Executable(
+        "start.py",
+        base=None,
+        target_name="openpype_console",
+        icon=icon_path.as_posix()
+    ),
 ]
+
+if IS_LINUX:
+    executables.append(
+        Executable(
+            "app_launcher.py",
+            base=None,
+            target_name="app_launcher",
+            icon=icon_path.as_posix()
+        )
+    )
 
 setup(
     name="OpenPype",
@@ -121,5 +195,6 @@ setup(
             "build_dir": (openpype_root / "docs" / "build").as_posix()
         }
     },
-    executables=executables
+    executables=executables,
+    packages=[]
 )

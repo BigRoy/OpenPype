@@ -1,7 +1,7 @@
 from maya import cmds
 
 import pyblish.api
-import openpype.api
+from openpype.pipeline.publish import ValidateContentsOrder
 
 
 class ValidateYetiRenderScriptCallbacks(pyblish.api.InstancePlugin):
@@ -20,7 +20,7 @@ class ValidateYetiRenderScriptCallbacks(pyblish.api.InstancePlugin):
 
     """
 
-    order = openpype.api.ValidateContentsOrder
+    order = ValidateContentsOrder
     label = "Yeti Render Script Callbacks"
     hosts = ["maya"]
     families = ["renderlayer"]
@@ -48,9 +48,21 @@ class ValidateYetiRenderScriptCallbacks(pyblish.api.InstancePlugin):
 
         yeti_loaded = cmds.pluginInfo("pgYetiMaya", query=True, loaded=True)
 
+        if not yeti_loaded and not cmds.ls(type="pgYetiMaya"):
+            # The yeti plug-in is available and loaded so at
+            # this point we don't really care whether the scene
+            # has any yeti callback set or not since if the callback
+            # is there it wouldn't error and if it weren't then
+            # nothing happens because there are no yeti nodes.
+            cls.log.debug(
+                "Yeti is loaded but no yeti nodes were found. "
+                "Callback validation skipped.."
+            )
+            return False
+
         renderer = instance.data["renderer"]
         if renderer == "redshift":
-            cls.log.info("Redshift ignores any pre and post render callbacks")
+            cls.log.debug("Redshift ignores any pre and post render callbacks")
             return False
 
         callback_lookup = cls.callbacks.get(renderer, {})

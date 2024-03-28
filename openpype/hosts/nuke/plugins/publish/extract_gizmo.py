@@ -1,42 +1,49 @@
-import pyblish.api
-from avalon.nuke import lib as anlib
-from openpype.hosts.nuke.api import utils as pnutils
-import nuke
 import os
-import openpype
+import nuke
+
+import pyblish.api
+
+from openpype.pipeline import publish
+from openpype.hosts.nuke.api import utils as pnutils
+from openpype.hosts.nuke.api.lib import (
+    maintained_selection,
+    reset_selection,
+    select_nodes
+)
 
 
-class ExtractGizmo(openpype.api.Extractor):
+class ExtractGizmo(publish.Extractor):
     """Extracting Gizmo (Group) node
 
     Will create nuke script only with the Gizmo node.
     """
 
     order = pyblish.api.ExtractorOrder
-    label = "Extract Gizmo (Group)"
+    label = "Extract Gizmo (group)"
     hosts = ["nuke"]
     families = ["gizmo"]
 
     def process(self, instance):
-        tmp_nodes = list()
-        orig_grpn = instance[0]
+        tmp_nodes = []
+        orig_grpn = instance.data["transientData"]["node"]
+
         # Define extract output file path
         stagingdir = self.staging_dir(instance)
         filename = "{0}.nk".format(instance.name)
         path = os.path.join(stagingdir, filename)
 
         # maintain selection
-        with anlib.maintained_selection():
+        with maintained_selection():
             orig_grpn_name = orig_grpn.name()
             tmp_grpn_name = orig_grpn_name + "_tmp"
             # select original group node
-            anlib.select_nodes([orig_grpn])
+            select_nodes([orig_grpn])
 
             # copy to clipboard
             nuke.nodeCopy("%clipboard%")
 
             # reset selection to none
-            anlib.reset_selection()
+            reset_selection()
 
             # paste clipboard
             nuke.nodePaste("%clipboard%")
@@ -47,15 +54,6 @@ class ExtractGizmo(openpype.api.Extractor):
 
             # convert gizmos to groups
             pnutils.bake_gizmos_recursively(copy_grpn)
-
-            # remove avalonknobs
-            knobs = copy_grpn.knobs()
-            avalon_knobs = [k for k in knobs.keys()
-                            for ak in ["avalon:", "ak:"]
-                            if ak in k]
-            avalon_knobs.append("publish")
-            for ak in avalon_knobs:
-                copy_grpn.removeKnob(knobs[ak])
 
             # add to temporary nodes
             tmp_nodes.append(copy_grpn)
@@ -87,8 +85,5 @@ class ExtractGizmo(openpype.api.Extractor):
         }
         instance.data["representations"].append(representation)
 
-        self.log.info("Extracted instance '{}' to: {}".format(
+        self.log.debug("Extracted instance '{}' to: {}".format(
             instance.name, path))
-
-        self.log.info("Data {}".format(
-            instance.data))

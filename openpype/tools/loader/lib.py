@@ -1,7 +1,9 @@
 import inspect
-from Qt import QtGui
+from qtpy import QtGui
+import qtawesome
 
-from avalon.vendor import qtawesome
+from openpype.lib.attribute_definitions import AbstractAttrDef
+from openpype.tools.attribute_defs import AttributeDefinitionsDialog
 from openpype.tools.utils.widgets import (
     OptionalAction,
     OptionDialog
@@ -18,26 +20,6 @@ def change_visibility(model, view, column_name, visible):
     view.setColumnHidden(index, not visible)
 
 
-def get_selected_items(rows, item_role):
-    items = []
-    for row_index in rows:
-        item = row_index.data(item_role)
-        if item.get("isGroup"):
-            continue
-
-        elif item.get("isMerged"):
-            for idx in range(row_index.model().rowCount(row_index)):
-                child_index = row_index.child(idx, 0)
-                item = child_index.data(item_role)
-                if item not in items:
-                    items.append(item)
-
-        else:
-            if item not in items:
-                items.append(item)
-    return items
-
-
 def get_options(action, loader, parent, repre_contexts):
     """Provides dialog to select value from loader provided options.
 
@@ -46,7 +28,7 @@ def get_options(action, loader, parent, repre_contexts):
 
         Args:
             action (OptionalAction) - action in menu
-            loader (cls of api.Loader) - not initilized yet
+            loader (cls of api.Loader) - not initialized yet
             parent (Qt element to parent dialog to)
             repre_contexts (list) of dict with full info about selected repres
         Returns:
@@ -54,21 +36,30 @@ def get_options(action, loader, parent, repre_contexts):
             None when dialog was closed or cancelled, in all other cases {}
               if no options
     """
+
     # Pop option dialog
     options = {}
     loader_options = loader.get_options(repre_contexts)
-    if getattr(action, "optioned", False) and loader_options:
+    if not getattr(action, "optioned", False) or not loader_options:
+        return options
+
+    if isinstance(loader_options[0], AbstractAttrDef):
+        qargparse_options = False
+        dialog = AttributeDefinitionsDialog(loader_options, parent)
+    else:
+        qargparse_options = True
         dialog = OptionDialog(parent)
-        dialog.setWindowTitle(action.label + " Options")
         dialog.create(loader_options)
 
-        if not dialog.exec_():
-            return None
+    dialog.setWindowTitle(action.label + " Options")
 
-        # Get option
-        options = dialog.parse()
+    if not dialog.exec_():
+        return None
 
-    return options
+    # Get option
+    if qargparse_options:
+        return dialog.parse()
+    return dialog.get_values()
 
 
 def add_representation_loaders_to_menu(loaders, menu, repre_contexts):

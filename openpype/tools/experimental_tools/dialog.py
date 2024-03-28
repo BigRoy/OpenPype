@@ -1,5 +1,6 @@
-from Qt import QtWidgets, QtCore, QtGui
+from qtpy import QtWidgets, QtCore, QtGui
 
+from openpype import AYON_SERVER_ENABLED
 from openpype.style import (
     load_stylesheet,
     app_icon_path
@@ -26,7 +27,8 @@ class ExperimentalToolsDialog(QtWidgets.QDialog):
 
     def __init__(self, parent=None):
         super(ExperimentalToolsDialog, self).__init__(parent)
-        self.setWindowTitle("OpenPype Experimental tools")
+        app_label = "AYON" if AYON_SERVER_ENABLED else "OpenPype"
+        self.setWindowTitle("{} Experimental tools".format(app_label))
         icon = QtGui.QIcon(app_icon_path())
         self.setWindowIcon(icon)
         self.setStyleSheet(load_stylesheet())
@@ -68,8 +70,8 @@ class ExperimentalToolsDialog(QtWidgets.QDialog):
         tool_btns_label = QtWidgets.QLabel(
             (
                 "You can enable these features in"
-                "<br><b>OpenPype tray -> Settings -> Experimental tools</b>"
-            ),
+                "<br><b>{} tray -> Settings -> Experimental tools</b>"
+            ).format(app_label),
             tool_btns_widget
         )
         tool_btns_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -82,7 +84,7 @@ class ExperimentalToolsDialog(QtWidgets.QDialog):
         tool_btns_layout.addWidget(tool_btns_label, 0)
 
         experimental_tools = ExperimentalTools(
-            parent=parent, filter_hosts=True
+            parent_widget=parent, refresh=False
         )
 
         # Main layout
@@ -107,16 +109,18 @@ class ExperimentalToolsDialog(QtWidgets.QDialog):
 
         # Is dialog first shown
         self._first_show = True
-        # Trigger refresh when window get's activity
+        # Trigger refresh when window gets activity
         self._refresh_on_active = True
         # Is window active
         self._window_is_active = False
 
     def refresh(self):
+        app_label = "AYON" if AYON_SERVER_ENABLED else "OpenPype"
         self._experimental_tools.refresh_availability()
 
         buttons_to_remove = set(self._buttons_by_tool_identifier.keys())
-        for idx, tool in enumerate(self._experimental_tools.tools):
+        tools = self._experimental_tools.get_tools_for_host()
+        for idx, tool in enumerate(tools):
             identifier = tool.identifier
             if identifier in buttons_to_remove:
                 buttons_to_remove.remove(identifier)
@@ -138,8 +142,8 @@ class ExperimentalToolsDialog(QtWidgets.QDialog):
             elif is_new or button.isEnabled():
                 button.setToolTip((
                     "You can enable this tool in local settings."
-                    "\n\nOpenPype Tray > Settings > Experimental Tools"
-                ))
+                    "\n\n{} Tray > Settings > Experimental Tools"
+                ).format(app_label))
 
             if tool.enabled != button.isEnabled():
                 button.setEnabled(tool.enabled)

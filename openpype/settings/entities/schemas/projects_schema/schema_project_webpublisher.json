@@ -6,6 +6,51 @@
     "is_file": true,
     "children": [
         {
+            "key": "imageio",
+            "type": "dict",
+            "label": "Color Management (derived to OCIO)",
+            "collapsible": true,
+            "is_group": true,
+            "children": [
+                {
+                    "type": "template",
+                    "name": "template_host_color_management_derived"
+                }
+            ]
+        },
+        {
+            "type": "list",
+            "collapsible": true,
+            "use_label_wrap": true,
+            "key": "timeout_profiles",
+            "label": "Timeout profiles",
+            "object_type": {
+                "type": "dict",
+                "children": [
+                    {
+                        "key": "hosts",
+                        "label": "Host names",
+                        "type": "hosts-enum",
+                        "multiselection": true
+                    },
+                    {
+                        "key": "task_types",
+                        "label": "Task types",
+                        "type": "task-types-enum",
+                        "multiselection": true
+                    },
+                    {
+                        "type": "separator"
+                    },
+                    {
+                        "type": "number",
+                        "key": "timeout",
+                        "label": "Timeout (sec)"
+                    }
+                ]
+            }
+        },
+        {
             "type": "dict",
             "collapsible": true,
             "key": "publish",
@@ -18,16 +63,29 @@
                     "label": "Collect Published Files",
                     "children": [
                         {
+                            "type": "label",
+                            "label": "Select if all versions of published items should be kept same. (As max(published) + 1.)"
+                        },
+                        {
+                            "type": "boolean",
+                            "key": "sync_next_version",
+                            "label": "Sync next publish version"
+                        },
+                        {
+                            "type": "label",
+                            "label": "Configure resulting family and tags on representation based on uploaded file and task. <br>Eg. '.png' is uploaded >> create instance of 'render' family<br>'Create review' in Tags >> mark representation to create review from."
+                        },
+                        {
                             "type": "dict-modifiable",
                             "collapsible": true,
                             "key": "task_type_to_family",
                             "label": "Task type to family mapping",
                             "collapsible_key": true,
                             "object_type": {
-                                "type": "dict-modifiable",
-                                "collapsible": false,
+                                "type": "list",
+                                "collapsible": true,
                                 "key": "task_type",
-                                "collapsible_key": false,
+                                "collapsible_key": true,
                                 "object_type": {
                                     "type": "dict",
                                     "children": [
@@ -43,6 +101,9 @@
                                             "object_type": "text"
                                         },
                                         {
+                                            "type": "separator"
+                                        },
+                                        {
                                             "type": "list",
                                             "key": "families",
                                             "label": "Families",
@@ -54,8 +115,8 @@
                                         },
                                         {
                                             "type": "text",
-                                            "key": "subset_template_name",
-                                            "label": "Subset template name"
+                                            "key": "result_family",
+                                            "label": "Resulting family"
                                         }
                                     ]
                                 }

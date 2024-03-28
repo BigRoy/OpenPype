@@ -19,6 +19,7 @@ import os
 import opentimelineio as otio
 import pyblish.api
 from openpype import lib as plib
+from openpype.pipeline.context_tools import get_current_project_asset
 
 
 class OTIO_View(pyblish.api.Action):
@@ -115,8 +116,8 @@ class CollectEditorial(pyblish.api.InstancePlugin):
             kwargs = {}
             if extension == ".edl":
                 # EDL has no frame rate embedded so needs explicit
-                # frame rate else 24 is asssumed.
-                kwargs["rate"] = plib.get_asset()["data"]["fps"]
+                # frame rate else 24 is assumed.
+                kwargs["rate"] = get_current_project_asset()["data"]["fps"]
 
             instance.data["otio_timeline"] = otio.adapters.read_from_file(
                 file_path, **kwargs)

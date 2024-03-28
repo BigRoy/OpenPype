@@ -4,12 +4,14 @@ import functools
 import logging
 import platform
 import copy
+
+from openpype import AYON_SERVER_ENABLED
+
 from .exceptions import (
     SaveWarningExc
 )
 from .constants import (
-    M_OVERRIDEN_KEY,
-    M_ENVIRONMENT_KEY,
+    M_OVERRIDDEN_KEY,
 
     METADATA_KEYS,
 
@@ -17,6 +19,11 @@ from .constants import (
     PROJECT_SETTINGS_KEY,
     PROJECT_ANATOMY_KEY,
     DEFAULT_PROJECT_KEY
+)
+
+from .ayon_settings import (
+    get_ayon_project_settings,
+    get_ayon_system_settings
 )
 
 log = logging.getLogger(__name__)
@@ -41,6 +48,54 @@ _SETTINGS_HANDLER = None
 _LOCAL_SETTINGS_HANDLER = None
 
 
+def clear_metadata_from_settings(values):
+    """Remove all metadata keys from loaded settings."""
+    if isinstance(values, dict):
+        for key in tuple(values.keys()):
+            if key in METADATA_KEYS:
+                values.pop(key)
+            else:
+                clear_metadata_from_settings(values[key])
+    elif isinstance(values, list):
+        for item in values:
+            clear_metadata_from_settings(item)
+
+
+def calculate_changes(old_value, new_value):
+    changes = {}
+    for key, value in new_value.items():
+        if key not in old_value:
+            changes[key] = value
+            continue
+
+        _value = old_value[key]
+        if isinstance(value, dict) and isinstance(_value, dict):
+            _changes = calculate_changes(_value, value)
+            if _changes:
+                changes[key] = _changes
+            continue
+
+        if _value != value:
+            changes[key] = value
+    return changes
+
+
+def create_settings_handler():
+    if AYON_SERVER_ENABLED:
+        raise RuntimeError("Mongo settings handler was triggered in AYON mode")
+    from .handlers import MongoSettingsHandler
+    # Handler can't be created in global space on initialization but only when
+    # needed. Plus here may be logic: Which handler is used (in future).
+    return MongoSettingsHandler()
+
+
+def create_local_settings_handler():
+    if AYON_SERVER_ENABLED:
+        raise RuntimeError("Mongo settings handler was triggered in AYON mode")
+    from .handlers import MongoLocalSettingsHandler
+    return MongoLocalSettingsHandler()
+
+
 def require_handler(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -61,35 +116,29 @@ def require_local_handler(func):
     return wrapper
 
 
-def create_settings_handler():
-    from .handlers import MongoSettingsHandler
-    # Handler can't be created in global space on initialization but only when
-    # needed. Plus here may be logic: Which handler is used (in future).
-    return MongoSettingsHandler()
+@require_handler
+def get_system_last_saved_info():
+    return _SETTINGS_HANDLER.get_system_last_saved_info()
 
 
-def create_local_settings_handler():
-    from .handlers import MongoLocalSettingsHandler
-    return MongoLocalSettingsHandler()
+@require_handler
+def get_project_last_saved_info(project_name):
+    return _SETTINGS_HANDLER.get_project_last_saved_info(project_name)
 
 
-def calculate_changes(old_value, new_value):
-    changes = {}
-    for key, value in new_value.items():
-        if key not in old_value:
-            changes[key] = value
-            continue
+@require_handler
+def get_last_opened_info():
+    return _SETTINGS_HANDLER.get_last_opened_info()
 
-        _value = old_value[key]
-        if isinstance(value, dict) and isinstance(_value, dict):
-            _changes = calculate_changes(_value, value)
-            if _changes:
-                changes[key] = _changes
-            continue
 
-        if _value != value:
-            changes[key] = value
-    return changes
+@require_handler
+def opened_settings_ui():
+    return _SETTINGS_HANDLER.opened_settings_ui()
+
+
+@require_handler
+def closed_settings_ui(info_obj):
+    return _SETTINGS_HANDLER.closed_settings_ui(info_obj)
 
 
 @require_handler
@@ -114,8 +163,7 @@ def save_studio_settings(data):
         SaveWarningExc: If any module raises the exception.
     """
     # Notify Pype modules
-    from openpype.modules import ModulesManager
-    from openpype_interfaces import ISettingsChangeListener
+    from openpype.modules import ModulesManager, ISettingsChangeListener
 
     old_data = get_system_settings()
     default_values = get_default_settings()[SYSTEM_SETTINGS_KEY]
@@ -124,7 +172,7 @@ def save_studio_settings(data):
     clear_metadata_from_settings(new_data)
 
     changes = calculate_changes(old_data, new_data)
-    modules_manager = ModulesManager(_system_settings=new_data)
+    modules_manager = ModulesManager(new_data)
 
     warnings = []
     for module in modules_manager.get_enabled_modules():
@@ -136,6 +184,7 @@ def save_studio_settings(data):
             except SaveWarningExc as exc:
                 warnings.extend(exc.warnings)
 
+    _SETTINGS_HANDLER.save_change_log(None, changes, "system")
     _SETTINGS_HANDLER.save_studio_settings(data)
     if warnings:
         raise SaveWarningExc(warnings)
@@ -162,8 +211,7 @@ def save_project_settings(project_name, overrides):
         SaveWarningExc: If any module raises the exception.
     """
     # Notify Pype modules
-    from openpype.modules import ModulesManager
-    from openpype_interfaces import ISettingsChangeListener
+    from openpype.modules import ModulesManager, ISettingsChangeListener
 
     default_values = get_default_settings()[PROJECT_SETTINGS_KEY]
     if project_name:
@@ -196,7 +244,7 @@ def save_project_settings(project_name, overrides):
                 )
             except SaveWarningExc as exc:
                 warnings.extend(exc.warnings)
-
+    _SETTINGS_HANDLER.save_change_log(project_name, changes, "project")
     _SETTINGS_HANDLER.save_project_settings(project_name, overrides)
 
     if warnings:
@@ -224,8 +272,7 @@ def save_project_anatomy(project_name, anatomy_data):
         SaveWarningExc: If any module raises the exception.
     """
     # Notify Pype modules
-    from openpype.modules import ModulesManager
-    from openpype_interfaces import ISettingsChangeListener
+    from openpype.modules import ModulesManager, ISettingsChangeListener
 
     default_values = get_default_settings()[PROJECT_ANATOMY_KEY]
     if project_name:
@@ -259,35 +306,211 @@ def save_project_anatomy(project_name, anatomy_data):
             except SaveWarningExc as exc:
                 warnings.extend(exc.warnings)
 
+    _SETTINGS_HANDLER.save_change_log(project_name, changes, "anatomy")
     _SETTINGS_HANDLER.save_project_anatomy(project_name, anatomy_data)
 
     if warnings:
         raise SaveWarningExc(warnings)
 
 
-@require_handler
-def get_studio_system_settings_overrides():
-    return _SETTINGS_HANDLER.get_studio_system_settings_overrides()
+def _system_settings_backwards_compatible_conversion(studio_overrides):
+    # Backwards compatibility of tools 3.9.1 - 3.9.2 to keep
+    #   "tools" environments
+    if (
+        "tools" in studio_overrides
+        and "tool_groups" in studio_overrides["tools"]
+    ):
+        tool_groups = studio_overrides["tools"]["tool_groups"]
+        for tool_group, group_value in tool_groups.items():
+            if tool_group in METADATA_KEYS:
+                continue
+
+            variants = group_value.get("variants")
+            if not variants:
+                continue
+
+            for key in set(variants.keys()):
+                if key in METADATA_KEYS:
+                    continue
+
+                variant_value = variants[key]
+                if "environment" not in variant_value:
+                    variants[key] = {
+                        "environment": variant_value
+                    }
+
+
+def _project_anatomy_backwards_compatible_conversion(project_anatomy):
+    # Backwards compatibility of node settings in Nuke 3.9.x - 3.10.0
+    # - source PR - https://github.com/pypeclub/OpenPype/pull/3143
+    value = project_anatomy
+    for key in ("imageio", "nuke", "nodes", "requiredNodes"):
+        if key not in value:
+            return
+        value = value[key]
+
+    for item in value:
+        for node in item.get("knobs") or []:
+            if "type" in node:
+                break
+            node["type"] = "__legacy__"
 
 
 @require_handler
-def get_studio_project_settings_overrides():
-    return _SETTINGS_HANDLER.get_studio_project_settings_overrides()
+def get_studio_system_settings_overrides(return_version=False):
+    output = _SETTINGS_HANDLER.get_studio_system_settings_overrides(
+        return_version
+    )
+    value = output
+    if return_version:
+        value, version = output
+    _system_settings_backwards_compatible_conversion(value)
+    return output
 
 
 @require_handler
-def get_studio_project_anatomy_overrides():
-    return _SETTINGS_HANDLER.get_studio_project_anatomy_overrides()
+def get_studio_project_settings_overrides(return_version=False):
+    return _SETTINGS_HANDLER.get_studio_project_settings_overrides(
+        return_version
+    )
 
 
 @require_handler
-def get_project_settings_overrides(project_name):
-    return _SETTINGS_HANDLER.get_project_settings_overrides(project_name)
+def get_studio_project_anatomy_overrides(return_version=False):
+    return _SETTINGS_HANDLER.get_studio_project_anatomy_overrides(
+        return_version
+    )
+
+
+@require_handler
+def get_project_settings_overrides(project_name, return_version=False):
+    return _SETTINGS_HANDLER.get_project_settings_overrides(
+        project_name, return_version
+    )
 
 
 @require_handler
 def get_project_anatomy_overrides(project_name):
-    return _SETTINGS_HANDLER.get_project_anatomy_overrides(project_name)
+    output = _SETTINGS_HANDLER.get_project_anatomy_overrides(project_name)
+    _project_anatomy_backwards_compatible_conversion(output)
+    return output
+
+
+@require_handler
+def get_studio_system_settings_overrides_for_version(version):
+    return (
+        _SETTINGS_HANDLER
+        .get_studio_system_settings_overrides_for_version(version)
+    )
+
+
+@require_handler
+def get_studio_project_anatomy_overrides_for_version(version):
+    return (
+        _SETTINGS_HANDLER
+        .get_studio_project_anatomy_overrides_for_version(version)
+    )
+
+
+@require_handler
+def get_studio_project_settings_overrides_for_version(version):
+    return (
+        _SETTINGS_HANDLER
+        .get_studio_project_settings_overrides_for_version(version)
+    )
+
+
+@require_handler
+def get_project_settings_overrides_for_version(
+    project_name, version
+):
+    return (
+        _SETTINGS_HANDLER
+        .get_project_settings_overrides_for_version(project_name, version)
+    )
+
+
+@require_handler
+def get_available_studio_system_settings_overrides_versions(sorted=None):
+    return (
+        _SETTINGS_HANDLER
+        .get_available_studio_system_settings_overrides_versions(
+            sorted=sorted
+        )
+    )
+
+
+@require_handler
+def get_available_studio_project_anatomy_overrides_versions(sorted=None):
+    return (
+        _SETTINGS_HANDLER
+        .get_available_studio_project_anatomy_overrides_versions(
+            sorted=sorted
+        )
+    )
+
+
+@require_handler
+def get_available_studio_project_settings_overrides_versions(sorted=None):
+    return (
+        _SETTINGS_HANDLER
+        .get_available_studio_project_settings_overrides_versions(
+            sorted=sorted
+        )
+    )
+
+
+@require_handler
+def get_available_project_settings_overrides_versions(
+    project_name, sorted=None
+):
+    return (
+        _SETTINGS_HANDLER
+        .get_available_project_settings_overrides_versions(
+            project_name, sorted=sorted
+        )
+    )
+
+
+@require_handler
+def find_closest_version_for_projects(project_names):
+    return (
+        _SETTINGS_HANDLER
+        .find_closest_version_for_projects(project_names)
+    )
+
+
+@require_handler
+def clear_studio_system_settings_overrides_for_version(version):
+    return (
+        _SETTINGS_HANDLER
+        .clear_studio_system_settings_overrides_for_version(version)
+    )
+
+
+@require_handler
+def clear_studio_project_settings_overrides_for_version(version):
+    return (
+        _SETTINGS_HANDLER
+        .clear_studio_project_settings_overrides_for_version(version)
+    )
+
+
+@require_handler
+def clear_studio_project_anatomy_overrides_for_version(version):
+    return (
+        _SETTINGS_HANDLER
+        .clear_studio_project_anatomy_overrides_for_version(version)
+    )
+
+
+@require_handler
+def clear_project_settings_overrides_for_version(
+    version, project_name
+):
+    return _SETTINGS_HANDLER.clear_project_settings_overrides_for_version(
+        version, project_name
+    )
 
 
 @require_local_handler
@@ -296,26 +519,15 @@ def save_local_settings(data):
 
 
 @require_local_handler
-def get_local_settings():
+def _get_local_settings():
     return _LOCAL_SETTINGS_HANDLER.get_local_settings()
 
 
-class DuplicatedEnvGroups(Exception):
-    def __init__(self, duplicated):
-        self.origin_duplicated = duplicated
-        self.duplicated = {}
-        for key, items in duplicated.items():
-            self.duplicated[key] = []
-            for item in items:
-                self.duplicated[key].append("/".join(item["parents"]))
-
-        msg = "Duplicated environment group keys. {}".format(
-            ", ".join([
-                "\"{}\"".format(env_key) for env_key in self.duplicated.keys()
-            ])
-        )
-
-        super(DuplicatedEnvGroups, self).__init__(msg)
+def get_local_settings():
+    if not AYON_SERVER_ENABLED:
+        return _get_local_settings()
+    # TODO implement ayon implementation
+    return {}
 
 
 def load_openpype_default_settings():
@@ -403,7 +615,7 @@ def load_jsons_from_dir(path, *args, **kwargs):
     Data are loaded recursively from a directory and recreate the
     hierarchy as a dictionary.
 
-    Entered path hiearchy:
+    Entered path hierarchy:
     |_ folder1
     | |_ data1.json
     |_ folder2
@@ -467,69 +679,6 @@ def load_jsons_from_dir(path, *args, **kwargs):
     return output
 
 
-def find_environments(data, with_items=False, parents=None):
-    """ Find environemnt values from system settings by it's metadata.
-
-    Args:
-        data(dict): System settings data or dictionary which may contain
-            environments metadata.
-
-    Returns:
-        dict: Key as Environment key and value for `acre` module.
-    """
-    if not data or not isinstance(data, dict):
-        return {}
-
-    output = {}
-    if parents is None:
-        parents = []
-
-    if M_ENVIRONMENT_KEY in data:
-        metadata = data.get(M_ENVIRONMENT_KEY)
-        for env_group_key, env_keys in metadata.items():
-            if env_group_key not in output:
-                output[env_group_key] = []
-
-            _env_values = {}
-            for key in env_keys:
-                _env_values[key] = data[key]
-
-            item = {
-                "env": _env_values,
-                "parents": parents[:-1]
-            }
-            output[env_group_key].append(item)
-
-    for key, value in data.items():
-        _parents = copy.deepcopy(parents)
-        _parents.append(key)
-        result = find_environments(value, True, _parents)
-        if not result:
-            continue
-
-        for env_group_key, env_values in result.items():
-            if env_group_key not in output:
-                output[env_group_key] = []
-
-            for env_values_item in env_values:
-                output[env_group_key].append(env_values_item)
-
-    if with_items:
-        return output
-
-    duplicated_env_groups = {}
-    final_output = {}
-    for key, value_in_list in output.items():
-        if len(value_in_list) > 1:
-            duplicated_env_groups[key] = value_in_list
-        else:
-            final_output[key] = value_in_list[0]["env"]
-
-    if duplicated_env_groups:
-        raise DuplicatedEnvGroups(duplicated_env_groups)
-    return final_output
-
-
 def subkey_merge(_dict, value, keys):
     key = keys.pop(0)
     if not keys:
@@ -546,13 +695,13 @@ def subkey_merge(_dict, value, keys):
 def merge_overrides(source_dict, override_dict):
     """Merge data from override_dict to source_dict."""
 
-    if M_OVERRIDEN_KEY in override_dict:
-        overriden_keys = set(override_dict.pop(M_OVERRIDEN_KEY))
+    if M_OVERRIDDEN_KEY in override_dict:
+        overridden_keys = set(override_dict.pop(M_OVERRIDDEN_KEY))
     else:
-        overriden_keys = set()
+        overridden_keys = set()
 
     for key, value in override_dict.items():
-        if (key in overriden_keys or key not in source_dict):
+        if (key in overridden_keys or key not in source_dict):
             source_dict[key] = value
 
         elif isinstance(value, dict) and isinstance(source_dict[key], dict):
@@ -574,17 +723,32 @@ def apply_local_settings_on_system_settings(system_settings, local_settings):
     """Apply local settings on studio system settings.
 
     ATM local settings can modify only application executables. Executable
-    values are not overriden but prepended.
+    values are not overridden but prepended.
     """
     if not local_settings or "applications" not in local_settings:
         return
 
     current_platform = platform.system().lower()
+    apps_settings = system_settings["applications"]
+    additional_apps = apps_settings["additional_apps"]
     for app_group_name, value in local_settings["applications"].items():
-        if not value or app_group_name not in system_settings["applications"]:
+        if not value:
             continue
 
-        variants = system_settings["applications"][app_group_name]["variants"]
+        if (
+            app_group_name not in apps_settings
+            and app_group_name not in additional_apps
+        ):
+            continue
+
+        if app_group_name in apps_settings:
+            variants = apps_settings[app_group_name]["variants"]
+
+        else:
+            variants = (
+                apps_settings["additional_apps"][app_group_name]["variants"]
+            )
+
         for app_name, app_value in value.items():
             if (
                 not app_value
@@ -758,7 +922,7 @@ def apply_local_settings_on_project_settings(
         sync_server_config["remote_site"] = remote_site
 
 
-def get_system_settings(clear_metadata=True, exclude_locals=None):
+def _get_system_settings(clear_metadata=True, exclude_locals=None):
     """System settings with applied studio overrides."""
     default_values = get_default_settings()[SYSTEM_SETTINGS_KEY]
     studio_values = get_studio_system_settings_overrides()
@@ -860,7 +1024,7 @@ def get_anatomy_settings(
     return result
 
 
-def get_project_settings(
+def _get_project_settings(
     project_name, clear_metadata=True, exclude_locals=None
 ):
     """Project settings with applied studio and project overrides."""
@@ -910,20 +1074,25 @@ def get_current_project_settings():
     return get_project_settings(project_name)
 
 
-def get_environments():
-    """Calculated environment based on defaults and system settings.
-
-    Any default environment also found in the system settings will be fully
-    overriden by the one from the system settings.
-
-    Returns:
-        dict: Output should be ready for `acre` module.
-    """
-
-    return find_environments(get_system_settings(False))
+@require_handler
+def _get_global_settings():
+    default_settings = load_openpype_default_settings()
+    default_values = default_settings["system_settings"]["general"]
+    studio_values = _SETTINGS_HANDLER.get_global_settings()
+    return {
+        key: studio_values.get(key, default_values.get(key))
+        for key in _SETTINGS_HANDLER.global_keys
+    }
 
 
-def get_general_environments():
+def get_global_settings():
+    if not AYON_SERVER_ENABLED:
+        return _get_global_settings()
+    default_settings = load_openpype_default_settings()
+    return default_settings["system_settings"]["general"]
+
+
+def _get_general_environments():
     """Get general environments.
 
     Function is implemented to be able load general environments without using
@@ -941,17 +1110,35 @@ def get_general_environments():
 
     clear_metadata_from_settings(environments)
 
+    whitelist_envs = result["general"].get("local_env_white_list")
+    if whitelist_envs:
+        local_settings = get_local_settings()
+        local_envs = local_settings.get("environments") or {}
+        for key, value in local_envs.items():
+            if key in whitelist_envs and key in environments:
+                environments[key] = value
+
     return environments
 
 
-def clear_metadata_from_settings(values):
-    """Remove all metadata keys from loaded settings."""
-    if isinstance(values, dict):
-        for key in tuple(values.keys()):
-            if key in METADATA_KEYS:
-                values.pop(key)
-            else:
-                clear_metadata_from_settings(values[key])
-    elif isinstance(values, list):
-        for item in values:
-            clear_metadata_from_settings(item)
+def get_general_environments():
+    if not AYON_SERVER_ENABLED:
+        return _get_general_environments()
+    value = get_system_settings()
+    return value["general"]["environment"]
+
+
+def get_system_settings(*args, **kwargs):
+    if not AYON_SERVER_ENABLED:
+        return _get_system_settings(*args, **kwargs)
+
+    default_settings = get_default_settings()[SYSTEM_SETTINGS_KEY]
+    return get_ayon_system_settings(default_settings)
+
+
+def get_project_settings(project_name, *args, **kwargs):
+    if not AYON_SERVER_ENABLED:
+        return _get_project_settings(project_name, *args, **kwargs)
+
+    default_settings = get_default_settings()[PROJECT_SETTINGS_KEY]
+    return get_ayon_project_settings(default_settings, project_name)

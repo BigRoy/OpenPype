@@ -1,7 +1,12 @@
 from maya import cmds
 
 import pyblish.api
-import openpype.api
+
+from openpype.pipeline.publish import (
+    ValidateContentsOrder,
+    RepairAction,
+    PublishValidationError
+)
 
 from openpype.hosts.maya.api import lib
 import openpype.hosts.maya.api.action
@@ -26,11 +31,11 @@ class ValidateRigControllersArnoldAttributes(pyblish.api.InstancePlugin):
     This validator will ensure they are hidden or unkeyable attributes.
 
     """
-    order = openpype.api.ValidateContentsOrder + 0.05
+    order = ValidateContentsOrder + 0.05
     label = "Rig Controllers (Arnold Attributes)"
     hosts = ["maya"]
     families = ["rig"]
-    actions = [openpype.api.RepairAction,
+    actions = [RepairAction,
                openpype.hosts.maya.api.action.SelectInvalidAction]
 
     attributes = [
@@ -45,17 +50,17 @@ class ValidateRigControllersArnoldAttributes(pyblish.api.InstancePlugin):
     def process(self, instance):
         invalid = self.get_invalid(instance)
         if invalid:
-            raise RuntimeError('{} failed, see log '
+            raise PublishValidationError('{} failed, see log '
                                'information'.format(self.label))
 
     @classmethod
     def get_invalid(cls, instance):
 
-        controllers_sets = [i for i in instance if i == "controls_SET"]
-        if not controllers_sets:
+        controls_set = instance.data["rig_sets"].get("controls_SET")
+        if not controls_set:
             return []
 
-        controls = cmds.sets(controllers_sets, query=True) or []
+        controls = cmds.sets(controls_set, query=True) or []
         if not controls:
             return []
 

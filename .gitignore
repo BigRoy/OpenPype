@@ -37,6 +37,7 @@ Temporary Items
 ###########
 /build
 /dist/
+/server_addon/packages/*
 
 /vendor/bin/*
 /vendor/python/*
@@ -70,6 +71,8 @@ coverage.xml
 ##################
 node_modules
 package-lock.json
+package.json
+yarn.lock
 
 openpype/premiere/ppro/js/debug.log
 
@@ -100,3 +103,19 @@ website/.docusaurus
 
 .poetry/
 .python-version
+.editorconfig
+.pre-commit-config.yaml
+mypy.ini
+
+tools/run_eventserver.*
+
+#  Developer tools
+tools/dev_*
+
+.github_changelog_generator
+
+
+# Addons
+########
+/openpype/addons/*
+!/openpype/addons/README.md

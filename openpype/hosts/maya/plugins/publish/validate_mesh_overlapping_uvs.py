@@ -1,9 +1,23 @@
-import pyblish.api
-import openpype.api
-import openpype.hosts.maya.api.action
 import math
+from six.moves import xrange
+
+from maya import cmds
 import maya.api.OpenMaya as om
-import pymel.core as pm
+import pyblish.api
+
+import openpype.hosts.maya.api.action
+from openpype.pipeline.publish import (
+    ValidateMeshOrder,
+    OptionalPyblishPluginMixin,
+    PublishValidationError
+)
+
+
+def _as_report_list(values, prefix="- ", suffix="\n"):
+    """Return list as bullet point list for a report"""
+    if not values:
+        return ""
+    return prefix + (suffix + prefix).join(values)
 
 
 class GetOverlappingUVs(object):
@@ -78,7 +92,7 @@ class GetOverlappingUVs(object):
         if len(uarray) == 0 or len(varray) == 0:
             return (False, None, None)
 
-        # loop throught all vertices to construct edges/rays
+        # loop through all vertices to construct edges/rays
         u = uarray[-1]
         v = varray[-1]
         for i in xrange(len(uarray)):  # noqa: F821
@@ -183,8 +197,7 @@ class GetOverlappingUVs(object):
 
         center, radius = self._createBoundingCircle(meshfn)
         for i in xrange(meshfn.numPolygons):  # noqa: F821
-            rayb1, face1Orig, face1Vec = self._createRayGivenFace(
-                                                    meshfn, i)
+            rayb1, face1Orig, face1Vec = self._createRayGivenFace(meshfn, i)
             if not rayb1:
                 continue
             cui = center[2*i]
@@ -204,8 +217,8 @@ class GetOverlappingUVs(object):
                 if (dsqr >= (ri + rj) * (ri + rj)):
                     continue
 
-                rayb2, face2Orig, face2Vec = self._createRayGivenFace(
-                                                    meshfn, j)
+                rayb2, face2Orig, face2Vec = self._createRayGivenFace(meshfn,
+                                                                      j)
                 if not rayb2:
                     continue
                 # Exclude the degenerate face
@@ -223,58 +236,71 @@ class GetOverlappingUVs(object):
         return faces
 
 
-class ValidateMeshHasOverlappingUVs(pyblish.api.InstancePlugin):
+class ValidateMeshHasOverlappingUVs(pyblish.api.InstancePlugin,
+                                    OptionalPyblishPluginMixin):
     """ Validate the current mesh overlapping UVs.
 
     It validates whether the current UVs are overlapping or not.
     It is optional to warn publisher about it.
     """
 
-    order = openpype.api.ValidateMeshOrder
+    order = ValidateMeshOrder
     hosts = ['maya']
     families = ['model']
-    category = 'geometry'
     label = 'Mesh Has Overlapping UVs'
     actions = [openpype.hosts.maya.api.action.SelectInvalidAction]
     optional = True
 
     @classmethod
-    def _get_overlapping_uvs(cls, node):
-        """ Check if mesh has overlapping UVs.
+    def _get_overlapping_uvs(cls, mesh):
+        """Return overlapping UVs of mesh.
 
-            :param node: node to check
-            :type node: str
-            :returns: True is has overlapping UVs, False otherwise
-            :rtype: bool
+        Args:
+            mesh (str): Mesh node name
+
+        Returns:
+            list: Overlapping uvs for the input mesh in all uv sets.
+
         """
         ovl = GetOverlappingUVs()
 
+        # Store original uv set
+        original_current_uv_set = cmds.polyUVSet(mesh,
+                                                 query=True,
+                                                 currentUVSet=True)[0]
+
         overlapping_faces = []
-        for i, uv in enumerate(pm.polyUVSet(node, q=1, auv=1)):
-            pm.polyUVSet(node, cuv=1, uvSet=uv)
-            overlapping_faces.extend(ovl._getOverlapUVFaces(str(node)))
+        for uv_set in cmds.polyUVSet(mesh, query=True, allUVSets=True):
+            cmds.polyUVSet(mesh, currentUVSet=True, uvSet=uv_set)
+            overlapping_faces.extend(ovl._getOverlapUVFaces(mesh))
+
+        # Restore original uv set
+        cmds.polyUVSet(mesh, currentUVSet=True, uvSet=original_current_uv_set)
 
         return overlapping_faces
 
     @classmethod
     def get_invalid(cls, instance, compute=False):
-        invalid = []
+
         if compute:
-            instance.data["overlapping_faces"] = []
-            for node in pm.ls(instance, type="mesh"):
+            invalid = []
+            for node in cmds.ls(instance, type="mesh"):
                 faces = cls._get_overlapping_uvs(node)
                 invalid.extend(faces)
-                # Store values for later.
-                instance.data["overlapping_faces"].extend(faces)
-        else:
-            invalid.extend(instance.data["overlapping_faces"])
 
-        return invalid
+            instance.data["overlapping_faces"] = invalid
+
+        return instance.data.get("overlapping_faces", [])
 
     def process(self, instance):
+        if not self.is_active(instance.data):
+            return
 
         invalid = self.get_invalid(instance, compute=True)
         if invalid:
-            raise RuntimeError(
-                "Meshes found with overlapping UVs: {0}".format(invalid)
+            raise PublishValidationError(
+                "Meshes found with overlapping UVs:\n\n{0}".format(
+                    _as_report_list(sorted(invalid))
+                ),
+                title="Overlapping UVs"
             )

@@ -1,16 +1,19 @@
-import nuke
 import os
 import math
-import pyblish.api
-import openpype.api
-from avalon.nuke import lib as anlib
 from pprint import pformat
 
+import nuke
 
-class ExtractCamera(openpype.api.Extractor):
-    """ 3D camera exctractor
+import pyblish.api
+
+from openpype.pipeline import publish
+from openpype.hosts.nuke.api.lib import maintained_selection
+
+
+class ExtractCamera(publish.Extractor):
+    """ 3D camera extractor
     """
-    label = 'Exctract Camera'
+    label = 'Extract Camera'
     order = pyblish.api.ExtractorOrder
     families = ["camera"]
     hosts = ["nuke"]
@@ -25,6 +28,7 @@ class ExtractCamera(openpype.api.Extractor):
     ]
 
     def process(self, instance):
+        camera_node = instance.data["transientData"]["node"]
         handle_start = instance.context.data["handleStart"]
         handle_end = instance.context.data["handleEnd"]
         first_frame = int(nuke.root()["first_frame"].getValue())
@@ -32,11 +36,8 @@ class ExtractCamera(openpype.api.Extractor):
         step = 1
         output_range = str(nuke.FrameRange(first_frame, last_frame, step))
 
-        self.log.info("instance.data: `{}`".format(
-            pformat(instance.data)))
-
-        rm_nodes = list()
-        self.log.info("Crating additional nodes")
+        rm_nodes = []
+        self.log.debug("Creating additional nodes for 3D Camera Extractor")
         subset = instance.data["subset"]
         staging_dir = self.staging_dir(instance)
 
@@ -52,10 +53,10 @@ class ExtractCamera(openpype.api.Extractor):
         filename = subset + ".{}".format(extension)
         file_path = os.path.join(staging_dir, filename).replace("\\", "/")
 
-        with anlib.maintained_selection():
+        with maintained_selection():
             # bake camera with axeses onto word coordinate XYZ
             rm_n = bakeCameraWithAxeses(
-                nuke.toNode(instance.data["name"]), output_range)
+                camera_node, output_range)
             rm_nodes.append(rm_n)
 
             # create scene node
@@ -79,8 +80,6 @@ class ExtractCamera(openpype.api.Extractor):
             # erase additional nodes
             for n in rm_nodes:
                 nuke.delete(n)
-
-            self.log.info(file_path)
 
         # create representation data
         if "representations" not in instance.data:
@@ -108,12 +107,12 @@ class ExtractCamera(openpype.api.Extractor):
             "frameEndHandle": last_frame,
         })
 
-        self.log.info("Extracted instance '{0}' to: {1}".format(
+        self.log.debug("Extracted instance '{0}' to: {1}".format(
             instance.name, file_path))
 
 
 def bakeCameraWithAxeses(camera_node, output_range):
-    """ Baking all perent hiearchy of axeses into camera
+    """ Baking all perent hierarchy of axeses into camera
     with transposition onto word XYZ coordinance
     """
     bakeFocal = False

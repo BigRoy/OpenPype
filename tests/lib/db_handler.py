@@ -2,7 +2,7 @@
     Helper class for automatic testing, provides dump and restore via command
     line utilities.
 
-    Expect mongodump, mongoimport and mongorestore present at PATH
+    Expect mongodump, mongoexport, mongoimport and mongorestore present at PATH
 """
 import os
 import pymongo
@@ -118,9 +118,8 @@ class DBHandler:
                                    "Run with overwrite=True")
             else:
                 if collection:
-                    coll = self.client[db_name_out].get(collection)
-                    if coll:
-                        coll.drop()
+                    if collection in self.client[db_name_out].list_collection_names():  # noqa
+                        self.client[db_name_out][collection].drop()
                 else:
                     self.teardown(db_name_out)
 
@@ -133,7 +132,11 @@ class DBHandler:
                                     db_name=db_name, db_name_out=db_name_out,
                                     collection=collection)
         print("mongorestore query:: {}".format(query))
-        subprocess.run(query)
+        try:
+            subprocess.run(query)
+        except FileNotFoundError:
+            raise RuntimeError("'mongorestore' utility must be on path."
+                               "Please install it.")
 
     def teardown(self, db_name):
         """Drops 'db_name' if exists."""
@@ -145,7 +148,7 @@ class DBHandler:
         self.client.drop_database(db_name)
 
     def backup_to_dump(self, db_name, dump_dir, overwrite=False,
-                       collection=None):
+                       collection=None, format="bson"):
         """
             Helper method for running mongodump for specific 'db_name'
         """
@@ -157,15 +160,24 @@ class DBHandler:
             raise RuntimeError("Backup already exists, "
                                "run with overwrite=True")
 
-        query = self._dump_query(self.uri, dump_dir,
-                                 db_name=db_name, collection=collection)
-        print("Mongodump query:: {}".format(query))
-        subprocess.run(query)
+        collections = [collection]
+        if format == "json" and collection is None:
+            collections = self.client[db_name].list_collection_names()
+
+        for collection in collections:
+            query = self._dump_query(self.uri, dump_dir,
+                                     db_name=db_name, collection=collection,
+                                     format=format)
+            print("Mongodump query:: {}".format(query))
+            process = subprocess.run(query)
+            assert process.returncode == 0, "Mongo dump failed."
 
     def _db_exists(self, db_name):
         return db_name in self.client.list_database_names()
 
-    def _dump_query(self, uri, output_path, db_name=None, collection=None):
+    def _dump_query(
+        self, uri, output_path, db_name=None, collection=None, format="bson"
+    ):
         """Prepares dump query based on 'db_name' or 'collection'."""
         db_part = coll_part = ""
         if db_name:
@@ -174,11 +186,22 @@ class DBHandler:
             if not db_name:
                 raise ValueError("db_name must be present")
             coll_part = "--collection={}".format(collection)
-        query = "\"{}\" --uri=\"{}\" --out={} {} {}".format(
-            "mongodump", uri, output_path, db_part, coll_part
-        )
 
-        return query
+        tool = "mongodump"
+        query = "{} --uri=\"{}\""
+
+        if format == "json":
+            assert collection, "Collection is needed for json export."
+
+            query += " --jsonArray --pretty"
+            tool = "mongoexport"
+            output_path = os.path.join(
+                output_path, "{}.{}.json".format(db_name, collection)
+            )
+
+        query += " --out={} {} {}"
+
+        return query.format(tool, uri, output_path, db_part, coll_part)
 
     def _restore_query(self, uri, dump_dir,
                        db_name=None, db_name_out=None,
@@ -231,13 +254,15 @@ class DBHandler:
 # Examples
 # handler = DBHandler(uri="mongodb://localhost:27017")
 # #
-# backup_dir = "c:\\projects\\test_nuke_publish\\input\\dumps"
+# backup_dir = "c:\\projects\\test_zips\\test_nuke_deadline_publish\\input\\dumps"  # noqa
 # # #
-# handler.backup_to_dump("avalon", backup_dir, True, collection="test_project")
-# handler.setup_from_dump("test_db", backup_dir, True, db_name_out="avalon", collection="test_project")
-# handler.setup_from_sql_file("test_db", "c:\\projects\\sql\\item.sql",
+# handler.backup_to_dump("avalon_tests", backup_dir, True, collection="test_project")  # noqa
+#handler.backup_to_dump("openpype_tests", backup_dir, True, collection="settings")  # noqa
+
+# handler.setup_from_dump("avalon_tests", backup_dir, True, db_name_out="avalon_tests", collection="test_project")  # noqa
+# handler.setup_from_sql_file("avalon_tests", "c:\\projects\\sql\\item.sql",
 #                             collection="test_project",
 #                             drop=False, mode="upsert")
-# handler.setup_from_sql("test_db", "c:\\projects\\sql",
+# handler.setup_from_sql("avalon_tests", "c:\\projects\\sql",
 #                        collection="test_project",
 #                        drop=False, mode="upsert")

@@ -1,45 +1,30 @@
-import pyblish.api
-import avalon.api
 import os
-from maya import cmds
+import pyblish.api
 
 
-class CollectWorkfile(pyblish.api.ContextPlugin):
-    """Inject the current working file into context"""
+class CollectWorkfileData(pyblish.api.InstancePlugin):
+    """Inject data into Workfile instance"""
 
     order = pyblish.api.CollectorOrder - 0.01
     label = "Maya Workfile"
     hosts = ['maya']
+    families = ["workfile"]
 
-    def process(self, context):
+    def process(self, instance):
         """Inject the current working file"""
-        current_file = cmds.file(query=True, sceneName=True)
-        context.data['currentFile'] = current_file
 
+        context = instance.context
+        current_file = instance.context.data['currentFile']
         folder, file = os.path.split(current_file)
         filename, ext = os.path.splitext(file)
 
-        task = avalon.api.Session["AVALON_TASK"]
-
-        data = {}
-
-        # create instance
-        instance = context.create_instance(name=filename)
-        subset = 'workfile' + task.capitalize()
-
-        data.update({
-            "subset": subset,
-            "asset": os.getenv("AVALON_ASSET", None),
-            "label": subset,
-            "publish": True,
-            "family": 'workfile',
-            "families": ['workfile'],
+        data = {  # noqa
             "setMembers": [current_file],
             "frameStart": context.data['frameStart'],
             "frameEnd": context.data['frameEnd'],
             "handleStart": context.data['handleStart'],
             "handleEnd": context.data['handleEnd']
-        })
+        }
 
         data['representations'] = [{
             'name': ext.lstrip("."),
@@ -49,8 +34,3 @@ class CollectWorkfile(pyblish.api.ContextPlugin):
         }]
 
         instance.data.update(data)
-
-        self.log.info('Collected instance: {}'.format(file))
-        self.log.info('Scene path: {}'.format(current_file))
-        self.log.info('staging Dir: {}'.format(folder))
-        self.log.info('subset: {}'.format(subset))

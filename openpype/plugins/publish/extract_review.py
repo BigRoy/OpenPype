@@ -97,7 +97,7 @@ class ExtractReview(pyblish.api.InstancePlugin):
     ]
 
     # Supported extensions
-    image_exts = ["exr", "jpg", "jpeg", "png", "dpx", "tga"]
+    image_exts = ["exr", "jpg", "jpeg", "png", "dpx", "tga", "tif", "tiff"]
     video_exts = ["mov", "mp4"]
     supported_exts = image_exts + video_exts
 

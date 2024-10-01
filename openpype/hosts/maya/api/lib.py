@@ -3322,32 +3322,48 @@ def update_content_on_context_change():
     """
     This will update scene content to match new asset on context change
     """
-    scene_sets = cmds.listSets(allSets=True)
-    context = get_current_context()
+
+    host = registered_host()
+    create_context = CreateContext(host)
     asset_doc = get_current_project_asset()
-    new_asset = asset_doc["name"]
-    new_data = asset_doc["data"]
-    new_task = context["task_name"]
-    for s in scene_sets:
-        try:
-            if cmds.getAttr("{}.id".format(s)) != "pyblish.avalon.instance":
+
+    instance_values = {
+        "asset": create_context.get_current_asset_name(),
+        "task": create_context.get_current_task_name(),
+    }
+    creator_attribute_values = {
+        "frameStart": float(asset_doc["data"]["frameStart"]),
+        "frameEnd": float(asset_doc["data"]["frameEnd"]),
+    }
+
+    has_changes = False
+    for instance in create_context.instances:
+        # Update instance data
+        for key, value in instance_values.items():
+            if key not in instance or instance[key] == value:
                 continue
 
-            if cmds.attributeQuery("asset", node=s, exists=True):
-                print("  - setting asset to: [ {} ]".format(new_asset))
-                cmds.setAttr("{}.asset".format(s), new_asset, type="string")
+            # Update instance value
+            print(f"Updating {instance.product_name} {key} to: {value}")
+            instance[key] = value
+            has_changes = True
 
-            if cmds.attributeQuery("task", node=s, exists=True):
-                print("  - setting task to: [ {} ]".format(new_task))
-                cmds.setAttr("{}.task".format(s), new_task, type="string")
+        # Update creator attributes data
+        creator_attributes = instance.creator_attributes
+        for key, value in creator_attribute_values.items():
+            if (
+                    key not in creator_attributes
+                    or creator_attributes[key] == value
+            ):
+                continue
 
-            if cmds.attributeQuery("frameStart", node=s, exists=True):
-                cmds.setAttr("{}.frameStart".format(s), new_data["frameStart"])
+            # Update instance creator attribute value
+            print(f"Updating {instance.product_name} {key} to: {value}")
+            creator_attributes[key] = value
+            has_changes = True
 
-            if cmds.attributeQuery("frameEnd", node=s, exists=True):
-                cmds.setAttr("{}.frameEnd".format(s), new_data["frameEnd"])
-        except ValueError:
-            pass
+    if has_changes:
+        create_context.save_changes()
 
 
 def show_message(title, msg):

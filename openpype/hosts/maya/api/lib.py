@@ -30,7 +30,6 @@ from openpype.client import (
 )
 from openpype.settings import get_project_settings
 from openpype.pipeline import (
-    get_current_context,
     get_current_project_name,
     get_current_asset_name,
     get_current_task_name,

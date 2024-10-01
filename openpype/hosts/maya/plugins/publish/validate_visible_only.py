@@ -40,7 +40,10 @@ class ValidateAlembicVisibleOnly(pyblish.api.InstancePlugin):
 
         if instance.data["family"] == "animation":
             # Special behavior to use the nodes in out_SET
-            nodes = instance.data["out_hierarchy"]
+            # We assume the `out_hierarchy` value may not exist because it may
+            # happen that it fails to collect if the `out_SET` wasn't found
+            # in the publish instance.
+            nodes = instance.data.get("out_hierarchy", [])
         else:
             nodes = instance[:]
 
